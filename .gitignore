@@ -1,0 +1,6 @@
+*.zst
+core.log-*
+target/
+.vscode/
+indexed_file/resources/test
+Cargo.lock
