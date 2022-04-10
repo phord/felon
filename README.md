@@ -1,6 +1,6 @@
-lgrok - the Log Grokker tool
+igrok - the Log Grokker tool
 
-lgrok reads a text file (possibly compressed) and indexes every word in the file.  Users can then browse
+igrok reads a text file (possibly compressed) and indexes every word in the file.  Users can then browse
 the interesting lines of the file by searching for keywords identified in it.
 
 Needs some special expression parsing.  Something like
@@ -52,7 +52,7 @@ SearchCache - a special TextMap that maps SearchExpr strings to indexes
 TextSearch - applies a SearchExpr to a TextMap to find all lines matched
 
 Features/Ideas:
-    - Rewrite this in Rust
+    - Use TUI or Termion or something else for managing the display
     - Recognize/parse timestamps to support time-based filters, goto, timedelta, etc.
     - Able to show context lines (eg. -A5 -C3)
     - Support regexes that bypass the index with accompanying sucky performance
@@ -92,3 +92,16 @@ For UI-driven workflow, is this workable?
     foo bar             the exact text "foo bar"
 
     foo_bar             the exact text "foo_bar" (even though _ is not indexed)
+
+
+Display filters:
+    SHOW - Show all lines that match
+    HIDE - Hide all lines that match
+    MARK - Highlight all matches
+
+Need to be able to disable / enable filters individually and collectively.
+
+Every line knows its timestamp for `goto`, `delta`, and merging, but don't parse the time until it's needed.
+
+Blast!  `less` already supports filtering built-in!
+    https://unix.stackexchange.com/questions/179238/grep-inside-less
