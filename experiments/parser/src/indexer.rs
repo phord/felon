@@ -8,18 +8,18 @@ use std::io::{BufRead, BufReader};
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use rustc_hash::FxHashMap;
+use fnv::FnvHashMap;
 
 struct Index {
-    words: FxHashMap<String, Vec<usize>>,
-    numbers: FxHashMap<u64, Vec<usize>>,
+    words: FnvHashMap<String, Vec<usize>>,
+    numbers: FnvHashMap<u64, Vec<usize>>,
 }
 
 impl Index {
     fn new() -> Index {
         Index {
-            words: FxHashMap::default(),
-            numbers: FxHashMap::default(),
+            words: FnvHashMap::default(),
+            numbers: FnvHashMap::default(),
         }
     }
 
