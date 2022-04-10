@@ -4,20 +4,22 @@ use std::path::PathBuf;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::collections::{HashMap};
-use regex::Regex;
+// use std::collections::{HashMap};
+
 use lazy_static::lazy_static;
+use regex::Regex;
+use rustc_hash::FxHashMap;
 
 struct Index {
-    words: HashMap<String, Vec<usize>>,
-    numbers: HashMap<u64, Vec<usize>>,
+    words: FxHashMap<String, Vec<usize>>,
+    numbers: FxHashMap<u64, Vec<usize>>,
 }
 
 impl Index {
     fn new() -> Index {
         Index {
-            words: HashMap::new(),
-            numbers: HashMap::new(),
+            words: FxHashMap::default(),
+            numbers: FxHashMap::default(),
         }
     }
 
