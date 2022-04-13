@@ -77,6 +77,8 @@ impl Index {
     // }
 }
 
+use mapr::MmapOptions;
+
 // Read the file and count the words/lines/characters
 pub fn run(input_file: Option<PathBuf>,) {
     let input = if let Some(input_file) = input_file {
@@ -89,26 +91,37 @@ pub fn run(input_file: Option<PathBuf>,) {
         ::std::process::exit(1);
     };
 
-    let file = BufReader::new(input.unwrap());
+    let mmap = unsafe { MmapOptions::new().map(&input.unwrap()) };
+    let mmap = mmap.expect("Could not mmap file.");
+
     let mut cnt  = 0;
     let mut bytes = 0;
     let mut words = 0;
     let mut index = Index::new();
 
-    for l in file.lines() {
-        cnt = cnt + 1;
-        let line: String = l.unwrap()[40..].to_string();
-        bytes += line.len() + 1;
-        for w in line.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
-            if !w.is_empty() {
-                words += 1;
-                index.add_word(w, cnt);
+    let mut inword = false;
+    for c in mmap.as_ref() {
+        if *c == b'\n' {
+            cnt += 1;
+        }
+        match c {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {
+                if !inword {
+                    inword = true;
+                    words += 1;
+                }
+            }
+            _ => {
+                if inword {
+                    inword = false;
+                }
             }
         }
+        bytes += 1;
     }
 
     println!("Indexed tokens: {}",index.words.len());
-    index.split_numbers();
+    // index.split_numbers();
 
     println!("Total lines are: {}",cnt);
     println!("Total words are: {}",words);
