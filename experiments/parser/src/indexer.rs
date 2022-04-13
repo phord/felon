@@ -97,7 +97,7 @@ pub fn run(input_file: Option<PathBuf>,) {
 
     for l in file.lines() {
         cnt = cnt + 1;
-        let line: String = l.unwrap().clone();
+        let line: String = l.unwrap()[40..].to_string();
         bytes += line.len() + 1;
         for w in line.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
             if !w.is_empty() {
