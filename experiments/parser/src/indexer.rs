@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use std::fs::File;
 use fnv::FnvHashMap;
+use std::collections::VecDeque;
 
 struct Index {
     words: FnvHashMap<Vec<u8>, Vec<usize>>,
@@ -28,6 +29,22 @@ impl Index {
         lines.push(line);
     }
 
+    fn merge(&mut self, other: Index, line_start: usize) {
+        // println!("Merging {} words into {} existing at line {}", other.words.len(), self.words.len(), line_start);
+        for (word, l) in other.words {
+            let lines = self.words.entry(word).or_insert(Vec::new());
+            for line in l {
+                lines.push(line + line_start);
+            }
+        }
+        for (number, l) in other.numbers {
+            let lines = self.numbers.entry(number).or_insert(Vec::new());
+            for line in l {
+                lines.push(line + line_start);
+            }
+        }
+    }
+
 
     fn add_number(&mut self, number: u64, line: usize) {
         let lines = self.numbers.entry(number).or_insert(Vec::new());
@@ -50,24 +67,15 @@ impl Index {
 }
 
 use mapr::MmapOptions;
+use std::sync::mpsc::channel;
+use std::thread;
+use std::sync::Arc;
 
-// Read the file and count the words/lines/characters
-pub fn run(input_file: Option<PathBuf>,) {
-    let input = if let Some(input_file) = input_file {
-        // Must have a filename as input.
-        let file = File::open(input_file).expect("Could not open file.");
-        Some(file)
-    } else {
-        // Print error.
-        eprintln!("Expected '<input>' or input over stdin.");
-        ::std::process::exit(1);
-    };
+// Read part of the file and count the words/lines/characters
+fn parse(data: Vec<u8>) -> (usize, Index) {
 
-    let mmap = unsafe { MmapOptions::new().map(&input.unwrap()) };
-    let mmap = mmap.expect("Could not mmap file.");
-
+    let bytes = data.len();
     let mut cnt  = 0;
-    let bytes = mmap.len();
     let mut words = 0;
     let mut index = Index::new();
     let mut start = 0;
@@ -82,7 +90,7 @@ pub fn run(input_file: Option<PathBuf>,) {
         if pos >= bytes {
             break;
         }
-        let c = mmap[pos];
+        let c = data[pos];
         match c {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {
                 if !inword {
@@ -124,7 +132,7 @@ pub fn run(input_file: Option<PathBuf>,) {
                     } else if inhexnum {
                         index.add_number(hexnum, cnt);
                     } else {
-                        index.add_word(mmap[start..pos].to_vec(), cnt);
+                        index.add_word(data[start..pos].to_vec(), cnt);
                     }
                     inword = false;
                 }
@@ -136,10 +144,114 @@ pub fn run(input_file: Option<PathBuf>,) {
         }
         pos += 1;
     }
+    (cnt, index)
+}
 
-    println!("Total lines are: {}",cnt);
-    println!("Total words are: {}",words);
-    println!("Total bytes are: {}",bytes);
+pub fn run(input_file: Option<PathBuf>) {
+    let input = if let Some(input_file) = input_file {
+        // Must have a filename as input.
+        let file = File::open(input_file).expect("Could not open file.");
+        Some(file)
+    } else {
+        // Print error.
+        eprintln!("Expected '<input>' or input over stdin.");
+        ::std::process::exit(1);
+    };
+
+    let mmap = unsafe { MmapOptions::new().map(&input.unwrap()) };
+    let mmap = mmap.expect("Could not mmap file.");
+    let bytes = mmap.len();
+    let chunk_size = 1024 * 1024 * 64;
+
+    let mut pos = 0;
+
+    struct ThreadData {
+        start: usize,
+        end: usize,
+        lines: usize,
+        index: Index,
+    }
+
+    let (tx, rx):(std::sync::mpsc::Sender<_>, std::sync::mpsc::Receiver<ThreadData>) = channel();
+    let (mtx, mrx) = flume::unbounded();
+    let (sender, receiver): (flume::Sender<(usize, usize, Vec<u8>)>, flume::Receiver<(_,_,_)>)  = flume::bounded(10);
+
+    let merger = thread::spawn(move || {
+        let mut held: VecDeque<ThreadData> = VecDeque::new();
+        let mut pos = 0;
+        let mut line_offset = 0;
+        let mut index = Index::new();
+        while let Ok(data) = rx.recv() {
+            held.push_front(data);
+            loop {
+                let mut data = None;
+                for i in 0..held.len() {
+                    if held[i].start == pos {
+                        data = held.remove(i);
+                        break;
+                    }
+                }
+                if let Some(data) = data {
+                    pos = data.end;
+                    index.merge(data.index, line_offset);
+                    line_offset += data.lines;
+                    continue;
+                } else {
+                    break; //exit held-poller loop; wait for new data
+                }
+            }
+        }
+        mtx.send((line_offset, index)).unwrap();
+    });
+
+    // Build a threadpool of parsers
+    let mut pool = Vec::new();
+    for _ in 0..10 {
+        let tx = tx.clone();
+        let receiver = receiver.clone();
+        pool.push(thread::spawn(move || {
+            for (start, end, buffer) in receiver.iter() {
+                let (lines, index) = parse(buffer);
+                let result = ThreadData {
+                    start: start,
+                    end: end,
+                    lines: lines,
+                    index: index,
+                };
+                tx.send(result).unwrap();
+            }
+        }));
+    }
+
+    // We don't need our own handle for this channel
+    drop(tx);
+
+    // get indexes in chunks in threads
+    while pos < bytes {
+        let mut end = pos + chunk_size;
+        if end > bytes {
+            end = bytes;
+        } else {
+            while end < bytes && mmap[end] != b'\n' {
+                end += 1;
+            }
+        }
+        // Send the buffer to the parsers
+        let buffer = mmap[pos..end].to_vec();
+        sender.send((pos, end, buffer)).unwrap();
+        pos = end;
+    }
+
+    drop(sender);
+
+    // Wait for results
+    let (total_lines, index) = mrx.iter().next().unwrap();
+    println!("Lines {}", total_lines);
+
+
+    // println!("Total lines are: {}",cnt);
+    // println!("Total words are: {}",words);
+    // println!("Total bytes are: {}",bytes);
     println!("Indexed words: {}",index.words.len());
     println!("Indexed numbers: {}",index.numbers.len());
 }
