@@ -94,6 +94,7 @@ pub fn run(input_file: Option<PathBuf>,) {
                 }
                 if c == b'\n' {
                     cnt += 1;
+                    pos += 40;   // skip timestamp on next line
                 }
             }
         }
