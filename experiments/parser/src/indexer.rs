@@ -3,11 +3,6 @@
 use std::path::PathBuf;
 
 use std::fs::File;
-use std::io::{BufRead, BufReader};
-// use std::collections::{HashMap};
-
-use lazy_static::lazy_static;
-use regex::Regex;
 use fnv::FnvHashMap;
 
 struct Index {
@@ -33,6 +28,11 @@ impl Index {
         lines.push(line);
     }
 
+
+    fn add_number(&mut self, number: u64, line: usize) {
+        let lines = self.numbers.entry(number).or_insert(Vec::new());
+        lines.push(line);
+    }
 
 
     // fn search(&self, word: &str) -> Vec<usize> {
@@ -73,6 +73,10 @@ pub fn run(input_file: Option<PathBuf>,) {
     let mut start = 0;
 
     let mut inword = false;
+    let mut inhexnum = false;
+    let mut indecnum = false;
+    let mut num:u64 = 0;
+    let mut hexnum:u64 = 0;
     let mut pos = 0;
     loop {  // for pos in 0..bytes { //for c in mmap.as_ref() {
         if pos >= bytes {
@@ -85,11 +89,43 @@ pub fn run(input_file: Option<PathBuf>,) {
                     inword = true;
                     words += 1;
                     start = pos;
+                    if c >= b'0' && c <= b'9' {
+                        num = (c - b'0') as u64;
+                        indecnum = true;
+                        if c == b'0' {
+                            inhexnum = true;
+                            hexnum = 0;
+                        }
+                    }
+                } else {
+                    if inhexnum {
+                        if pos == bytes+1 && c == b'x' {
+                            // inhexnum = true;
+                        } else if !((c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f') || (c >= b'A' && c <= b'F')) {
+                            inhexnum = false;
+                        } else {
+                            hexnum = hexnum * 16 + (c - b'0') as u64;
+                        }
+                    }
+                    if indecnum {
+                        if !(c >= b'0' && c <= b'9') {
+                            indecnum = false;
+                        } else {
+                            num = num * 10 + (c - b'0') as u64;
+                        }
+                    }
                 }
             }
+
             _ => {
                 if inword {
-                    index.add_word(mmap[start..pos].to_vec(), cnt as usize);
+                    if indecnum {
+                        index.add_number(num, cnt);
+                    } else if inhexnum {
+                        index.add_number(hexnum, cnt);
+                    } else {
+                        index.add_word(mmap[start..pos].to_vec(), cnt);
+                    }
                     inword = false;
                 }
                 if c == b'\n' {
@@ -100,9 +136,6 @@ pub fn run(input_file: Option<PathBuf>,) {
         }
         pos += 1;
     }
-
-    println!("Indexed tokens: {}",index.words.len());
-    // index.split_numbers();
 
     println!("Total lines are: {}",cnt);
     println!("Total words are: {}",words);
