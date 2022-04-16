@@ -15,6 +15,8 @@ struct Opt {
 fn main() {
     let opt = Opt::from_args();
     let index = indexer::index_file(opt.input);
-    println!("Indexed words: {}",index.words.len());
-    println!("Indexed numbers: {}",index.numbers.len());
+    println!("Indexed words: {}", index.words.len());
+    println!("Indexed numbers: {}", index.numbers.len());
+    println!("Total lines: {}", index.lines());
+    println!("Total bytes: {}", index.bytes());
 }

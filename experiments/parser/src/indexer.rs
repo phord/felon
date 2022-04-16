@@ -9,6 +9,7 @@ use std::collections::VecDeque;
 pub struct Index {
     pub words: FnvHashMap<Vec<u8>, Vec<usize>>,
     pub numbers: FnvHashMap<u64, Vec<usize>>,
+    pub line_offsets: Vec<usize>,
     // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
     // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
 }
@@ -18,6 +19,7 @@ impl Index {
         Index {
             words: FnvHashMap::default(),
             numbers: FnvHashMap::default(),
+            line_offsets: Vec::new(),
         }
     }
 
@@ -31,8 +33,8 @@ impl Index {
         lines.push(line);
     }
 
-    fn merge(&mut self, other: Index, line_start: usize) {
-        // println!("Merging {} words into {} existing at line {}", other.words.len(), self.words.len(), line_start);
+    fn merge(&mut self, other: Index) {
+        let line_start = self.line_offsets.len();
         for (word, l) in other.words {
             let lines = self.words.entry(word).or_insert(Vec::new());
             for line in l {
@@ -45,6 +47,8 @@ impl Index {
                 lines.push(line + line_start);
             }
         }
+        // TODO: Use `append` for speed?
+        self.line_offsets.extend_from_slice(&other.line_offsets);
     }
 
 
@@ -53,6 +57,13 @@ impl Index {
         lines.push(line);
     }
 
+    pub fn bytes(&self) -> usize {
+        *self.line_offsets.last().unwrap_or(&0)
+    }
+
+    pub fn lines(&self) -> usize {
+        self.line_offsets.len()
+    }
 
     // fn search(&self, word: &str) -> Vec<usize> {
     //     let word = word.to_lowercase();
@@ -67,9 +78,8 @@ impl Index {
     //     }
     // }
 
-    // Accumulate the map of words and numbers from the sllice of lines
-    fn parse(&mut self, data: &[u8]) -> usize {
-
+    // Accumulate the map of words and numbers from the slice of lines
+    fn parse(&mut self, data: &[u8], offset: usize) -> usize {
         let bytes = data.len();
         let has_final_eol = data.last().unwrap() == &b'\n';
         let mut cnt  = 0;
@@ -173,13 +183,10 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
 
     struct ThreadData {
         start: usize,
-        end: usize,
-        lines: usize,
         index: Index,
     }
 
     let mut index = Index::new();
-    let mut total_lines = 0;
 
     scope(|scope| {
         let (tx, rx) = unbounded();
@@ -192,7 +199,6 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
         scope.spawn(move |_| {
             let mut held: VecDeque<ThreadData> = VecDeque::new();
             let mut pos = 0;
-            let mut line_offset = 0;
             let mut index = Index::new();
             while let Ok(data) = rx.recv() {
                 held.push_front(data);
@@ -205,16 +211,16 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
                         }
                     }
                     if let Some(data) = data {
-                        pos = data.end;
-                        index.merge(data.index, line_offset);
-                        line_offset += data.lines;
+                        index.merge(data.index);
+                        pos = index.bytes();
                         continue;
                     } else {
                         break; //exit held-poller loop; wait for new data
                     }
                 }
             }
-            mtx.send((line_offset, index)).unwrap();
+            assert!(held.is_empty());
+            mtx.send(index).unwrap();
         });
 
         // get indexes in chunks in threads
@@ -245,8 +251,8 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
             let start = pos;
             scope.spawn(move |_| {
                 let mut index = Index::new();
-                let lines = index.parse(&buffer);
-                let result = ThreadData {start, end, lines, index, };
+                index.parse(&buffer, start);
+                let result = ThreadData {start, index, };
                 tx.send(result).unwrap();
                 receiver.recv().unwrap();
             });
@@ -257,8 +263,7 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
         drop(tx);
 
         // Wait for results
-        (total_lines, index) = mrx.iter().next().unwrap();
+        index = mrx.iter().next().unwrap();
     }).unwrap();
-    println!("Lines {}", total_lines);
     return index;
 }
