@@ -66,86 +66,86 @@ impl Index {
     //         None => Vec::new(),
     //     }
     // }
+
+    // Accumulate the map of words and numbers from the sllice of lines
+    fn parse(&mut self, data: &[u8]) -> usize {
+
+        let bytes = data.len();
+        let mut cnt  = 0;
+        // let mut words = 0;
+        let mut start = 0;
+
+        let mut inword = false;
+        let mut inhexnum = false;
+        let mut indecnum = false;
+        let mut num:u64 = 0;
+        let mut hexnum:u64 = 0;
+        let mut pos = 0;
+        loop {  // for pos in 0..bytes { //for c in mmap.as_ref() {
+            if pos >= bytes {
+                break;
+            }
+            let c = data[pos];
+            match c {
+                // All valid word or number characters
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {
+                    if !inword {
+                        inword = true;
+                        // words += 1;
+                        start = pos;
+                        if c >= b'0' && c <= b'9' {
+                            num = (c - b'0') as u64;
+                            indecnum = true;
+                            if c == b'0' {
+                                inhexnum = true;
+                                hexnum = 0;
+                            }
+                        }
+                    } else {
+                        if inhexnum {
+                            if pos == bytes+1 && c == b'x' {
+                                // inhexnum = true;
+                            } else if !((c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f') || (c >= b'A' && c <= b'F')) {
+                                inhexnum = false;
+                            } else {
+                                hexnum = hexnum * 16 + (c - b'0') as u64;
+                            }
+                        }
+                        if indecnum {
+                            if !(c >= b'0' && c <= b'9') {
+                                indecnum = false;
+                            } else {
+                                num = num * 10 + (c - b'0') as u64;
+                            }
+                        }
+                    }
+                }
+                // All other characters (whitespace, punctuation)
+                _ => {
+                    if inword {
+                        if indecnum {
+                            self.add_number(num, cnt);
+                        } else if inhexnum {
+                            self.add_number(hexnum, cnt);
+                        } else {
+                            self.add_word(&data[start..pos], cnt);
+                        }
+                        inword = false;
+                    }
+                    if c == b'\n' {
+                        cnt += 1;
+                        pos += 40;   // skip timestamp on next line
+                    }
+                }
+            }
+            pos += 1;
+        }
+        cnt
+    }
 }
 
 use mapr::MmapOptions;
 
-// Read part of the file and count the words/lines/characters
-fn parse(data: &[u8]) -> (usize, Index) {
-
-    let bytes = data.len();
-    let mut cnt  = 0;
-    // let mut words = 0;
-    let mut index = Index::new();
-    let mut start = 0;
-
-    let mut inword = false;
-    let mut inhexnum = false;
-    let mut indecnum = false;
-    let mut num:u64 = 0;
-    let mut hexnum:u64 = 0;
-    let mut pos = 0;
-    loop {  // for pos in 0..bytes { //for c in mmap.as_ref() {
-        if pos >= bytes {
-            break;
-        }
-        let c = data[pos];
-        match c {
-            // All valid word or number characters
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {
-                if !inword {
-                    inword = true;
-                    // words += 1;
-                    start = pos;
-                    if c >= b'0' && c <= b'9' {
-                        num = (c - b'0') as u64;
-                        indecnum = true;
-                        if c == b'0' {
-                            inhexnum = true;
-                            hexnum = 0;
-                        }
-                    }
-                } else {
-                    if inhexnum {
-                        if pos == bytes+1 && c == b'x' {
-                            // inhexnum = true;
-                        } else if !((c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f') || (c >= b'A' && c <= b'F')) {
-                            inhexnum = false;
-                        } else {
-                            hexnum = hexnum * 16 + (c - b'0') as u64;
-                        }
-                    }
-                    if indecnum {
-                        if !(c >= b'0' && c <= b'9') {
-                            indecnum = false;
-                        } else {
-                            num = num * 10 + (c - b'0') as u64;
-                        }
-                    }
-                }
-            }
-            // All other characters (whitespace, punctuation)
-            _ => {
-                if inword {
-                    if indecnum {
-                        index.add_number(num, cnt);
-                    } else if inhexnum {
-                        index.add_number(hexnum, cnt);
-                    } else {
-                        index.add_word(&data[start..pos], cnt);
-                    }
-                    inword = false;
-                }
-                if c == b'\n' {
-                    cnt += 1;
-                    pos += 40;   // skip timestamp on next line
-                }
-            }
-        }
-        pos += 1;
-    }
-    (cnt, index)
-}
 
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
@@ -236,8 +236,9 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
             let receiver = receiver.clone();
             let start = pos;
             scope.spawn(move |_| {
-                let (lines, index) = parse(&buffer);
-                let result = ThreadData {start,end,lines,index,};
+                let mut index = Index::new();
+                let lines = index.parse(&buffer);
+                let result = ThreadData {start, end, lines, index, };
                 tx.send(result).unwrap();
                 receiver.recv().unwrap();
             });
