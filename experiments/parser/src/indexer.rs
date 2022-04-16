@@ -71,6 +71,7 @@ impl Index {
     fn parse(&mut self, data: &[u8]) -> usize {
 
         let bytes = data.len();
+        let has_final_eol = data.last().unwrap() == &b'\n';
         let mut cnt  = 0;
         // let mut words = 0;
         let mut start = 0;
@@ -81,11 +82,12 @@ impl Index {
         let mut num:u64 = 0;
         let mut hexnum:u64 = 0;
         let mut pos = 0;
+        let max_pos = if has_final_eol { bytes } else { bytes + 1 };
         loop {  // for pos in 0..bytes { //for c in mmap.as_ref() {
-            if pos >= bytes {
+            if pos >= max_pos {
                 break;
             }
-            let c = data[pos];
+            let c = if pos < bytes { data[pos] } else { b'\n' };
             match c {
                 // All valid word or number characters
                 b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {
@@ -134,6 +136,7 @@ impl Index {
                     }
                     if c == b'\n' {
                         cnt += 1;
+                        self.line_offsets.push(offset + std::cmp::max(pos + 1, bytes));
                         pos += 40;   // skip timestamp on next line
                     }
                 }
@@ -222,6 +225,11 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
             } else {
                 // It would be nice to do this in parser, but we need an answer for the next thread or we can't proceed.
                 while end < bytes && mmap[end] != b'\n' {
+                    end += 1;
+                }
+                // Point past eol, if there is one
+                if end < bytes {
+                    assert_eq!(mmap[end], b'\n');
                     end += 1;
                 }
             }
