@@ -148,6 +148,7 @@ fn parse(data: &[u8]) -> (usize, Index) {
 }
 
 use crossbeam::scope;
+use crossbeam_channel::{bounded, unbounded};
 
 pub fn index_file(input_file: Option<PathBuf>) -> Index{
     let input = if let Some(input_file) = input_file {
@@ -178,10 +179,10 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
     let mut total_lines = 0;
 
     scope(|scope| {
-        let (tx, rx) = flume::unbounded();
-        let (mtx, mrx) = flume::unbounded();
+        let (tx, rx) = unbounded();
+        let (mtx, mrx) = unbounded();
         // Limit threadpool of parsers by relying on sender queue length
-        let (sender, receiver) = flume::bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
+        let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
 
         // Thread to merge index results
         //   rx ---> [merged] ---> mtx ---> [index]
@@ -251,6 +252,4 @@ pub fn index_file(input_file: Option<PathBuf>) -> Index{
     }).unwrap();
     println!("Lines {}", total_lines);
     return index;
-
-
 }
