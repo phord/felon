@@ -6,9 +6,11 @@ use std::fs::File;
 use fnv::FnvHashMap;
 use std::collections::VecDeque;
 
-struct Index {
-    words: FnvHashMap<Vec<u8>, Vec<usize>>,
-    numbers: FnvHashMap<u64, Vec<usize>>,
+pub struct Index {
+    pub words: FnvHashMap<Vec<u8>, Vec<usize>>,
+    pub numbers: FnvHashMap<u64, Vec<usize>>,
+    // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
+    // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
 }
 
 impl Index {
@@ -69,14 +71,13 @@ impl Index {
 use mapr::MmapOptions;
 use std::sync::mpsc::channel;
 use std::thread;
-use std::sync::Arc;
 
 // Read part of the file and count the words/lines/characters
 fn parse(data: Vec<u8>) -> (usize, Index) {
 
     let bytes = data.len();
     let mut cnt  = 0;
-    let mut words = 0;
+    // let mut words = 0;
     let mut index = Index::new();
     let mut start = 0;
 
@@ -92,10 +93,11 @@ fn parse(data: Vec<u8>) -> (usize, Index) {
         }
         let c = data[pos];
         match c {
+            // All valid word or number characters
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => {
                 if !inword {
                     inword = true;
-                    words += 1;
+                    // words += 1;
                     start = pos;
                     if c >= b'0' && c <= b'9' {
                         num = (c - b'0') as u64;
@@ -124,7 +126,7 @@ fn parse(data: Vec<u8>) -> (usize, Index) {
                     }
                 }
             }
-
+            // All other characters (whitespace, punctuation)
             _ => {
                 if inword {
                     if indecnum {
@@ -147,7 +149,7 @@ fn parse(data: Vec<u8>) -> (usize, Index) {
     (cnt, index)
 }
 
-pub fn run(input_file: Option<PathBuf>) {
+pub fn index_file(input_file: Option<PathBuf>) -> Index{
     let input = if let Some(input_file) = input_file {
         // Must have a filename as input.
         let file = File::open(input_file).expect("Could not open file.");
@@ -232,6 +234,7 @@ pub fn run(input_file: Option<PathBuf>) {
         if end > bytes {
             end = bytes;
         } else {
+            // It would be nice to do this in parser, but we need an answer for the next thread or we can't proceed.
             while end < bytes && mmap[end] != b'\n' {
                 end += 1;
             }
@@ -246,12 +249,19 @@ pub fn run(input_file: Option<PathBuf>) {
 
     // Wait for results
     let (total_lines, index) = mrx.iter().next().unwrap();
+
+    // Wait for all threads to finish
+    merger.join().unwrap();
+    for thread in pool {
+        thread.join().unwrap();
+    }
+
     println!("Lines {}", total_lines);
 
 
     // println!("Total lines are: {}",cnt);
     // println!("Total words are: {}",words);
     // println!("Total bytes are: {}",bytes);
-    println!("Indexed words: {}",index.words.len());
-    println!("Indexed numbers: {}",index.numbers.len());
+
+    return index;
 }
