@@ -4,15 +4,15 @@ use std::path::PathBuf;
 
 use std::fs::File;
 use std::fmt;
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::VecDeque;
 use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 
 pub struct Index {
-    pub words: FnvHashMap<Vec<u8>, Vec<usize>>,
-    pub numbers: FnvHashMap<u64, Vec<usize>>,
+    pub words: FnvHashMap<Vec<u8>, FnvHashSet<usize>>,
+    pub numbers: FnvHashMap<u64, FnvHashSet<usize>>,
     pub line_offsets: Vec<usize>,
     // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
     // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
@@ -33,22 +33,22 @@ impl Index {
         // if word.is_empty() {
         //     return;
         // }
-        let lines = self.words.entry(word.to_vec()).or_insert(Vec::new());
-        lines.push(line);
+        let lines = self.words.entry(word.to_vec()).or_insert(FnvHashSet::default());
+        lines.insert(line);
     }
 
     fn merge(&mut self, other: Index) {
         let line_start = self.line_offsets.len();
         for (word, l) in other.words {
-            let lines = self.words.entry(word).or_insert(Vec::new());
+            let lines = self.words.entry(word).or_insert(FnvHashSet::default());
             for line in l {
-                lines.push(line + line_start);
+                lines.insert(line + line_start);
             }
         }
         for (number, l) in other.numbers {
-            let lines = self.numbers.entry(number).or_insert(Vec::new());
+            let lines = self.numbers.entry(number).or_insert(FnvHashSet::default());
             for line in l {
-                lines.push(line + line_start);
+                lines.insert(line + line_start);
             }
         }
         // TODO: Use `append` for speed? Or use split_vectors?  skip_lists?
@@ -57,8 +57,8 @@ impl Index {
 
 
     fn add_number(&mut self, number: u64, line: usize) {
-        let lines = self.numbers.entry(number).or_insert(Vec::new());
-        lines.push(line);
+        let lines = self.numbers.entry(number).or_insert(FnvHashSet::default());
+        lines.insert(line);
     }
 
     pub fn bytes(&self) -> usize {
@@ -69,15 +69,15 @@ impl Index {
         self.line_offsets.len()
     }
 
-    pub fn search_word(&self, word: &str) -> Vec<usize> {
+    pub fn search_word(&self, word: &str) -> FnvHashSet<usize> {
         let word = word.trim();
         if word.is_empty() {
-            return Vec::new();
+            return FnvHashSet::default();
         }
         let word = word.as_bytes().to_vec();
         match self.words.get(&word) {
             Some(lines) => lines.clone(),
-            None => Vec::new(),
+            None => FnvHashSet::default(),
         }
     }
 
