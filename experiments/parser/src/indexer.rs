@@ -65,18 +65,21 @@ impl Index {
         self.line_offsets.len()
     }
 
-    // fn search(&self, word: &str) -> Vec<usize> {
-    //     let word = word.to_lowercase();
-    //     let word = word.trim();
-    //     if word.is_empty() {
-    //         return Vec::new();
-    //     }
-    //     let word = word.to_string();
-    //     match self.words.get(&word) {
-    //         Some(words) => words.clone(),
-    //         None => Vec::new(),
-    //     }
-    // }
+    pub fn search_word(&self, word: &str) -> Vec<usize> {
+        let word = word.trim();
+        if word.is_empty() {
+            return Vec::new();
+        }
+        let word = word.as_bytes().to_vec();
+        match self.words.get(&word) {
+            Some(lines) => lines.clone(),
+            None => Vec::new(),
+        }
+    }
+
+    // TODO: search_line
+    // Parse line into another index
+    // Match index against self to find matching lines
 
     // Accumulate the map of words and numbers from the slice of lines
     fn parse(&mut self, data: &[u8], offset: usize) -> usize {
