@@ -123,7 +123,8 @@ impl Index {
                             } else if !((c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f') || (c >= b'A' && c <= b'F')) {
                                 inhexnum = false;
                             } else {
-                                hexnum = hexnum * 16 + (c - b'0') as u64;
+                                let nybble = if c <= b'9' {c - b'0'} else if c <= b'F' {10 + c - b'A'} else {10 + c - b'a'};
+                                hexnum = hexnum * 16 + nybble as u64;
                             }
                         }
                         if indecnum {
