@@ -3,8 +3,12 @@
 use std::path::PathBuf;
 
 use std::fs::File;
+use std::fmt;
 use fnv::FnvHashMap;
 use std::collections::VecDeque;
+use mapr::{MmapOptions, Mmap};
+use crossbeam::scope;
+use crossbeam_channel::{bounded, unbounded};
 
 pub struct Index {
     pub words: FnvHashMap<Vec<u8>, Vec<usize>>,
@@ -47,7 +51,7 @@ impl Index {
                 lines.push(line + line_start);
             }
         }
-        // TODO: Use `append` for speed?
+        // TODO: Use `append` for speed? Or use split_vectors?  skip_lists?
         self.line_offsets.extend_from_slice(&other.line_offsets);
     }
 
@@ -161,113 +165,141 @@ impl Index {
     }
 }
 
-use mapr::MmapOptions;
+pub struct LogFile {
+    // pub file_path: PathBuf,
+    mmap: Mmap,
+    pub index: Index,
+}
 
+impl fmt::Debug for LogFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LogFile")
+         .field("bytes", &self.index.bytes())
+         .field("words", &self.index.words.len())
+         .field("numbers", &self.index.numbers.len())
+         .field("lines", &self.index.lines())
+         .finish()
+    }
+}
 
-use crossbeam::scope;
-use crossbeam_channel::{bounded, unbounded};
+impl LogFile {
+    // FIXME: Return a Result<> to pass errors upstream
+    pub fn new(input_file: Option<PathBuf>) -> LogFile {
 
-pub fn index_file(input_file: Option<PathBuf>) -> Index{
-    let input = if let Some(input_file) = input_file {
-        // Must have a filename as input.
-        let file = File::open(input_file).expect("Could not open file.");
-        Some(file)
-    } else {
-        // Print error.
-        eprintln!("Expected '<input>' or input over stdin.");
-        ::std::process::exit(1);
-    };
+        let file = if let Some(file_path) = input_file {
+            // Must have a filename as input.
+            let file = File::open(file_path).expect("Could not open file.");
+            Some(file)
+        } else {
+            // Print error.
+            eprintln!("Expected '<input>' or input over stdin.");
+            ::std::process::exit(1);
+        };
 
-    let mmap = unsafe { MmapOptions::new().map(&input.unwrap()) };
-    let mmap = mmap.expect("Could not mmap file.");
-    let bytes = mmap.len();
-    let chunk_size = 1024 * 1024 * 32;
+        let mmap = unsafe { MmapOptions::new().map(&file.unwrap()) };
+        let mmap = mmap.expect("Could not mmap file.");
 
-    let mut pos = 0;
+        let mut file = LogFile {
+            // file_path: input_file.unwrap(),
+            mmap,
+            index: Index::new(),
+        };
 
-    struct ThreadData {
-        start: usize,
-        index: Index,
+        file.index_file();
+        file
     }
 
-    let mut index = Index::new();
+    pub fn index_file(&mut self) {
 
-    scope(|scope| {
-        let (tx, rx) = unbounded();
-        let (mtx, mrx) = unbounded();
-        // Limit threadpool of parsers by relying on sender queue length
-        let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
+        let bytes = self.mmap.len();
+        let chunk_size = 1024 * 1024 * 32;
 
-        // Thread to merge index results
-        //   rx ---> [merged] ---> mtx ---> [index]
-        scope.spawn(move |_| {
-            let mut held: VecDeque<ThreadData> = VecDeque::new();
-            let mut pos = 0;
-            let mut index = Index::new();
-            while let Ok(data) = rx.recv() {
-                held.push_front(data);
-                loop {
-                    let mut data = None;
-                    for i in 0..held.len() {
-                        if held[i].start == pos {
-                            data = held.remove(i);
-                            break;
-                        }
-                    }
-                    if let Some(data) = data {
-                        index.merge(data.index);
-                        pos = index.bytes();
-                        continue;
-                    } else {
-                        break; //exit held-poller loop; wait for new data
-                    }
-                }
-            }
-            assert!(held.is_empty());
-            mtx.send(index).unwrap();
-        });
+        let mut pos = 0;
 
-        // get indexes in chunks in threads
-        while pos < bytes {
-            let mut end = pos + chunk_size;
-            if end > bytes {
-                end = bytes;
-            } else {
-                // It would be nice to do this in parser, but we need an answer for the next thread or we can't proceed.
-                while end < bytes && mmap[end] != b'\n' {
-                    end += 1;
-                }
-                // Point past eol, if there is one
-                if end < bytes {
-                    assert_eq!(mmap[end], b'\n');
-                    end += 1;
-                }
-            }
-
-            // Count parser threads
-            sender.send(true).unwrap();
-
-            // Send the buffer to the parsers
-            let buffer = &mmap[pos..end];
-
-            let tx = tx.clone();
-            let receiver = receiver.clone();
-            let start = pos;
-            scope.spawn(move |_| {
-                let mut index = Index::new();
-                index.parse(&buffer, start);
-                let result = ThreadData {start, index, };
-                tx.send(result).unwrap();
-                receiver.recv().unwrap();
-            });
-            pos = end;
+        struct ThreadData {
+            start: usize,
+            index: Index,
         }
 
-        // We don't need our own handle for this channel
-        drop(tx);
+        let mut index = Index::new();
 
-        // Wait for results
-        index = mrx.iter().next().unwrap();
-    }).unwrap();
-    return index;
+        scope(|scope| {
+            let (tx, rx) = unbounded();
+            let (mtx, mrx) = unbounded();
+            // Limit threadpool of parsers by relying on sender queue length
+            let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
+
+            // Thread to merge index results
+            //   rx ---> [merged] ---> mtx ---> [index]
+            scope.spawn(move |_| {
+                let mut held: VecDeque<ThreadData> = VecDeque::new();
+                let mut pos = 0;
+                let mut index = Index::new();
+                while let Ok(data) = rx.recv() {
+                    held.push_front(data);
+                    loop {
+                        let mut data = None;
+                        for i in 0..held.len() {
+                            if held[i].start == pos {
+                                data = held.remove(i);
+                                break;
+                            }
+                        }
+                        if let Some(data) = data {
+                            index.merge(data.index);
+                            pos = index.bytes();
+                            continue;
+                        } else {
+                            break; //exit held-poller loop; wait for new data
+                        }
+                    }
+                }
+                assert!(held.is_empty());
+                mtx.send(index).unwrap();
+            });
+
+            // get indexes in chunks in threads
+            while pos < bytes {
+                let mut end = pos + chunk_size;
+                if end > bytes {
+                    end = bytes;
+                } else {
+                    // It would be nice to do this in parser, but we need an answer for the next thread or we can't proceed.
+                    while end < bytes && self.mmap[end] != b'\n' {
+                        end += 1;
+                    }
+                    // Point past eol, if there is one
+                    if end < bytes {
+                        assert_eq!(self.mmap[end], b'\n');
+                        end += 1;
+                    }
+                }
+
+                // Count parser threads
+                sender.send(true).unwrap();
+
+                // Send the buffer to the parsers
+                let buffer = &self.mmap[pos..end];
+
+                let tx = tx.clone();
+                let receiver = receiver.clone();
+                let start = pos;
+                scope.spawn(move |_| {
+                    let mut index = Index::new();
+                    index.parse(&buffer, start);
+                    let result = ThreadData {start, index, };
+                    tx.send(result).unwrap();
+                    receiver.recv().unwrap();
+                });
+                pos = end;
+            }
+
+            // We don't need our own handle for this channel
+            drop(tx);
+
+            // Wait for results
+            index = mrx.iter().next().unwrap();
+        }).unwrap();
+        self.index = index;
+    }
 }

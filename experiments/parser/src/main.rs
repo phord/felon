@@ -10,13 +10,20 @@ mod indexer;
 struct Opt {
     #[structopt(parse(from_os_str))]
     input: Option<PathBuf>,
+    search_word: Option<String>,
 }
 
 fn main() {
     let opt = Opt::from_args();
-    let index = indexer::index_file(opt.input);
-    println!("Indexed words: {}", index.words.len());
-    println!("Indexed numbers: {}", index.numbers.len());
-    println!("Total lines: {}", index.lines());
-    println!("Total bytes: {}", index.bytes());
+    let file = indexer::LogFile::new(opt.input);
+
+    println!("{:?}", file);
+
+    if let Some(word) = opt.search_word {
+        let lines = file.index.search_word(&word);
+        println!("Found {} lines for word '{}'", lines.len(), word);
+        // for line in lines {
+        //     println!("{}", line);
+        // }
+    }
 }
