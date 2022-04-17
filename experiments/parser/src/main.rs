@@ -21,9 +21,16 @@ fn main() {
 
     if let Some(word) = opt.search_word {
         let lines = file.index.search_word(&word);
-        println!("Found {} lines for word '{}'", lines.len(), word);
-        // for line in lines {
-        //     println!("{}", line);
-        // }
+        match lines {
+            Some(lines) => {
+                println!("Found {} lines for word '{}'", lines.len(), word);
+                // for line in lines {
+                //     println!("{}", line);
+                // }
+            }
+            None => {
+                println!("No lines found for word '{}'", word);
+            }
+        }
     }
 }

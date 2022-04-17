@@ -4,16 +4,82 @@ use std::path::PathBuf;
 
 use std::fs::File;
 use std::fmt;
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 use std::collections::VecDeque;
+use std::collections::BTreeSet;
 use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 
+use std::cell::UnsafeCell;
+
+struct LazyLineSet {
+    lines: UnsafeCell<BTreeSet<usize>>,
+    source_lines: UnsafeCell<Vec<(usize, Vec<usize>)>>,
+}
+
+// Builder for a set of lines. Collection is in a vector at first, but later
+// is merged with others at different starting offsets. The merge is expensive
+// so it is deferred until it is actually needed. Once it is merged, no new lines can be added.
+impl LazyLineSet {
+    fn new() -> LazyLineSet {
+        let mut source_lines = Vec::new();
+        source_lines.push((0, Vec::new()));
+        LazyLineSet {
+            lines: UnsafeCell::new(BTreeSet::new()),
+            source_lines: UnsafeCell::new(source_lines),
+        }
+    }
+
+    fn insert(&mut self, line: usize) {
+        let source_lines = unsafe { &mut *self.source_lines.get() };
+        assert_eq!(source_lines.len(), 1);
+        source_lines[0].1.push(line);
+    }
+
+    fn resolve(&self) -> &BTreeSet<usize> {
+        println!("resolve");
+        let source_lines = unsafe { &mut *self.source_lines.get() };
+        let lines = unsafe { &mut *self.lines.get() };
+        if ! source_lines.is_empty() {
+            assert!(lines.is_empty());
+
+            for (offset, ll) in source_lines.drain(..) {
+                if offset == 0 {
+                    lines.extend(ll);
+                } else {
+                    for line in ll {
+                        lines.insert(line + offset);
+                    }
+                }
+            }
+        } else {
+            assert!(source_lines.is_empty());
+        }
+        lines
+    }
+
+    fn merge(&mut self, offset: usize, other: Self) {
+        let source_lines = unsafe {&mut *self.source_lines.get()};
+        let lines = unsafe {&mut *self.lines.get()};
+        let other_source_lines = unsafe {&mut *other.source_lines.get()};
+        let other_lines = unsafe {& *other.lines.get()};
+        assert!(!source_lines.is_empty());
+        assert!(!other_source_lines.is_empty());
+        assert!(lines.is_empty());
+        assert!(other_lines.is_empty());
+
+        for (ofs, lines) in other_source_lines.drain(..) {
+            source_lines.push((ofs + offset, lines));
+        }
+    }
+}
+
+
 pub struct Index {
-    pub words: FnvHashMap<Vec<u8>, FnvHashSet<usize>>,
-    pub numbers: FnvHashMap<u64, FnvHashSet<usize>>,
-    pub line_offsets: Vec<usize>,
+    words: FnvHashMap<Vec<u8>, LazyLineSet>,
+    numbers: FnvHashMap<u64, LazyLineSet>,
+    line_offsets: Vec<usize>,
     // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
     // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
 }
@@ -33,23 +99,19 @@ impl Index {
         // if word.is_empty() {
         //     return;
         // }
-        let lines = self.words.entry(word.to_vec()).or_insert(FnvHashSet::default());
+        let lines = self.words.entry(word.to_vec()).or_insert(LazyLineSet::new());
         lines.insert(line);
     }
 
     fn merge(&mut self, other: Index) {
         let line_start = self.line_offsets.len();
         for (word, l) in other.words {
-            let lines = self.words.entry(word).or_insert(FnvHashSet::default());
-            for line in l {
-                lines.insert(line + line_start);
-            }
+            let lines = self.words.entry(word).or_insert(LazyLineSet::new());
+            lines.merge(line_start, l);
         }
         for (number, l) in other.numbers {
-            let lines = self.numbers.entry(number).or_insert(FnvHashSet::default());
-            for line in l {
-                lines.insert(line + line_start);
-            }
+            let lines = self.numbers.entry(number).or_insert(LazyLineSet::new());
+            lines.merge(line_start, l);
         }
         // TODO: Use `append` for speed? Or use split_vectors?  skip_lists?
         self.line_offsets.extend_from_slice(&other.line_offsets);
@@ -57,7 +119,7 @@ impl Index {
 
 
     fn add_number(&mut self, number: u64, line: usize) {
-        let lines = self.numbers.entry(number).or_insert(FnvHashSet::default());
+        let lines = self.numbers.entry(number).or_insert(LazyLineSet::new());
         lines.insert(line);
     }
 
@@ -69,15 +131,15 @@ impl Index {
         self.line_offsets.len()
     }
 
-    pub fn search_word(&self, word: &str) -> FnvHashSet<usize> {
+    pub fn search_word(&self, word: &str) -> Option<&BTreeSet<usize>> {
         let word = word.trim();
         if word.is_empty() {
-            return FnvHashSet::default();
+            return None;
         }
         let word = word.as_bytes().to_vec();
         match self.words.get(&word) {
-            Some(lines) => lines.clone(),
-            None => FnvHashSet::default(),
+            Some(lines) => Some(lines.resolve()),
+            None => None,
         }
     }
 
