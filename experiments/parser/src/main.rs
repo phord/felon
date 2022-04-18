@@ -2,6 +2,7 @@ extern crate structopt;
 
 use std::path::PathBuf;
 use structopt::StructOpt;
+use std::time::{Instant};
 
 mod indexer;
 
@@ -15,11 +16,15 @@ struct Opt {
 
 fn main() {
     let opt = Opt::from_args();
+    let index_timer = Instant::now();
+
     let file = indexer::LogFile::new(opt.input);
+    println!("Index time: {}", index_timer.elapsed().as_millis() as f32 / 1000.);
 
     println!("{:?}", file);
 
     if let Some(word) = opt.search_word {
+        let lookup_timer = Instant::now();
         let lines = file.index.search_word(&word);
         match lines {
             Some(lines) => {
@@ -32,5 +37,7 @@ fn main() {
                 println!("No lines found for word '{}'", word);
             }
         }
+        println!("Lookup time: {}", lookup_timer.elapsed().as_millis() as f32 / 1000.);
+
     }
 }
