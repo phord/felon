@@ -10,13 +10,8 @@ use std::collections::BTreeSet;
 use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
-use std::cell::Cell;
-
-
-// FIXME: Get rid of unsafe?  https://gist.github.com/jesperdj/7d4f5dede9fc4efc26cc7fc8d367b46b
 
 struct LazyLineSet {
-    lines: Cell<BTreeSet<usize>>,
     source_lines: Vec<(usize, Vec<usize>)>,
 }
 
@@ -28,8 +23,7 @@ impl LazyLineSet {
         let mut source_lines = Vec::new();
         source_lines.push((0, Vec::new()));
         LazyLineSet {
-            lines: Cell::new(BTreeSet::new()),
-            source_lines: source_lines,
+            source_lines,
         }
     }
 
@@ -61,11 +55,8 @@ impl LazyLineSet {
         // &self.lines.get_mut()
     }
 
-    fn merge(&mut self, offset: usize, other: Self) {
-        assert!(self.lines.get_mut().is_empty());
-        // assert!(other.lines.get_mut().is_empty());  // FIXME
-
-        for (ofs, lines) in other.source_lines {
+    fn merge(&mut self, offset: usize, mut other: Self) {
+        for (ofs, lines) in other.source_lines.drain(..) {
             self.source_lines.push((ofs + offset, lines));
         }
     }
@@ -99,13 +90,13 @@ impl Index {
         lines.insert(line);
     }
 
-    fn merge(&mut self, other: Index) {
+    fn merge(&mut self, other: &mut Index) {
         let line_start = self.line_offsets.len();
-        for (word, l) in other.words {
+        for (word, l) in other.words.drain() {
             let lines = self.words.entry(word).or_insert(LazyLineSet::new());
             lines.merge(line_start, l);
         }
-        for (number, l) in other.numbers {
+        for (number, l) in other.numbers.drain() {
             let lines = self.numbers.entry(number).or_insert(LazyLineSet::new());
             lines.merge(line_start, l);
         }
@@ -304,8 +295,8 @@ impl LogFile {
                                 break;
                             }
                         }
-                        if let Some(data) = data {
-                            index.merge(data.index);
+                        if let Some(mut data) = data {
+                            index.merge(&mut data.index);
                             pos = index.bytes();
                             continue;
                         } else {
