@@ -11,62 +11,10 @@ use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 
-struct LazyLineSet {
-    source_lines: Vec<(usize, Vec<usize>)>,
-}
-
-// Builder for a set of lines. Collection is in a vector at first, but later
-// is merged with others at different starting offsets. The merge is expensive
-// so it is deferred until it is actually needed. Once it is merged, no new lines can be added.
-impl LazyLineSet {
-    fn new() -> LazyLineSet {
-        let mut source_lines = Vec::new();
-        source_lines.push((0, Vec::new()));
-        LazyLineSet {
-            source_lines,
-        }
-    }
-
-    fn insert(&mut self, line: usize) {
-        assert_eq!(self.source_lines.len(), 1);
-        self.source_lines[0].1.push(line);
-    }
-
-    // FIXME: return a memoized reference
-    fn resolve(&self) -> BTreeSet<usize> {
-        let mut lines = BTreeSet::new();
-        if ! self.source_lines.is_empty() {
-            // assert!(self.lines.get_mut().is_empty());
-
-            for (offset, ll) in self.source_lines.iter() {
-                if offset == &0 {
-                    lines.extend(ll);
-                } else {
-                    for line in ll {
-                        lines.insert(line + offset);
-                    }
-                }
-            }
-        } else {
-            // assert!(self.source_lines.get_mut().is_empty());
-            assert!(false);
-        }
-        lines
-        // &self.lines.get_mut()
-    }
-
-    fn merge(&mut self, offset: usize, mut other: Self) {
-        for (ofs, lines) in other.source_lines.drain(..) {
-            self.source_lines.push((ofs + offset, lines));
-        }
-    }
-}
-
-
 pub struct Index {
-    words: FnvHashMap<Vec<u8>, LazyLineSet>,
-    numbers: FnvHashMap<u64, LazyLineSet>,
-    line_offsets: Vec<usize>,
+    pub words: FnvHashMap<Vec<u8>, Vec<usize>>,
+    pub numbers: FnvHashMap<u64, Vec<usize>>,
+    pub line_offsets: Vec<usize>,
     // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
     // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
 }
@@ -86,19 +34,23 @@ impl Index {
         // if word.is_empty() {
         //     return;
         // }
-        let lines = self.words.entry(word.to_vec()).or_insert(LazyLineSet::new());
-        lines.insert(line);
+        let lines = self.words.entry(word.to_vec()).or_insert(Vec::new());
+        lines.push(line);
     }
 
-    fn merge(&mut self, other: &mut Index) {
+    fn merge(&mut self, other: Index) {
         let line_start = self.line_offsets.len();
-        for (word, l) in other.words.drain() {
-            let lines = self.words.entry(word).or_insert(LazyLineSet::new());
-            lines.merge(line_start, l);
+        for (word, l) in other.words {
+            let lines = self.words.entry(word).or_insert(Vec::new());
+            for line in l {
+                lines.push(line + line_start);
+            }
         }
-        for (number, l) in other.numbers.drain() {
-            let lines = self.numbers.entry(number).or_insert(LazyLineSet::new());
-            lines.merge(line_start, l);
+        for (number, l) in other.numbers {
+            let lines = self.numbers.entry(number).or_insert(Vec::new());
+            for line in l {
+                lines.push(line + line_start);
+            }
         }
         // TODO: Use `append` for speed? Or use split_vectors?  skip_lists?
         self.line_offsets.extend_from_slice(&other.line_offsets);
@@ -106,8 +58,8 @@ impl Index {
 
 
     fn add_number(&mut self, number: u64, line: usize) {
-        let lines = self.numbers.entry(number).or_insert(LazyLineSet::new());
-        lines.insert(line);
+        let lines = self.numbers.entry(number).or_insert(Vec::new());
+        lines.push(line);
     }
 
     pub fn bytes(&self) -> usize {
@@ -118,7 +70,7 @@ impl Index {
         self.line_offsets.len()
     }
 
-    // FIXME: return a reference
+    // FIXME: memoize this and return a reference
     pub fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
         let word = word.trim();
         if word.is_empty() {
@@ -126,7 +78,7 @@ impl Index {
         }
         let word = word.as_bytes().to_vec();
         match self.words.get(&word) {
-            Some(lazy_lines) => Some(lazy_lines.resolve()),
+            Some(lines) => Some(BTreeSet::from_iter(lines.iter().cloned())),
             None => None,
         }
     }
@@ -262,7 +214,7 @@ impl LogFile {
     pub fn index_file(&mut self) {
 
         let bytes = self.mmap.len();
-        let chunk_size = 1024 * 1024 * 32;
+        let chunk_size = 1024 * 1024 * 64;
 
         let mut pos = 0;
 
@@ -295,8 +247,8 @@ impl LogFile {
                                 break;
                             }
                         }
-                        if let Some(mut data) = data {
-                            index.merge(&mut data.index);
+                        if let Some(data) = data {
+                            index.merge(data.index);
                             pos = index.bytes();
                             continue;
                         } else {
