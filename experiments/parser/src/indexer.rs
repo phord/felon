@@ -10,12 +10,14 @@ use std::collections::BTreeSet;
 use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
+use std::cell::Cell;
 
-use std::cell::UnsafeCell;
+
+// FIXME: Get rid of unsafe?  https://gist.github.com/jesperdj/7d4f5dede9fc4efc26cc7fc8d367b46b
 
 struct LazyLineSet {
-    lines: UnsafeCell<BTreeSet<usize>>,
-    source_lines: UnsafeCell<Vec<(usize, Vec<usize>)>>,
+    lines: Cell<BTreeSet<usize>>,
+    source_lines: Vec<(usize, Vec<usize>)>,
 }
 
 // Builder for a set of lines. Collection is in a vector at first, but later
@@ -26,26 +28,24 @@ impl LazyLineSet {
         let mut source_lines = Vec::new();
         source_lines.push((0, Vec::new()));
         LazyLineSet {
-            lines: UnsafeCell::new(BTreeSet::new()),
-            source_lines: UnsafeCell::new(source_lines),
+            lines: Cell::new(BTreeSet::new()),
+            source_lines: source_lines,
         }
     }
 
     fn insert(&mut self, line: usize) {
-        let source_lines = unsafe { &mut *self.source_lines.get() };
-        assert_eq!(source_lines.len(), 1);
-        source_lines[0].1.push(line);
+        assert_eq!(self.source_lines.len(), 1);
+        self.source_lines[0].1.push(line);
     }
 
-    fn resolve(&self) -> &BTreeSet<usize> {
-        println!("resolve");
-        let source_lines = unsafe { &mut *self.source_lines.get() };
-        let lines = unsafe { &mut *self.lines.get() };
-        if ! source_lines.is_empty() {
-            assert!(lines.is_empty());
+    // FIXME: return a memoized reference
+    fn resolve(&self) -> BTreeSet<usize> {
+        let mut lines = BTreeSet::new();
+        if ! self.source_lines.is_empty() {
+            // assert!(self.lines.get_mut().is_empty());
 
-            for (offset, ll) in source_lines.drain(..) {
-                if offset == 0 {
+            for (offset, ll) in self.source_lines.iter() {
+                if offset == &0 {
                     lines.extend(ll);
                 } else {
                     for line in ll {
@@ -54,23 +54,19 @@ impl LazyLineSet {
                 }
             }
         } else {
-            assert!(source_lines.is_empty());
+            // assert!(self.source_lines.get_mut().is_empty());
+            assert!(false);
         }
         lines
+        // &self.lines.get_mut()
     }
 
     fn merge(&mut self, offset: usize, other: Self) {
-        let source_lines = unsafe {&mut *self.source_lines.get()};
-        let lines = unsafe {&mut *self.lines.get()};
-        let other_source_lines = unsafe {&mut *other.source_lines.get()};
-        let other_lines = unsafe {& *other.lines.get()};
-        assert!(!source_lines.is_empty());
-        assert!(!other_source_lines.is_empty());
-        assert!(lines.is_empty());
-        assert!(other_lines.is_empty());
+        assert!(self.lines.get_mut().is_empty());
+        // assert!(other.lines.get_mut().is_empty());  // FIXME
 
-        for (ofs, lines) in other_source_lines.drain(..) {
-            source_lines.push((ofs + offset, lines));
+        for (ofs, lines) in other.source_lines {
+            self.source_lines.push((ofs + offset, lines));
         }
     }
 }
@@ -131,14 +127,15 @@ impl Index {
         self.line_offsets.len()
     }
 
-    pub fn search_word(&self, word: &str) -> Option<&BTreeSet<usize>> {
+    // FIXME: return a reference
+    pub fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
         let word = word.trim();
         if word.is_empty() {
             return None;
         }
         let word = word.as_bytes().to_vec();
         match self.words.get(&word) {
-            Some(lines) => Some(lines.resolve()),
+            Some(lazy_lines) => Some(lazy_lines.resolve()),
             None => None,
         }
     }
