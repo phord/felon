@@ -11,10 +11,10 @@ use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 
-pub struct Index {
-    pub words: FnvHashMap<Vec<u8>, Vec<usize>>,
-    pub numbers: FnvHashMap<u64, Vec<usize>>,
-    pub line_offsets: Vec<usize>,
+struct Index {
+    words: FnvHashMap<Vec<u8>, Vec<usize>>,
+    numbers: FnvHashMap<u64, Vec<usize>>,
+    line_offsets: Vec<usize>,
     // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
     // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
 }
@@ -62,16 +62,16 @@ impl Index {
         lines.push(line);
     }
 
-    pub fn bytes(&self) -> usize {
+    fn bytes(&self) -> usize {
         *self.line_offsets.last().unwrap_or(&0)
     }
 
-    pub fn lines(&self) -> usize {
+    fn lines(&self) -> usize {
         self.line_offsets.len()
     }
 
     // FIXME: memoize this and return a reference
-    pub fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
+    fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
         let word = word.trim();
         if word.is_empty() {
             return None;
@@ -170,7 +170,7 @@ impl Index {
 pub struct LogFile {
     // pub file_path: PathBuf,
     mmap: Mmap,
-    pub index: Index,
+    index: Index,
 }
 
 impl fmt::Debug for LogFile {
@@ -211,7 +211,7 @@ impl LogFile {
         file
     }
 
-    pub fn index_file(&mut self) {
+    fn index_file(&mut self) {
 
         let bytes = self.mmap.len();
         let chunk_size = 1024 * 1024 * 64;
@@ -303,5 +303,10 @@ impl LogFile {
             index = mrx.iter().next().unwrap();
         }).unwrap();
         self.index = index;
+    }
+
+    // FIXME: memoize this and return a reference
+    pub fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
+        return self.index.search_word(word);
     }
 }

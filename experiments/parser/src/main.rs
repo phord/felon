@@ -25,7 +25,7 @@ fn main() {
 
     if let Some(word) = opt.search_word {
         let lookup_timer = Instant::now();
-        let lines = file.index.search_word(&word);
+        let lines = file.search_word(&word);
         match lines {
             Some(lines) => {
                 println!("Found {} lines for word '{}'", lines.len(), word);
