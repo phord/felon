@@ -241,11 +241,11 @@ impl EventualIndex {
 }
 
     fn bytes(&self) -> usize {
-        *self.indexes[0].line_offsets.last().unwrap_or(&0)
+        self.indexes.iter().fold(0, |a, v| std::cmp::max(*v.line_offsets.last().or(Some(&0)).unwrap(), a))
     }
 
     fn lines(&self) -> usize {
-        self.indexes[0].line_offsets.len()
+        self.indexes.iter().fold(0, |a, v| a + v.lines())
     }
 
 }
