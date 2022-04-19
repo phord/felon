@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::fmt;
 use fnv::FnvHashMap;
-use std::collections::VecDeque;
 use std::collections::BTreeSet;
 use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
@@ -39,19 +38,19 @@ impl Index {
     }
 
     fn merge(&mut self, other: Index) {
-        let line_start = self.line_offsets.len();
-        for (word, l) in other.words {
-            let lines = self.words.entry(word).or_insert(Vec::new());
-            for line in l {
-                lines.push(line + line_start);
-            }
-        }
-        for (number, l) in other.numbers {
-            let lines = self.numbers.entry(number).or_insert(Vec::new());
-            for line in l {
-                lines.push(line + line_start);
-            }
-        }
+        // let line_start = self.line_offsets.len();
+        // for (word, l) in other.words {
+        //     let lines = self.words.entry(word).or_insert(Vec::new());
+        //     for line in l {
+        //         lines.push(line + line_start);
+        //     }
+        // }
+        // for (number, l) in other.numbers {
+        //     let lines = self.numbers.entry(number).or_insert(Vec::new());
+        //     for line in l {
+        //         lines.push(line + line_start);
+        //     }
+        // }
         // TODO: Use `append` for speed? Or use split_vectors?  skip_lists?
         self.line_offsets.extend_from_slice(&other.line_offsets);
     }
@@ -167,18 +166,62 @@ impl Index {
     }
 }
 
+struct EventualIndex {
+    indexes: Vec<Index>,
+}
+
+impl EventualIndex {
+    fn new() -> EventualIndex {
+        EventualIndex {
+            indexes: Vec::new(),
+        }
+    }
+
+    fn merge(&mut self, other: Index) {
+        self.indexes.push(other);
+        // if self.indexes.len() <= 1 {
+        //     return;
+        // }
+
+        // I should be able to do this in, but I can't figure out how to do it
+        // let &other = &self.indexes.last().unwrap();
+        // self.indexes[0].line_offsets.extend_from_slice(&other.line_offsets);
+    }
+
+    // FIXME: memoize this and return a reference
+    fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
+        let mut result = BTreeSet::new();
+        for index in &self.indexes {
+            if let Some(lines) = index.search_word(word) {
+                result.extend(lines);
+            }
+        }
+        if result.len() > 0 { Some(result) } else { None }
+    }
+
+    fn bytes(&self) -> usize {
+        *self.indexes[0].line_offsets.last().unwrap_or(&0)
+    }
+
+    fn lines(&self) -> usize {
+        self.indexes[0].line_offsets.len()
+    }
+
+}
+
+
 pub struct LogFile {
     // pub file_path: PathBuf,
     mmap: Mmap,
-    index: Index,
+    index: EventualIndex,
 }
 
 impl fmt::Debug for LogFile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LogFile")
          .field("bytes", &self.index.bytes())
-         .field("words", &self.index.words.len())
-         .field("numbers", &self.index.numbers.len())
+        //  .field("words", &self.index.words.len())
+        //  .field("numbers", &self.index.numbers.len())
          .field("lines", &self.index.lines())
          .finish()
     }
@@ -204,7 +247,7 @@ impl LogFile {
         let mut file = LogFile {
             // file_path: input_file.unwrap(),
             mmap,
-            index: Index::new(),
+            index: EventualIndex::new(),
         };
 
         file.index_file();
@@ -214,7 +257,7 @@ impl LogFile {
     fn index_file(&mut self) {
 
         let bytes = self.mmap.len();
-        let chunk_size = 1024 * 1024 * 64;
+        let chunk_size = 1024 * 1024 * 32;
 
         let mut pos = 0;
 
@@ -223,42 +266,10 @@ impl LogFile {
             index: Index,
         }
 
-        let mut index = Index::new();
-
         scope(|scope| {
-            let (tx, rx) = unbounded();
-            let (mtx, mrx) = unbounded();
+            let (tx, rx):(crossbeam_channel::Sender<ThreadData>, crossbeam_channel::Receiver<_>) = unbounded();
             // Limit threadpool of parsers by relying on sender queue length
             let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
-
-            // Thread to merge index results
-            //   rx ---> [merged] ---> mtx ---> [index]
-            scope.spawn(move |_| {
-                let mut held: VecDeque<ThreadData> = VecDeque::new();
-                let mut pos = 0;
-                let mut index = Index::new();
-                while let Ok(data) = rx.recv() {
-                    held.push_front(data);
-                    loop {
-                        let mut data = None;
-                        for i in 0..held.len() {
-                            if held[i].start == pos {
-                                data = held.remove(i);
-                                break;
-                            }
-                        }
-                        if let Some(data) = data {
-                            index.merge(data.index);
-                            pos = index.bytes();
-                            continue;
-                        } else {
-                            break; //exit held-poller loop; wait for new data
-                        }
-                    }
-                }
-                assert!(held.is_empty());
-                mtx.send(index).unwrap();
-            });
 
             // get indexes in chunks in threads
             while pos < bytes {
@@ -299,10 +310,11 @@ impl LogFile {
             // We don't need our own handle for this channel
             drop(tx);
 
-            // Wait for results
-            index = mrx.iter().next().unwrap();
+            // Wait for results and merge them in
+            while let Ok(data) = rx.recv() {
+                self.index.merge(data.index);
+            }
         }).unwrap();
-        self.index = index;
     }
 
     // FIXME: memoize this and return a reference
