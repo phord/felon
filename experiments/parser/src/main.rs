@@ -26,18 +26,13 @@ fn main() {
     if let Some(word) = opt.search_word {
         let lookup_timer = Instant::now();
         let lines = file.search_word(&word);
-        match lines {
-            Some(lines) => {
-                println!("Found {} lines for word '{}'", lines.len(), word);
-                // for line in lines {
-                //     println!("{}", line);
-                // }
-            }
-            None => {
-                println!("No lines found for word '{}'", word);
-            }
-        }
-        println!("Lookup time: {}", lookup_timer.elapsed().as_millis() as f32 / 1000.);
+        println!("Found {} lines for word '{}'", lines.len(), word);
+        println!("Lookup time: {}", lookup_timer.elapsed().as_micros() as f32 / 1000000.);
+
+        let lookup_timer = Instant::now();
+        let lines = file.search_word(&word);
+        println!("Found {} lines for word '{}'", lines.len(), word);
+        println!("Second lookup time: {}", lookup_timer.elapsed().as_micros() as f32 / 1000000.);
 
     }
 }
