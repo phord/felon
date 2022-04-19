@@ -104,7 +104,7 @@ impl Index {
             for c in data {
                 pos += 1;
                 if c == &b'\n' {
-                    cnt = offset + pos + 1;
+                    cnt = offset + pos;
                     break;
                 }
             }
