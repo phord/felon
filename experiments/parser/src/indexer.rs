@@ -87,7 +87,10 @@ impl Index {
     // Match index against self to find matching lines
 
     // Accumulate the map of words and numbers from the slice of lines
-    fn parse(&mut self, data: &[u8], offset: usize) -> usize {
+    // Parse buffer starting at `offset` and stopping at the first eol after end_target
+    // Skip the first line unless offset is zero
+    // size is the bytes we must process. After that is overlap with the next buffer.
+    fn parse(&mut self, data: &[u8], offset: usize, size: usize) -> usize {
         let bytes = data.len();
         let has_final_eol = data.last().unwrap() == &b'\n';
         let mut cnt  = offset;
@@ -101,6 +104,18 @@ impl Index {
         let mut hexnum:u64 = 0;
         let mut pos = 0;
         let max_pos = if has_final_eol { bytes } else { bytes + 1 };
+
+        // Skip the first line if offset is not zero
+        if offset > 0 {
+            for c in data {
+                pos += 1;
+                if c == &b'\n' {
+                    cnt = offset + pos + 1;
+                    break;
+                }
+            }
+        }
+
         loop {  // for pos in 0..bytes { //for c in mmap.as_ref() {
             if pos >= max_pos {
                 break;
@@ -156,6 +171,9 @@ impl Index {
                     if c == b'\n' {
                         cnt = offset + pos + 1;
                         self.line_offsets.push(offset + std::cmp::max(pos + 1, bytes));
+                        if pos > size {
+                            break;
+                        }
                         pos += 40;   // skip timestamp on next line
                     }
                 }
@@ -257,7 +275,8 @@ impl LogFile {
     fn index_file(&mut self) {
 
         let bytes = self.mmap.len();
-        let chunk_size = 1024 * 1024 * 32;
+        let chunk_size = 1024 * 1024 * 1;
+        let max_line_length: usize = 64 * 1024;
 
         let mut pos = 0;
 
@@ -268,26 +287,14 @@ impl LogFile {
 
             // get indexes in chunks in threads
             while pos < bytes {
-                let mut end = pos + chunk_size;
-                if end > bytes {
-                    end = bytes;
-                } else {
-                    // It would be nice to do this in parser, but we need an answer for the next thread or we can't proceed.
-                    while end < bytes && self.mmap[end] != b'\n' {
-                        end += 1;
-                    }
-                    // Point past eol, if there is one
-                    if end < bytes {
-                        assert_eq!(self.mmap[end], b'\n');
-                        end += 1;
-                    }
-                }
+                let end = std::cmp::min(pos + chunk_size, bytes);
+                let overflow = std::cmp::min(bytes, end + max_line_length);
 
                 // Count parser threads
                 sender.send(true).unwrap();
 
                 // Send the buffer to the parsers
-                let buffer = &self.mmap[pos..end];
+                let buffer = &self.mmap[pos..overflow];
 
                 let tx = tx.clone();
                 let receiver = receiver.clone();
