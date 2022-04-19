@@ -138,17 +138,23 @@ impl Index {
                         }
                     } else {
                         if inhexnum {
-                            if pos == bytes+1 && c == b'x' {
-                                // inhexnum = true;
+                            if pos == start+1 {
+                                inhexnum = c == b'x';
                             } else if !((c >= b'0' && c <= b'9') || (c >= b'a' && c <= b'f') || (c >= b'A' && c <= b'F')) {
+                                inhexnum = false;
+                            } else if hexnum >= 1u64 << 61 {
+                                // println!("Hex number too big @{cnt}: '{}' ==> {hexnum}", String::from_utf8((&data[start..pos]).to_vec()).unwrap());
                                 inhexnum = false;
                             } else {
                                 let nybble = if c <= b'9' {c - b'0'} else if c <= b'F' {10 + c - b'A'} else {10 + c - b'a'};
-                                hexnum = hexnum * 16 + nybble as u64;
+                                hexnum = hexnum * 16u64 + nybble as u64;
                             }
                         }
                         if indecnum {
                             if !(c >= b'0' && c <= b'9') {
+                                indecnum = false;
+                            } else if num >= (1u64 << 63) / 5 + 1 {
+                                // println!("Decimal number too big @{cnt}: '{}' ==> {num}", String::from_utf8((&data[start..pos]).to_vec()).unwrap());
                                 indecnum = false;
                             } else {
                                 num = num * 10 + (c - b'0') as u64;
@@ -167,6 +173,8 @@ impl Index {
                             self.add_word(&data[start..pos], cnt);
                         }
                         inword = false;
+                        inhexnum = false;
+                        indecnum = false;
                     }
                     if c == b'\n' {
                         cnt = offset + pos + 1;
