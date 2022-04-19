@@ -90,7 +90,7 @@ impl Index {
     fn parse(&mut self, data: &[u8], offset: usize) -> usize {
         let bytes = data.len();
         let has_final_eol = data.last().unwrap() == &b'\n';
-        let mut cnt  = 0;
+        let mut cnt  = offset;
         // let mut words = 0;
         let mut start = 0;
 
@@ -154,7 +154,7 @@ impl Index {
                         inword = false;
                     }
                     if c == b'\n' {
-                        cnt += 1;
+                        cnt = offset + pos + 1;
                         self.line_offsets.push(offset + std::cmp::max(pos + 1, bytes));
                         pos += 40;   // skip timestamp on next line
                     }
@@ -261,13 +261,8 @@ impl LogFile {
 
         let mut pos = 0;
 
-        struct ThreadData {
-            start: usize,
-            index: Index,
-        }
-
         scope(|scope| {
-            let (tx, rx):(crossbeam_channel::Sender<ThreadData>, crossbeam_channel::Receiver<_>) = unbounded();
+            let (tx, rx):(crossbeam_channel::Sender<Index>, crossbeam_channel::Receiver<_>) = unbounded();
             // Limit threadpool of parsers by relying on sender queue length
             let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
 
@@ -299,9 +294,8 @@ impl LogFile {
                 let start = pos;
                 scope.spawn(move |_| {
                     let mut index = Index::new();
-                    index.parse(&buffer, start);
-                    let result = ThreadData {start, index, };
-                    tx.send(result).unwrap();
+                    index.parse(&buffer, start, end - start);
+                    tx.send(index).unwrap();
                     receiver.recv().unwrap();
                 });
                 pos = end;
@@ -311,8 +305,8 @@ impl LogFile {
             drop(tx);
 
             // Wait for results and merge them in
-            while let Ok(data) = rx.recv() {
-                self.index.merge(data.index);
+            while let Ok(index) = rx.recv() {
+                self.index.merge(index);
             }
         }).unwrap();
     }
