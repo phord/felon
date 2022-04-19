@@ -69,14 +69,8 @@ impl Index {
         self.line_offsets.len()
     }
 
-    // FIXME: memoize this and return a reference
-    fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
-        let word = word.trim();
-        if word.is_empty() {
-            return None;
-        }
-        let word = word.as_bytes().to_vec();
-        match self.words.get(&word) {
+    fn search_word(&self, word: &Vec<u8>) -> Option<BTreeSet<usize>> {
+        match self.words.get(word) {
             Some(lines) => Some(BTreeSet::from_iter(lines.iter().cloned())),
             None => None,
         }
@@ -192,14 +186,22 @@ impl Index {
     }
 }
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 struct EventualIndex {
     indexes: Vec<Index>,
+    words: Cell<FnvHashMap<Vec<u8>, Rc<BTreeSet<usize>>> >,
+    numbers: FnvHashMap<u64, BTreeSet<usize>>,
+    // line_offsets: Vec<usize>,
 }
 
 impl EventualIndex {
     fn new() -> EventualIndex {
         EventualIndex {
             indexes: Vec::new(),
+            words: Cell::new(FnvHashMap::default()),
+            numbers: FnvHashMap::default(),
         }
     }
 
@@ -214,16 +216,29 @@ impl EventualIndex {
         // self.indexes[0].line_offsets.extend_from_slice(&other.line_offsets);
     }
 
-    // FIXME: memoize this and return a reference
-    fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
-        let mut result = BTreeSet::new();
-        for index in &self.indexes {
-            if let Some(lines) = index.search_word(word) {
-                result.extend(lines);
+    // Memoize a set of lines for a word and return a reference
+    fn search_word<'a>(&'a self, word: &'a str) -> Rc<BTreeSet<usize>> {
+        let word = word.as_bytes().to_vec();
+        let mut words = self.words.take();
+
+        let lines = if let Some(result) = words.get(&word) {
+            result.clone()
+        } else {
+            println!("Searching for {}", String::from_utf8(word.clone()).unwrap());
+            let mut result = BTreeSet::new();
+            for index in &self.indexes {
+                // TODO: Move lines out of original map?
+                if let Some(lines) = &index.search_word(&word) {
+                    result.extend(lines);
+                }
             }
-        }
-        if result.len() > 0 { Some(result) } else { None }
-    }
+            let result = Rc::new(result);
+            words.insert(word.clone(), result.clone());
+            result
+        };
+        self.words.set(words);
+        lines
+}
 
     fn bytes(&self) -> usize {
         *self.indexes[0].line_offsets.last().unwrap_or(&0)
@@ -326,8 +341,7 @@ impl LogFile {
         }).unwrap();
     }
 
-    // FIXME: memoize this and return a reference
-    pub fn search_word(&self, word: &str) -> Option<BTreeSet<usize>> {
+    pub fn search_word<'a>(&'a self, word: &'a str) -> Rc<BTreeSet<usize>> {
         return self.index.search_word(word);
     }
 }
