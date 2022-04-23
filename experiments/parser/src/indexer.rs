@@ -174,7 +174,7 @@ struct EventualIndex {
     indexes: Vec<Index>,
     words: Cell<FnvHashMap<Vec<u8>, Rc<BTreeSet<usize>>> >,
     numbers: FnvHashMap<u64, BTreeSet<usize>>,
-    // line_offsets: Vec<usize>,
+    line_offsets: Vec<usize>,
 }
 
 impl EventualIndex {
@@ -183,6 +183,7 @@ impl EventualIndex {
             indexes: Vec::new(),
             words: Cell::new(FnvHashMap::default()),
             numbers: FnvHashMap::default(),
+            line_offsets: Vec::new(),
         }
     }
 
@@ -195,6 +196,37 @@ impl EventualIndex {
         // I should be able to do this in, but I can't figure out how to do it
         // let &other = &self.indexes.last().unwrap();
         // self.indexes[0].line_offsets.extend_from_slice(&other.line_offsets);
+    }
+
+    fn finalize(&mut self) {
+        self.indexes.sort_by_key(|index| *index.line_offsets.get(0).unwrap_or(&(1usize << 20)));
+
+        // TODO: self.line_offsets is duplicate info; better to move from indexes or to always lookup from indexes
+        for index in self.indexes.iter() {
+            self.line_offsets.extend_from_slice(&index.line_offsets);
+        }
+    }
+
+    fn line_number(&self, offset: usize) -> usize {
+        // TODO: memoize or hashmap this
+        let mut lo = 0;
+        let mut hi = self.line_offsets.len();
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            if self.line_offsets[mid] > offset {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        lo
+    }
+
+    fn line_offset(&self, line_number: usize) -> Option<usize> {
+        if line_number >= self.line_offsets.len() {
+            return None;
+        }
+        Some(self.line_offsets[line_number])
     }
 
     // Memoize a set of lines for a word and return a reference
@@ -250,6 +282,7 @@ impl fmt::Debug for LogFile {
 }
 
 impl LogFile {
+
     // FIXME: Return a Result<> to pass errors upstream
     pub fn new(input_file: Option<PathBuf>) -> LogFile {
 
@@ -320,9 +353,24 @@ impl LogFile {
                 self.index.merge(index);
             }
         }).unwrap();
+
+        // Partially coalesce merged info
+        self.index.finalize();
     }
 
     pub fn search_word<'a>(&'a self, word: &'a str) -> Rc<BTreeSet<usize>> {
         return self.index.search_word(word);
+    }
+
+    pub fn readline(&self, line_number: usize) -> Option<&str> {
+        let start = self.index.line_offset(line_number);
+        let end = self.index.line_offset(line_number + 1);
+        if let (Some(start), Some(end)) = (start, end) {
+            assert!(end > start);
+            // FIXME: Handle unwrap error
+            Some(std::str::from_utf8(&self.mmap[start..end-1]).unwrap())
+        } else {
+            None
+        }
     }
 }
