@@ -2,9 +2,11 @@
 
 use std::path::PathBuf;
 
+use std::fs::File;
 use std::fmt;
 use fnv::FnvHashMap;
 use std::collections::BTreeSet;
+use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 
@@ -251,7 +253,7 @@ impl EventualIndex {
 
 pub struct LogFile {
     // pub file_path: PathBuf,
-    buffer: Vec<u8>,
+    mmap: Mmap,
     index: EventualIndex,
 }
 
@@ -270,17 +272,22 @@ impl LogFile {
     // FIXME: Return a Result<> to pass errors upstream
     pub fn new(input_file: Option<PathBuf>) -> LogFile {
 
-        let buffer = if let Some(file_path) = input_file {
-            std::fs::read(file_path).expect("Could not read file.")
+        let file = if let Some(file_path) = input_file {
+            // Must have a filename as input.
+            let file = File::open(file_path).expect("Could not open file.");
+            Some(file)
         } else {
             // Print error.
             eprintln!("Expected '<input>' or input over stdin.");
             ::std::process::exit(1);
         };
 
+        let mmap = unsafe { MmapOptions::new().map(&file.unwrap()) };
+        let mmap = mmap.expect("Could not mmap file.");
+
         let mut file = LogFile {
             // file_path: input_file.unwrap(),
-            buffer,
+            mmap,
             index: EventualIndex::new(),
         };
 
@@ -290,7 +297,7 @@ impl LogFile {
 
     fn index_file(&mut self) {
 
-        let bytes = self.buffer.len();
+        let bytes = self.mmap.len();
         let chunk_size = 1024 * 1024 * 1;
         let max_line_length: usize = 64 * 1024;
 
@@ -310,7 +317,7 @@ impl LogFile {
                 sender.send(true).unwrap();
 
                 // Send the buffer to the parsers
-                let buffer = &self.buffer[pos..overflow];
+                let buffer = &self.mmap[pos..overflow];
 
                 let tx = tx.clone();
                 let receiver = receiver.clone();
