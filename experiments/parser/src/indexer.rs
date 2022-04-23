@@ -153,7 +153,7 @@ impl Index {
                     }
                     if c == b'\n' {
                         cnt = offset + pos + 1;
-                        self.line_offsets.push(offset + std::cmp::max(pos + 1, bytes));
+                        self.line_offsets.push(offset + pos + 1);
                         if pos > size {
                             break;
                         }
