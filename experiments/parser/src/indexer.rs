@@ -37,25 +37,6 @@ impl Index {
         lines.push(line);
     }
 
-    fn merge(&mut self, other: Index) {
-        // let line_start = self.line_offsets.len();
-        // for (word, l) in other.words {
-        //     let lines = self.words.entry(word).or_insert(Vec::new());
-        //     for line in l {
-        //         lines.push(line + line_start);
-        //     }
-        // }
-        // for (number, l) in other.numbers {
-        //     let lines = self.numbers.entry(number).or_insert(Vec::new());
-        //     for line in l {
-        //         lines.push(line + line_start);
-        //     }
-        // }
-        // TODO: Use `append` for speed? Or use split_vectors?  skip_lists?
-        self.line_offsets.extend_from_slice(&other.line_offsets);
-    }
-
-
     fn add_number(&mut self, number: u64, line: usize) {
         let lines = self.numbers.entry(number).or_insert(Vec::new());
         lines.push(line);
