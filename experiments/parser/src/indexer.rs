@@ -207,19 +207,25 @@ impl EventualIndex {
         }
     }
 
-    fn line_number(&self, offset: usize) -> usize {
+    fn line_number(&self, offset: usize) -> Option<usize> {
         // TODO: memoize or hashmap this
         let mut lo = 0;
         let mut hi = self.line_offsets.len();
         while lo < hi {
             let mid = (lo + hi) / 2;
-            if self.line_offsets[mid] > offset {
+            if self.line_offsets[mid] == offset {
+                return Some(mid);
+            } else if self.line_offsets[mid] > offset {
                 hi = mid;
             } else {
                 lo = mid + 1;
             }
         }
-        lo
+        if self.line_offsets[lo] == offset {
+            return Some(lo)
+        } else {
+            None
+        }
     }
 
     fn line_offset(&self, line_number: usize) -> Option<usize> {
@@ -360,6 +366,14 @@ impl LogFile {
 
     pub fn search_word<'a>(&'a self, word: &'a str) -> Rc<BTreeSet<usize>> {
         return self.index.search_word(word);
+    }
+
+    pub fn readline_at(&self, offset: usize) -> Option<&str> {
+        if let Some(line_number) = self.index.line_number(offset) {
+            self.readline(line_number)
+        } else {
+            None
+        }
     }
 
     pub fn readline(&self, line_number: usize) -> Option<&str> {

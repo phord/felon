@@ -23,12 +23,6 @@ fn main() {
 
     println!("{:?}", file);
 
-    for line in 0..10 {
-        if let Some(l) = file.readline(line) {
-            println!("{}", l);
-        }
-    }
-
     if let Some(word) = opt.search_word {
         let lookup_timer = Instant::now();
         let lines = file.search_word(&word);
@@ -40,5 +34,10 @@ fn main() {
         println!("Found {} lines for word '{}'", lines.len(), word);
         println!("Second lookup time: {}", lookup_timer.elapsed().as_micros() as f32 / 1000000.);
 
+        for line in lines.iter() {
+            if let Some(str) = file.readline_at(*line) {
+                println!("{}", str);
+            }
+        }
     }
 }
