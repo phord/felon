@@ -389,6 +389,18 @@ impl LogFile {
         }
     }
 
+    pub fn bytes(&self) -> usize {
+        self.index.bytes()
+    }
+
+    pub fn lines(&self) -> usize {
+        self.index.lines()
+    }
+
+    pub fn line_offset(&self, line_number: usize) -> Option<usize> {
+        self.index.line_offset(line_number)
+    }
+
     pub fn readline(&self, line_number: usize) -> Option<&str> {
         let start = self.index.line_offset(line_number);
         let end = self.index.line_offset(line_number + 1);
