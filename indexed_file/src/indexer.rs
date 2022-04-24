@@ -336,11 +336,11 @@ impl LogFile {
         let bytes = self.mmap.len();
         let mut pos = 0;
 
-        scope(|scope| {
-            let (tx, rx):(crossbeam_channel::Sender<Index>, crossbeam_channel::Receiver<_>) = unbounded();
-            // Limit threadpool of parsers by relying on sender queue length
-            let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
+        let (tx, rx):(crossbeam_channel::Sender<Index>, crossbeam_channel::Receiver<_>) = unbounded();
+        // Limit threadpool of parsers by relying on sender queue length
+        let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
 
+        scope(|scope| {
             // get indexes in chunks in threads
             while pos < bytes {
                 let end = std::cmp::min(pos + chunk_size, bytes);
