@@ -287,40 +287,53 @@ impl fmt::Debug for LogFile {
     }
 }
 
+use std::io::{Error, ErrorKind};
 impl LogFile {
 
-    // FIXME: Return a Result<> to pass errors upstream
-    pub fn new(input_file: Option<PathBuf>) -> LogFile {
+    pub fn open(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
 
         let file = if let Some(file_path) = input_file {
             // Must have a filename as input.
-            let file = File::open(file_path).expect("Could not open file.");
+            let file = File::open(file_path)?;
             Some(file)
         } else {
+
             // Print error.
             eprintln!("Expected '<input>' or input over stdin.");
-            ::std::process::exit(1);
+            return Err(Error::new(ErrorKind::Other, "Expected a filename or stdin"));
         };
 
         let mmap = unsafe { MmapOptions::new().map(&file.unwrap()) };
         let mmap = mmap.expect("Could not mmap file.");
 
-        let mut file = LogFile {
+        let file = LogFile {
             // file_path: input_file.unwrap(),
             mmap,
             index: EventualIndex::new(),
         };
 
-        file.index_file();
-        file
+        Ok(file)
     }
 
-    fn index_file(&mut self) {
-
-        let bytes = self.mmap.len();
+    pub fn new(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
         let chunk_size = 1024 * 1024 * 1;
         let max_line_length: usize = 64 * 1024;
 
+        let mut file = LogFile::open(input_file)?;
+        file.index_file(chunk_size, max_line_length);
+        Ok(file)
+    }
+
+    // FIXME: Is there a way to mark this for tests only?
+    pub fn test_new(input_file: Option<PathBuf>, chunk_size: usize, max_line_length: usize) -> std::io::Result<LogFile> {
+        let mut file = LogFile::open(input_file)?;
+        file.index_file(chunk_size, max_line_length);
+        Ok(file)
+    }
+
+    fn index_file(&mut self, chunk_size: usize, max_line_length: usize) {
+
+        let bytes = self.mmap.len();
         let mut pos = 0;
 
         scope(|scope| {
