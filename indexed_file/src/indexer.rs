@@ -188,14 +188,8 @@ impl EventualIndex {
     }
 
     fn merge(&mut self, other: Index) {
+        // merge lazily
         self.indexes.push(other);
-        // if self.indexes.len() <= 1 {
-        //     return;
-        // }
-
-        // I should be able to do this in, but I can't figure out how to do it
-        // let &other = &self.indexes.last().unwrap();
-        // self.indexes[0].line_offsets.extend_from_slice(&other.line_offsets);
     }
 
     fn finalize(&mut self) {
