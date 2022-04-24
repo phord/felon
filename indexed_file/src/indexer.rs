@@ -154,7 +154,7 @@ impl Index {
                     if c == b'\n' {
                         cnt = offset + pos + 1;
                         self.line_offsets.push(offset + pos + 1);
-                        if pos > size {
+                        if pos >= size {
                             break;
                         }
                         pos += 40;   // skip timestamp on next line
