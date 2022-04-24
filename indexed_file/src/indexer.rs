@@ -260,7 +260,7 @@ impl EventualIndex {
 }
 
     fn bytes(&self) -> usize {
-        self.indexes.iter().fold(0, |a, v| std::cmp::max(*v.line_offsets.last().or(Some(&0)).unwrap(), a))
+        self.indexes.iter().fold(0, |a, v| std::cmp::max(v.bytes(), a))
     }
 
     fn lines(&self) -> usize {
