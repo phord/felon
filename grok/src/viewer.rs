@@ -7,6 +7,7 @@ pub struct Viewer {
     config: Config,
     display: Display,
     input: Input,
+    display_changed: bool,
     file: LogFile,
 }
 
@@ -17,12 +18,23 @@ impl Viewer {
             config: config.clone(),
             display: Display::new(config),
             input: Input::new(),
+            display_changed: true,
             file: LogFile::new(Some(filename)).expect("Failed to open file"),
         }
     }
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
-        self.display.refresh_screen()?;
+        if self.display_changed {
+            self.display.clear();
+            self.display_changed = false;
+            for row in 0..self.display.height {
+                let line = self.file.readline(row as usize);
+                if let Some(line) = line {
+                    self.display.push(&line);
+                }
+            }
+            self.display.refresh_screen()?;
+        }
 
         let cmd = self.input.process_keypress()?;
 

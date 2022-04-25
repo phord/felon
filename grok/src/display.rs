@@ -48,7 +48,7 @@ impl io::Write for ScreenBuffer {
 }
 
 pub struct Display {
-    height: u16,
+    pub height: u16,
     width: u16,
     data: Vec<String>,
     on_alt_screen: bool,
@@ -75,7 +75,7 @@ impl Display {
         }
     }
 
-    fn push(&mut self, line: &str) {
+    pub fn push(&mut self, line: &str) {
         self.data.push(line.to_string());
     }
 
@@ -93,12 +93,18 @@ impl Display {
         queue!(buff, cursor::Hide, cursor::MoveTo(0, 0))?;
         // self.draw_rows();
 
-        for row in 0..self.height {
+        for row in 0..self.height as usize {
             // buff.push_str(&welcome);
-            buff.push('~');
+            if row >= self.data.len() {
+                buff.push('~');
+            } else {
+                let line = self.data[row].clone();  // FIXME: Avoid clone by using lifetime?
+                let len = std::cmp::min(line.len(), self.width as usize);
+                buff.push_str(&line[0..len]);
+            }
             queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
 
-            if row < self.height-1 {
+            if row < self.height as usize - 1 {
                 buff.push_str("\r\n");
             }
         }
