@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 use pico_args::Arguments;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
-    filename: Vec<PathBuf>,
-    chop: bool,
+    pub filename: Vec<PathBuf>,
+    pub chop: bool,
+    pub altscreen: bool,
 }
 
 
@@ -19,6 +20,7 @@ FLAGS:
 
 OPTIONS:
   -S --chop-long-lines  Chop long lines instead of wrapping
+  -X                    Skip terminal config/cleanup such as using the alternate screen
 
 ARGS:
   <INPUT>               Input file(s) to read
@@ -29,6 +31,7 @@ impl Config {
         Config {
             filename: Vec::new(),
             chop: false,
+            altscreen: true,
         }
     }
 
@@ -60,6 +63,7 @@ impl Config {
     // TODO: Need some way to handle "toggle" values; eg., -S at runtime toggles slice
     fn parse_args(&mut self, mut pargs: Arguments) {
         if pargs.contains(["-S", "--chop-long-lines"]) { self.chop = true; }
+        if pargs.contains(["-X", "--no-alternate-screen"]) { self.altscreen = false; }
 
         // Parse remaining args as input filenames
         for ostr in pargs.finish() {

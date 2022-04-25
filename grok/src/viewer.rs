@@ -11,8 +11,8 @@ pub struct Viewer {
 impl Viewer {
     pub fn new(config: Config) -> Self {
         Self {
-            config,
-            display: Display::new(),
+            config: config.clone(),
+            display: Display::new(config),
             input: Input::new(),
         }
     }

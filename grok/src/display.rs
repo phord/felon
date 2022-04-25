@@ -2,6 +2,7 @@ use crossterm::terminal::ClearType;
 use std::io::stdout;
 use crossterm::{cursor, event, execute, queue, terminal};
 use std::io::Write;
+use crate::config::Config;
 
 
 struct ScreenBuffer {
@@ -50,25 +51,27 @@ pub struct Display {
     height: u16,
     width: u16,
     data: Vec<String>,
-    started: bool,
+    on_alt_screen: bool,
+    use_alt: bool,
 }
 
 impl Drop for Display {
     fn drop(&mut self) {
-        if self.started {
+        if self.on_alt_screen {
             execute!(stdout(), terminal::LeaveAlternateScreen).expect("Failed to exit alt mode");
         }
     }
 }
 
 impl Display {
-    pub fn new() -> Self {
+    pub fn new(config: Config) -> Self {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
         Self {
             height,
             width,
             data: Vec::new(),
-            started: false,
+            on_alt_screen: false,
+            use_alt: config.altscreen,
         }
     }
 
@@ -81,9 +84,9 @@ impl Display {
     }
 
     pub fn refresh_screen(&mut self) -> crossterm::Result<()> {
-        if ! self.started {
+        if ! self.on_alt_screen && self.use_alt {
             execute!(stdout(), terminal::EnterAlternateScreen)?;
-            self.started = true;
+            self.on_alt_screen = true;
         }
 
         let mut buff = ScreenBuffer::new();
