@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 pico-args = "0.4.2"
 crossterm = "*"
+indexed_file = { path = "../indexed_file" }
