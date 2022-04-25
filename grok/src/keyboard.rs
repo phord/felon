@@ -72,6 +72,10 @@ impl Input {
                 code: KeyCode::Char('q'),
                 modifiers: event::KeyModifiers::CONTROL,
             } => return Ok(UserCommand::Quit),
+            KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: event::KeyModifiers::NONE,
+            } => return Ok(UserCommand::Quit),
             // KeyEvent {
             //     code: direction @ (KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
             //                        | KeyCode::Home | KeyCode::End),
