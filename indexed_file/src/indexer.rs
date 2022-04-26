@@ -14,6 +14,7 @@ struct Index {
     words: FnvHashMap<Vec<u8>, Vec<usize>>,
     numbers: FnvHashMap<u64, Vec<usize>>,
     line_offsets: Vec<usize>,
+    prefix: usize,
     // TODO: timestamps: FnvHashMap<u64, Vec<usize>>,
     // TODO: wordtree: Trie<>,  // a trie of words and all sub-words
 }
@@ -24,6 +25,7 @@ impl Index {
             words: FnvHashMap::default(),
             numbers: FnvHashMap::default(),
             line_offsets: Vec::new(),
+            prefix: 40,             // Prefix of each line to skip indexing
         }
     }
 
@@ -140,12 +142,15 @@ impl Index {
                 // All other characters (whitespace, punctuation)
                 _ => {
                     if inword {
-                        if indecnum {
-                            self.add_number(num, cnt);
-                        } else if inhexnum {
-                            self.add_number(hexnum, cnt);
-                        } else {
-                            self.add_word(&data[start..pos], cnt);
+                        // Ignore words in the prefix of each line
+                        if pos - cnt > self.prefix {
+                            if indecnum {
+                                self.add_number(num, cnt);
+                            } else if inhexnum {
+                                self.add_number(hexnum, cnt);
+                            } else {
+                                self.add_word(&data[start..pos], cnt);
+                            }
                         }
                         inword = false;
                         inhexnum = false;
@@ -157,7 +162,6 @@ impl Index {
                         if pos >= size {
                             break;
                         }
-                        pos += 40;   // skip timestamp on next line
                     }
                 }
             }
@@ -329,6 +333,13 @@ impl LogFile {
 
         let bytes = self.mmap.len();
         let mut pos = 0;
+
+        // TODO: Since lazy merge is free, kick off the threads here and keep them running. Then ny readers
+        // can collect results and merge them to get completed progress in real-time. This also give us a
+        // chance to add a stop-signal so we can exit early.
+
+        // Finalize needs to adapt, and this loop needs to run in its own thread.
+        // In the future this mechanism can serve to read like tail -f or to read from stdin.
 
         let (tx, rx):(crossbeam_channel::Sender<Index>, crossbeam_channel::Receiver<_>) = unbounded();
         // Limit threadpool of parsers by relying on sender queue length
