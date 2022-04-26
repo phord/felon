@@ -56,6 +56,7 @@ pub struct Display {
     use_alt: bool,
 
     top: usize,
+    bottom: usize,
 }
 
 impl Drop for Display {
@@ -76,6 +77,7 @@ impl Display {
             on_alt_screen: false,
             use_alt: config.altscreen,
             top: 0,
+            bottom: height as usize,
         }
     }
 
@@ -88,13 +90,12 @@ impl Display {
     }
 
     pub fn set_length(&mut self, length: usize) {
-        // TODO:
-        // self.last_line = length;
+        self.bottom = length;
     }
 
     pub fn lines_needed(&self) -> Vec<usize> {
         let mut lines = Vec::new();
-        lines = (self.top..self.top+self.height).collect();
+        lines = (self.top..self.top + self.height).collect();
         lines
     }
 
@@ -118,7 +119,17 @@ impl Display {
                     self.top = 0;
                 }
             }
+            UserCommand::ScrollToTop => {
+                self.top = 0;
+            }
+            UserCommand::ScrollToBottom => {
+                self.top = self.bottom;
+            }
             _ => {}
+        }
+
+        if self.top + self.height >= self.bottom {
+            self.top = self.bottom.saturating_sub(self.height);
         }
     }
 

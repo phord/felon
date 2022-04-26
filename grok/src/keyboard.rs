@@ -5,22 +5,28 @@ use std::time::Duration;
 
 use UserCommand as cmd;
 const KEYMAP: &'static [(&'static str, UserCommand)] = &[
-    ("Ctrl+Q", cmd::Quit),
+    ("Ctrl+W", cmd::Quit),
+    ("Q", cmd::Quit),
     ("Esc", cmd::Quit),
     ("Up", cmd::ScrollUp),
     ("Down", cmd::ScrollDown),
     ("PageUp", cmd::PageUp),
     ("PageDown", cmd::PageDown),
+    ("Home", cmd::ScrollToTop),
+    ("End", cmd::ScrollToBottom),
 ];
 
 #[derive(Copy, Clone)]
 pub enum UserCommand {
     None,
     Quit,
+    Init,       // first screen
     ScrollUp,
     ScrollDown,
     PageUp,
     PageDown,
+    ScrollToTop,
+    ScrollToBottom,
 }
 
 struct Reader;

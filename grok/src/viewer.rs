@@ -24,6 +24,9 @@ impl Viewer {
     }
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
+
+        self.display.set_length(self.file.lines());
+
         let lines = self.display.lines_needed();
         for row in lines {
             let line = self.file.readline(row as usize);
