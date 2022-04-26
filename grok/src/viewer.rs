@@ -24,23 +24,25 @@ impl Viewer {
     }
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
-        if self.display_changed {
-            self.display.clear();
-            self.display_changed = false;
-            for row in 0..self.display.height {
-                let line = self.file.readline(row as usize);
-                if let Some(line) = line {
-                    self.display.push(&line);
-                }
+        let lines = self.display.lines_needed();
+        for row in lines {
+            let line = self.file.readline(row as usize);
+            if let Some(line) = line {
+                self.display.push(row, &line);
             }
-            self.display.refresh_screen()?;
         }
+
+        // self.display.clear();
+        self.display.refresh_screen()?;
 
         let cmd = self.input.process_keypress()?;
 
         match cmd {
             UserCommand::Quit => Ok(false),
-            _ => Ok(true),
+            _ => {
+                self.display.handle_command(cmd);
+                Ok(true)
+            }
         }
     }
 
