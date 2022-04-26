@@ -125,6 +125,11 @@ impl Display {
             UserCommand::ScrollToBottom => {
                 self.top = self.bottom;
             }
+            UserCommand::TerminalResize => {
+                let (width, height) = terminal::size().expect("Unable to get terminal size");
+                self.width = width as usize;
+                self.height = height as usize;
+            }
             _ => {}
         }
 

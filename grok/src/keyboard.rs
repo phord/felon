@@ -1,7 +1,8 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use crossterm::{event, terminal};
+use crossterm::{event, terminal, execute};
 use std::collections::HashMap;
 use std::time::Duration;
+use std::io::stdout;
 
 use UserCommand as cmd;
 const KEYMAP: &'static [(&'static str, UserCommand)] = &[
@@ -27,46 +28,22 @@ pub enum UserCommand {
     PageDown,
     ScrollToTop,
     ScrollToBottom,
+    TerminalResize,
 }
 
-struct Reader;
-impl Reader {
-    fn read_key(&self) -> crossterm::Result<KeyEvent> {
-        loop {
-            if event::poll(Duration::from_millis(500))? {
-                if let Event::Key(event) = event::read()? {
-                    return Ok(event);
-                }
-            }
-        }
-    }
-}
-
-pub struct Input {
-    reader: Reader,
-    started: bool,
+struct Reader {
     keymap: HashMap<KeyEvent, UserCommand>,
 }
 
-impl Drop for Input {
-    fn drop(&mut self) {
-        if self.started {
-            terminal::disable_raw_mode().expect("Unable to disable raw mode");
-        }
-    }
-}
+impl Reader {
 
-impl Input {
     pub fn new() -> Self {
-        // TODO:
         let keymap: HashMap<_, _> = KEYMAP
             .iter()
             .map(|(key, cmd)| (Self::keycode(key).unwrap(), *cmd))
             .collect();
 
         Self {
-            reader: Reader,
-            started: false,
             keymap,
         }
     }
@@ -133,28 +110,72 @@ impl Input {
         Ok(result)
     }
 
+    fn get_command(&self) -> crossterm::Result<UserCommand> {
+        loop {
+            if event::poll(Duration::from_millis(500))? {
+
+                match event::read()? {
+                    Event::Key(event) => {
+                        return match self.keymap.get(&event) {
+                            Some(cmd) => Ok(*cmd),
+                            None => Ok(UserCommand::None),
+                        };
+                    }
+                    Event::Mouse(event) => {
+                        println!("{:?}", event);
+                        // FIXME: handle mouse events
+                        return Ok(cmd::None);
+                    }
+                    Event::Resize(width, height) => {
+                        println!("New size {}x{}", width, height);
+                        return Ok(cmd::TerminalResize);
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+pub struct Input {
+    reader: Reader,
+    started: bool,
+}
+
+impl Drop for Input {
+    fn drop(&mut self) {
+        if self.started {
+            terminal::disable_raw_mode().expect("Unable to disable raw mode");
+
+            let mut stdout = stdout();
+            execute!(stdout, event::DisableMouseCapture).expect("Failed to disable mouse capture");
+        }
+    }
+}
+
+impl Input {
+    pub fn new() -> Self {
+        Self {
+            reader: Reader::new(),
+            started: false,
+        }
+    }
+
     fn start(&mut self) -> crossterm::Result<()> {
         if !self.started {
             terminal::enable_raw_mode()?;
+
+            let mut stdout = stdout();
+            execute!(stdout, event::EnableMouseCapture)?;
             self.started = true;
         }
         Ok(())
     }
 
-    pub fn read_key(&mut self) -> crossterm::Result<KeyEvent> {
+    pub fn get_command(&mut self) -> crossterm::Result<UserCommand> {
         self.start()?;
 
-        // TODO: Map keymap -> opcodes; eg. ScrollDown, ScrollUp, ScrollPageDown, etc.
         // TODO: Different keymaps for different modes. user-input, scrolling, etc.
-        self.reader.read_key()
-    }
-
-    pub fn process_keypress(&mut self) -> crossterm::Result<UserCommand> {
-        let event = self.read_key()?;
-        let cmd = self.keymap.get(&event);
-        match cmd {
-            Some(cmd) => Ok(*cmd),
-            None => Ok(UserCommand::None),
-        }
+        self.reader.get_command()
     }
 }

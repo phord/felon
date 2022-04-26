@@ -38,7 +38,7 @@ impl Viewer {
         // self.display.clear();
         self.display.refresh_screen()?;
 
-        let cmd = self.input.process_keypress()?;
+        let cmd = self.input.get_command()?;
 
         match cmd {
             UserCommand::Quit => Ok(false),
