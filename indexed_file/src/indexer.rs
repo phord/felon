@@ -396,8 +396,13 @@ impl LogFile {
     }
 
     pub fn readline(&self, line_number: usize) -> Option<&str> {
-        let start = self.index.line_offset(line_number);
-        let end = self.index.line_offset(line_number + 1);
+        let start =
+            if line_number == 0 {
+                Some(0)
+            } else {
+                self.index.line_offset(line_number - 1)
+            };
+        let end = self.index.line_offset(line_number);
         if let (Some(start), Some(end)) = (start, end) {
             assert!(end > start);
             // FIXME: Handle unwrap error
