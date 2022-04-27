@@ -1,7 +1,6 @@
 use crossterm::terminal::ClearType;
-use std::io::stdout;
+use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, event, execute, queue, terminal};
-use std::io::Write;
 use crate::config::Config;
 use crate::keyboard::UserCommand;
 use std::collections::HashMap;
@@ -26,8 +25,6 @@ impl ScreenBuffer {
         self.content.push_str(string)
     }
 }
-
-use std::io;
 
 impl io::Write for ScreenBuffer {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
@@ -94,36 +91,42 @@ impl Display {
     }
 
     pub fn lines_needed(&self) -> Vec<usize> {
-        let mut lines = Vec::new();
-        lines = (self.top..self.top + self.height).collect();
+        let lines = (self.top..self.top + self.height)
+            .filter(|x| {!self.data.contains_key(x)} )
+            .collect();
         lines
     }
+
+    fn vert_scroll(&mut self, amount: isize) {
+        let top = self.top as isize + amount;
+        let top = cmp::max(top, 0) as usize;
+
+        self.top = if top + self.height >= self.bottom {
+            self.bottom.saturating_sub(self.height)
+        } else { top };
+
+    }
+
 
     pub fn handle_command(&mut self, cmd: UserCommand) {
         match cmd {
             UserCommand::ScrollDown => {
-                self.top += 1;
+                self.vert_scroll(1);
             }
             UserCommand::ScrollUp => {
-                if self.top > 0 {
-                    self.top -= 1;
-                }
+                self.vert_scroll(-1);
             }
             UserCommand::PageDown => {
-                self.top += self.height;
+                self.vert_scroll(self.height as isize);
             }
             UserCommand::PageUp => {
-                if self.top > self.height {
-                    self.top -= self.height;
-                } else {
-                    self.top = 0;
-                }
+                self.vert_scroll(-(self.height as isize));
             }
             UserCommand::ScrollToTop => {
                 self.top = 0;
             }
             UserCommand::ScrollToBottom => {
-                self.top = self.bottom;
+                self.vert_scroll(self.bottom as isize);
             }
             UserCommand::TerminalResize => {
                 let (width, height) = terminal::size().expect("Unable to get terminal size");
@@ -131,10 +134,6 @@ impl Display {
                 self.height = height as usize;
             }
             _ => {}
-        }
-
-        if self.top + self.height >= self.bottom {
-            self.top = self.bottom.saturating_sub(self.height);
         }
     }
 
@@ -156,7 +155,7 @@ impl Display {
             let line = self.data.get(&lrow);
             match line {
                 Some(line) => {
-                    let len = std::cmp::min(line.len(), self.width as usize);
+                    let len = cmp::min(line.len(), self.width as usize);
                     buff.push_str(&line[0..len]);
                 }
                 _ => {
