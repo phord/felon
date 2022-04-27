@@ -1,4 +1,16 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+// TODO Investigate using xterm control codes to manipulate the clipboard
+// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html
+// https://github.com/microsoft/terminal/issues/2946#issuecomment-626355734
+
+// OSC 52 doesn't work for me.  It's not supported in Konsole.
+// https://bugs.kde.org/show_bug.cgi?id=372116
+// https://bugzilla.gnome.org/show_bug.cgi?id=795774
+
+// https://cirw.in/blog/bracketed-paste (quasi-related)
+// http://www.xfree86.org/current/ctlseqs.html
+// https://unix.stackexchange.com/questions/16694/copy-input-to-clipboard-over-ssh
+
+use crossterm::event::{Event, KeyCode, MouseButton, KeyEvent, MouseEvent, MouseEventKind, KeyModifiers};
 use crossterm::{event, terminal, execute};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -15,13 +27,21 @@ const KEYMAP: &'static [(&'static str, UserCommand)] = &[
     ("PageDown", cmd::PageDown),
     ("Home", cmd::ScrollToTop),
     ("End", cmd::ScrollToBottom),
+
+    // Mouse action mappings
+    // ("MouseLeft", cmd::Quit),
+    // ("Ctrl+MouseLeft", cmd::ScrollDown),
+    // ("MouseRight", cmd::MouseRight),
+    // ("MouseMiddle", cmd::MouseMiddle),
+    // ("MouseWheelUp", cmd::MouseWheelUp),
+    // ("MouseWheelDown", cmd::MouseWheelDown),
+
 ];
 
 #[derive(Copy, Clone)]
 pub enum UserCommand {
     None,
     Quit,
-    Init,       // first screen
     ScrollUp,
     ScrollDown,
     PageUp,
@@ -33,27 +53,41 @@ pub enum UserCommand {
 
 struct Reader {
     keymap: HashMap<KeyEvent, UserCommand>,
+    mousemap: HashMap<MouseEvent, UserCommand>,
 }
 
 impl Reader {
 
     pub fn new() -> Self {
-        let keymap: HashMap<_, _> = KEYMAP
+        let allmap: HashMap<_, _> = KEYMAP
             .iter()
             .map(|(key, cmd)| (Self::keycode(key).unwrap(), *cmd))
             .collect();
 
+        let keymap: HashMap<_, _> = allmap.iter()
+            .filter(|(event, _)| match event { Event::Key(_) => true, _ => false } )
+            .map(|(event, cmd)| match event { Event::Key(key_event) => (*key_event, *cmd), _ => unreachable!() })
+            .collect();
+
+        let mousemap: HashMap<_, _> = allmap.iter()
+            .filter(|(event, _)| match event { Event::Mouse(_) => true, _ => false } )
+            .map(|(event, cmd)| match event { Event::Mouse(mouse_event) => (*mouse_event, *cmd), _ => unreachable!() })
+            .collect();
+
         Self {
             keymap,
+            mousemap,
         }
     }
 
-    /// Convert a string representation of a key combo into a KeyEvent
+    /// Convert a string representation of a key combo into a Key or Mouse Event
     /// ```
     /// assert_eq!(crate::Input::keycode("Ctrl+Q"), KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
     /// ```
-    fn keycode(orig: &str) -> Result<KeyEvent, String> {
-        let mut result = KeyEvent::new(KeyCode::Null, KeyModifiers::NONE);
+    fn keycode(orig: &str) -> Result<Event, String> {
+        let mut modifiers = KeyModifiers::NONE;
+        let mut action_key: Option<KeyCode> = None;
+        let mut mouse_button: Option<MouseEventKind> = None;
 
         let str = orig.to_lowercase();
         for key in str.split("+") {
@@ -65,49 +99,76 @@ impl Reader {
             };
 
             let action = match key {
-                "backspace" => KeyCode::Backspace,
-                "enter" => KeyCode::Enter,
-                "left" => KeyCode::Left,
-                "right" => KeyCode::Right,
-                "up" => KeyCode::Up,
-                "down" => KeyCode::Down,
-                "home" => KeyCode::Home,
-                "end" => KeyCode::End,
-                "pageup" => KeyCode::PageUp,
-                "pagedown" => KeyCode::PageDown,
-                "tab" => KeyCode::Tab,
-                "backtab" => KeyCode::BackTab,
-                "delete" => KeyCode::Delete,
-                "insert" => KeyCode::Insert,
-                "null" => KeyCode::Null,
-                "esc" => KeyCode::Esc,
+                "backspace" => Some(KeyCode::Backspace),
+                "enter" => Some(KeyCode::Enter),
+                "left" => Some(KeyCode::Left),
+                "right" => Some(KeyCode::Right),
+                "up" => Some(KeyCode::Up),
+                "down" => Some(KeyCode::Down),
+                "home" => Some(KeyCode::Home),
+                "end" => Some(KeyCode::End),
+                "pageup" => Some(KeyCode::PageUp),
+                "pagedown" => Some(KeyCode::PageDown),
+                "tab" => Some(KeyCode::Tab),
+                "backtab" => Some(KeyCode::BackTab),
+                "delete" => Some(KeyCode::Delete),
+                "insert" => Some(KeyCode::Insert),
+                "null" => Some(KeyCode::Null),
+                "esc" => Some(KeyCode::Esc),
                 k => {
                     if k.len() == 1 {
-                        KeyCode::Char(k.chars().next().unwrap())
+                        Some(KeyCode::Char(k.chars().next().unwrap()))
                     } else if k.len() > 1 && k.starts_with("F") && k.len() < 4 {
-                        KeyCode::F(k[1..].parse().unwrap())
+                        Some(KeyCode::F(k[1..].parse().unwrap()))
                     } else {
-                        KeyCode::Null
+                        None
                     }
                 }
             };
 
+            let mouse_action = match key {
+                "mouseleft" => Some(MouseEventKind::Down(MouseButton::Left)),
+                "mouseright" => Some(MouseEventKind::Down(MouseButton::Right)),
+                "mousemiddle" => Some(MouseEventKind::Down(MouseButton::Middle)),
+                "mousewheelup" => Some(MouseEventKind::ScrollUp),
+                "mousewheeldown" => Some(MouseEventKind::ScrollDown),
+                _ => None,
+            };
+
             if mods != KeyModifiers::NONE {
-                if result.modifiers & mods != KeyModifiers::NONE {
+                if modifiers & mods != KeyModifiers::NONE {
                     return Err(format!("Key combo {} gives {} twice", orig, key));
                 }
-                result.modifiers |= mods;
-            } else if action != KeyCode::Null {
+                modifiers |= mods;
+            } else if action.is_some() {
                 // Already got an action key
-                if result.code != KeyCode::Null {
+                if action_key.is_some() {
                     return Err(format!("Key combo {} has two action keys", orig));
                 }
-                result.code = action;
+                if mouse_action.is_some() {
+                    return Err(format!("Key combo {} has an action key and a mouse action", orig));
+                }
+                action_key = action;
+            } else if mouse_action.is_some() {
+                // Already got a mouse action
+                if mouse_button.is_some() {
+                    return Err(format!("Key combo {} has two mouse actions", orig));
+                }
+                mouse_button = mouse_action;
             } else {
                 return Err(format!("Unknown key name {} in {}", key, orig));
             }
         }
-        Ok(result)
+
+        assert_ne!(action_key.is_some(), mouse_button.is_some());
+
+        if let Some(key) = action_key {
+            Ok(Event::Key(KeyEvent::new(key, modifiers)))
+        } else if let Some(button) = mouse_button {
+            Ok(Event::Mouse(MouseEvent { kind:button, column:0, row:0, modifiers } ))
+        } else {
+            Err(format!("Key combo {} has no action key or mouse action", orig))
+        }
     }
 
     fn get_command(&self) -> crossterm::Result<UserCommand> {
@@ -122,9 +183,17 @@ impl Reader {
                         };
                     }
                     Event::Mouse(event) => {
-                        println!("{:?}", event);
-                        // FIXME: handle mouse events
-                        return Ok(cmd::None);
+                        let lookup = MouseEvent {
+                            column:0, row:0,
+                            ..event
+                        };
+
+                        // println!("{:?}", event);
+
+                        return match self.mousemap.get(&lookup) {
+                            Some(cmd) => Ok(*cmd),
+                            None => Ok(UserCommand::None),
+                        };
                     }
                     Event::Resize(width, height) => {
                         println!("New size {}x{}", width, height);
@@ -148,7 +217,9 @@ impl Drop for Input {
             terminal::disable_raw_mode().expect("Unable to disable raw mode");
 
             let mut stdout = stdout();
-            execute!(stdout, event::DisableMouseCapture).expect("Failed to disable mouse capture");
+            if ! self.reader.mousemap.is_empty() {
+                execute!(stdout, event::DisableMouseCapture).expect("Failed to disable mouse capture");
+            }
         }
     }
 }
@@ -166,7 +237,9 @@ impl Input {
             terminal::enable_raw_mode()?;
 
             let mut stdout = stdout();
-            execute!(stdout, event::EnableMouseCapture)?;
+            if ! self.reader.mousemap.is_empty() {
+                execute!(stdout, event::EnableMouseCapture)?;
+            }
             self.started = true;
         }
         Ok(())
