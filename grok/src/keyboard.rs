@@ -29,6 +29,11 @@ const KEYMAP: &'static [(&'static str, UserCommand)] = &[
     ("End", cmd::ScrollToBottom),
 
     // Mouse action mappings
+    // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
+    // affects how the mouse is used. In particular, highlighting text, copy and paste functions from the terminal
+    // probably won't work as they normally do.  We can't emulate those features either since we don't have access
+    // to the user's clipboard unless we're on the same X server.
+
     // ("MouseLeft", cmd::Quit),
     // ("Ctrl+MouseLeft", cmd::ScrollDown),
     // ("MouseRight", cmd::MouseRight),
