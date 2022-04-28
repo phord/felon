@@ -149,8 +149,6 @@ impl Display {
     }
 
     pub fn refresh_screen(&mut self) -> crossterm::Result<()> {
-        // FIXME: Don't do anything if the screen has not changed
-        // FIXME: Only update parts of the screen that have changed
         // FIXME: Discard unused cached lines
 
         if ! self.on_alt_screen && self.use_alt {
@@ -202,8 +200,10 @@ impl Display {
                 unreachable!("Unexpected scroll value: {}", scroll);
             };
 
+
         if top == bottom {
             // Nothing to do
+            self.prev = disp;
             return Ok(());
         }
 
@@ -217,9 +217,9 @@ impl Display {
         let mut buff = ScreenBuffer::new();
         queue!(buff, cursor::Hide, cursor::MoveTo(0, start as u16))?;
 
-        if (scroll < 0 ) {
+        if scroll < 0 {
             queue!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollDown(scroll.abs() as u16)).unwrap();
-        } else if (scroll > 0) {
+        } else if scroll > 0 {
             queue!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollUp(scroll as u16)).unwrap();
         } else {
             // Clear the screen? Unnecessary.

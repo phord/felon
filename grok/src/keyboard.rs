@@ -201,7 +201,6 @@ impl Reader {
                         };
                     }
                     Event::Resize(width, height) => {
-                        println!("New size {}x{}", width, height);
                         return Ok(cmd::TerminalResize);
                     }
                 }
