@@ -54,15 +54,19 @@ impl io::Write for ScreenBuffer {
 }
 
 pub struct Display {
-    pub height: usize,
+    // Physical size of the display
+    height: usize,
     width: usize,
     data: HashMap<usize, String>,
     on_alt_screen: bool,
     use_alt: bool,
 
+
+    /// First line on the display (line-number in the file)
     top: usize,
     bottom: usize,
 
+    /// Previously displayed lines
     prev: DisplayState,
 }
 
@@ -191,11 +195,9 @@ impl Display {
             } else if scroll < 0 {
                 // Scroll down
                 (scroll, (disp.top as isize) as usize, self.prev.top)
-                // execute!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollDown(scroll.abs() as u16))?;
             } else if scroll > 0 {
                 // Scroll up
                 (scroll, self.prev.bottom, self.prev.bottom + scroll as usize)
-                // execute!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollUp(scroll as u16))?;
             } else {
                 unreachable!("Unexpected scroll value: {}", scroll);
             };
@@ -218,9 +220,9 @@ impl Display {
         queue!(buff, cursor::Hide, cursor::MoveTo(0, start as u16))?;
 
         if scroll < 0 {
-            queue!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollDown(scroll.abs() as u16)).unwrap();
+            queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
         } else if scroll > 0 {
-            queue!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollUp(scroll as u16)).unwrap();
+            queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
         } else {
             // Clear the screen? Unnecessary.
         }
