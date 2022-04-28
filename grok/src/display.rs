@@ -1,9 +1,17 @@
-use crossterm::terminal::ClearType;
+use crossterm::{terminal::ClearType, cursor::DisableBlinking};
 use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, event, execute, queue, terminal};
 use crate::config::Config;
 use crate::keyboard::UserCommand;
 use std::collections::HashMap;
+
+#[derive(PartialEq)]
+struct DisplayState {
+    top: usize,
+    bottom: usize,
+    // offset: usize, // column offset
+    width: usize,
+}
 
 struct ScreenBuffer {
     content: String,
@@ -54,6 +62,8 @@ pub struct Display {
 
     top: usize,
     bottom: usize,
+
+    prev: DisplayState,
 }
 
 impl Drop for Display {
@@ -75,6 +85,7 @@ impl Display {
             use_alt: config.altscreen,
             top: 0,
             bottom: height as usize,
+            prev: DisplayState { top: 0, bottom: 0, width: 0 },
         }
     }
 
@@ -147,10 +158,74 @@ impl Display {
             self.on_alt_screen = true;
         }
 
-        let mut buff = ScreenBuffer::new();
-        queue!(buff, cursor::Hide, cursor::MoveTo(0, 0))?;
+        // What we want to display
+        let disp = DisplayState {
+            top: self.top,
+            bottom: self.top + self.height,
+            width: self.width
+        };
 
-        for row in 0..self.height as usize {
+        if disp == self.prev {
+            // No change; nothing to do.
+            return Ok(());
+        }
+
+        let scroll = disp.top as isize - self.prev.top as isize;
+
+        let (scroll, top, bottom) =
+            if scroll == 0 {
+                // No scrolling; check height/width
+                if disp.width <= self.prev.width {
+                    if self.height <= self.prev.bottom - self.prev.top {
+                        // Screen is the same or smaller. Nothing to do.
+                        (0, 0, 0)
+                    } else {
+                        // Just need to display new rows at bottom
+                        (0, self.prev.bottom, disp.bottom)
+                    }
+                } else {
+                    // Screen got wider.  Repaint everything.
+                    (0, disp.top, disp.bottom)
+                }
+            } else if scroll.abs() > self.height as isize {
+                // Scrolling too far; clear the screen
+                    (0, disp.top, disp.bottom)
+            } else if scroll < 0 {
+                // Scroll down
+                (scroll, (disp.top as isize) as usize, self.prev.top)
+                // execute!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollDown(scroll.abs() as u16))?;
+            } else if scroll > 0 {
+                // Scroll up
+                (scroll, self.prev.bottom, self.prev.bottom + scroll as usize)
+                // execute!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollUp(scroll as u16))?;
+            } else {
+                unreachable!("Unexpected scroll value: {}", scroll);
+            };
+
+        if top == bottom {
+            // Nothing to do
+            return Ok(());
+        }
+
+        assert!(top >= disp.top);
+
+        let len = bottom - top;
+        let start = top - disp.top;
+
+        self.prev = disp;
+
+        let mut buff = ScreenBuffer::new();
+        queue!(buff, cursor::Hide, cursor::MoveTo(0, start as u16))?;
+
+        if (scroll < 0 ) {
+            queue!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollDown(scroll.abs() as u16)).unwrap();
+        } else if (scroll > 0) {
+            queue!(stdout(), cursor::MoveTo(0, 0), terminal::ScrollUp(scroll as u16)).unwrap();
+        } else {
+            // Clear the screen? Unnecessary.
+        }
+
+        for row in start..start+len as usize {
             let lrow = self.top + row;
             let line = self.data.get(&lrow);
             match line {
@@ -162,6 +237,7 @@ impl Display {
                     buff.push('~');
                 }
             }
+
             queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
 
             if row < self.height as usize - 1 {
