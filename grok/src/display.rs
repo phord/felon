@@ -64,7 +64,12 @@ pub struct Display {
 
     /// First line on the display (line-number in the file)
     top: usize,
-    bottom: usize,
+
+    /// Size of the bottom status panel
+    panel: usize,
+
+    /// Total lines in the file
+    lines_count: usize,
 
     /// Previously displayed lines
     prev: DisplayState,
@@ -80,17 +85,29 @@ impl Drop for Display {
 
 impl Display {
     pub fn new(config: Config) -> Self {
-        let (width, height) = terminal::size().expect("Unable to get terminal size");
-        Self {
-            height: height as usize,
-            width: width as usize,
+        let mut s = Self {
+            height: 0,
+            width: 0,
             data: HashMap::new(),
             on_alt_screen: false,
             use_alt: config.altscreen,
             top: 0,
-            bottom: height as usize,
+            panel: 1,
+            lines_count: 0,
             prev: DisplayState { top: 0, bottom: 0, width: 0 },
-        }
+        };
+        s.update_size();
+        s
+    }
+
+    fn update_size(&mut self) {
+        let (width, height) = terminal::size().expect("Unable to get terminal size");
+        self.width = width as usize;
+        self.height = height as usize;
+    }
+
+    fn page_size(&self) -> usize {
+        cmp::max(self.height as isize - self.panel as isize, 0) as usize
     }
 
     pub fn push(&mut self, row: usize, line: &str) {
@@ -102,22 +119,27 @@ impl Display {
     }
 
     pub fn set_length(&mut self, length: usize) {
-        self.bottom = length;
+        self.lines_count = length;
     }
 
     pub fn lines_needed(&self) -> Vec<usize> {
-        let lines = (self.top..self.top + self.height)
+        let lines = (self.top..self.top + self.page_size())
             .filter(|x| {!self.data.contains_key(x)} )
             .collect();
         lines
+    }
+
+    fn status_msg(& self) -> String {
+        "Status message".to_string()
     }
 
     fn vert_scroll(&mut self, amount: isize) {
         let top = self.top as isize + amount;
         let top = cmp::max(top, 0) as usize;
 
-        self.top = if top + self.height >= self.bottom {
-            self.bottom.saturating_sub(self.height)
+        let view_height = self.page_size();
+        self.top = if top + view_height >= self.lines_count {
+            self.lines_count.saturating_sub(view_height)
         } else { top };
 
     }
@@ -132,24 +154,31 @@ impl Display {
                 self.vert_scroll(-1);
             }
             UserCommand::PageDown => {
-                self.vert_scroll(self.height as isize);
+                self.vert_scroll(self.page_size() as isize);
             }
             UserCommand::PageUp => {
-                self.vert_scroll(-(self.height as isize));
+                self.vert_scroll(-(self.page_size() as isize));
             }
             UserCommand::ScrollToTop => {
                 self.top = 0;
             }
             UserCommand::ScrollToBottom => {
-                self.vert_scroll(self.bottom as isize);
+                self.vert_scroll(self.lines_count as isize);
             }
             UserCommand::TerminalResize => {
-                let (width, height) = terminal::size().expect("Unable to get terminal size");
-                self.width = width as usize;
-                self.height = height as usize;
+                self.update_size();
             }
             _ => {}
         }
+    }
+
+    fn draw_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String) {
+        queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
+
+        let len = cmp::min(line.len(), self.width as usize);
+        buff.push_str(&line[0..len]);
+
+        queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
     pub fn refresh_screen(&mut self) -> crossterm::Result<()> {
@@ -163,7 +192,7 @@ impl Display {
         // What we want to display
         let disp = DisplayState {
             top: self.top,
-            bottom: self.top + self.height,
+            bottom: self.top + self.page_size(),
             width: self.width
         };
 
@@ -178,7 +207,7 @@ impl Display {
             if scroll == 0 {
                 // No scrolling; check height/width
                 if disp.width <= self.prev.width {
-                    if self.height <= self.prev.bottom - self.prev.top {
+                    if self.page_size() <= self.prev.bottom - self.prev.top {
                         // Screen is the same or smaller. Nothing to do.
                         (0, 0, 0)
                     } else {
@@ -189,9 +218,9 @@ impl Display {
                     // Screen got wider.  Repaint everything.
                     (0, disp.top, disp.bottom)
                 }
-            } else if scroll.abs() > self.height as isize {
+            } else if scroll.abs() > self.page_size() as isize {
                 // Scrolling too far; clear the screen
-                    (0, disp.top, disp.bottom)
+                (0, disp.top, disp.bottom)
             } else if scroll < 0 {
                 // Scroll down
                 (scroll, (disp.top as isize) as usize, self.prev.top)
@@ -217,7 +246,6 @@ impl Display {
         self.prev = disp;
 
         let mut buff = ScreenBuffer::new();
-        queue!(buff, cursor::Hide, cursor::MoveTo(0, start as u16))?;
 
         if scroll < 0 {
             queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
@@ -226,25 +254,24 @@ impl Display {
         } else {
             // Clear the screen? Unnecessary.
         }
+        queue!(buff, cursor::Hide)?;
 
         for row in start..start+len as usize {
             let lrow = self.top + row;
             let line = self.data.get(&lrow);
-            match line {
-                Some(line) => {
-                    let len = cmp::min(line.len(), self.width as usize);
-                    buff.push_str(&line[0..len]);
-                }
-                _ => {
-                    buff.push('~');
-                }
-            }
+            let line = line.unwrap_or(&'~'.to_string()).clone();
+            self.draw_line(&mut buff, row, &line);
+        }
 
-            queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
-
-            if row < self.height as usize - 1 {
-                buff.push_str("\r\n");
+        if self.panel > 0 {
+            queue!(buff, cursor::Hide, cursor::MoveTo((self.height-self.panel) as u16, start as u16))?;
+            queue!(buff, crossterm::style::SetAttribute(crossterm::style::Attribute::Reverse)).unwrap();
+            for row in self.height-self.panel..self.height as usize {
+                // TODO: Draw the panel in inverse colors
+                let line = self.status_msg();
+                self.draw_line(&mut buff, row, &line);
             }
+            queue!(buff, crossterm::style::SetAttribute(crossterm::style::Attribute::NoReverse)).unwrap();
         }
 
         queue!(
