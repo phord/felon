@@ -143,7 +143,7 @@ impl Index {
                 _ => {
                     if inword {
                         // Ignore words in the prefix of each line
-                        if pos - cnt > self.prefix {
+                        if offset + pos - cnt > self.prefix {
                             if indecnum {
                                 self.add_number(num, cnt);
                             } else if inhexnum {
