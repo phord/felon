@@ -1,9 +1,11 @@
-use crossterm::{terminal::ClearType, cursor::DisableBlinking};
+use crossterm::{terminal::ClearType, style::Stylize, style::ContentStyle};
 use std::{io, io::{stdout, Write}, cmp};
-use crossterm::{cursor, event, execute, queue, terminal};
+use crossterm::{cursor, execute, queue, terminal};
 use crate::config::Config;
 use crate::keyboard::UserCommand;
 use std::collections::HashMap;
+
+use crossterm::style::Color;
 
 #[derive(PartialEq)]
 struct DisplayState {
@@ -12,6 +14,33 @@ struct DisplayState {
     // offset: usize, // column offset
     width: usize,
 }
+
+enum PattColor {
+    Normal,
+    Highlight,
+    Inverse,
+}
+/// Line section coloring
+struct RegionColor {
+    len: u16,
+    style: PattColor,
+}
+
+impl RegionColor {
+    fn to_str(&self, line: &str) -> String {
+        let len = cmp::min(self.len as usize, line.len());
+        let content = &line[..len];
+        let style = ContentStyle::new();
+
+        let style = match self.style {
+            PattColor::Normal => style.reset(),
+            PattColor::Highlight => style.with(Color::Red),
+            PattColor::Inverse => style.negative(),
+        };
+        format!("{}" , style.apply(content))
+    }
+}
+
 
 struct ScreenBuffer {
     content: String,
@@ -172,13 +201,44 @@ impl Display {
         }
     }
 
-    fn draw_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String) {
+    fn line_colors(&self, line: &str) -> Vec<RegionColor> {
+        let len = line.len();
+        vec![
+            RegionColor { len: 20, style: PattColor::Normal },
+            RegionColor { len: 10, style: PattColor::Highlight },
+            RegionColor { len: len as u16, style: PattColor::Normal },
+        ]
+    }
+
+    fn status_line_colors(&self, line: &str) -> Vec<RegionColor> {
+        let len = line.len();
+        vec![
+            RegionColor { len: len as u16, style: PattColor::Inverse },
+        ]
+    }
+
+    fn draw_styled_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String, colors: &Vec<RegionColor>) {
         queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
 
         let len = cmp::min(line.len(), self.width as usize);
-        buff.push_str(&line[0..len]);
+        let mut pos = 0;
+        for c in colors {
+            let section = cmp::min(c.len as usize, len - pos);
+            let str = c.to_str(&line[pos..pos+section]);
+            buff.push_str(&format!("{}", str));
+            pos += section;
+            if pos == len { break; }
+        }
 
         queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
+    }
+
+    fn draw_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String) {
+        self.draw_styled_line(buff, row, line, &self.line_colors(line));
+    }
+
+    fn draw_status_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String) {
+        self.draw_styled_line(buff, row, line, &self.status_line_colors(line));
     }
 
     pub fn refresh_screen(&mut self) -> crossterm::Result<()> {
@@ -264,14 +324,9 @@ impl Display {
         }
 
         if self.panel > 0 {
-            queue!(buff, cursor::Hide, cursor::MoveTo((self.height-self.panel) as u16, start as u16))?;
-            queue!(buff, crossterm::style::SetAttribute(crossterm::style::Attribute::Reverse)).unwrap();
             for row in self.height-self.panel..self.height as usize {
-                // TODO: Draw the panel in inverse colors
-                let line = self.status_msg();
-                self.draw_line(&mut buff, row, &line);
+                self.draw_status_line(&mut buff, row, &self.status_msg());
             }
-            queue!(buff, crossterm::style::SetAttribute(crossterm::style::Attribute::NoReverse)).unwrap();
         }
 
         queue!(
