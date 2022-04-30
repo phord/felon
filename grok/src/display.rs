@@ -1,9 +1,19 @@
+// Testing color and modes:
+// for m in 0 1 2 3 4 7 8 9 ; do echo "\e[0m\n--- $m ---" ; for i in {0..255}; do printf "\e[${m}m"'\e[38;5;%dm%3d ' $i $i; (( (i-15) * ((i-15) % 36))) || printf '\e[0m\n'; done ; echo "" ; done
+//
+// for r in {0..255..2} ; do for g in {0..255} ; do
+// echo -n "\033[38;2;$r;$g;$((255-g));48;2;0;0;0m0\e[0m"
+// done ; printf "\n" ; done
+
+
 use crossterm::{terminal::ClearType, style::Stylize, style::ContentStyle};
 use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, execute, queue, terminal};
 use crate::config::Config;
 use crate::keyboard::UserCommand;
 use std::collections::HashMap;
+use lazy_static::lazy_static;
+use regex::Regex;
 
 use crossterm::style::Color;
 
@@ -15,10 +25,19 @@ struct DisplayState {
     width: usize,
 }
 
+#[derive(Copy, Clone)]
 enum PattColor {
     Normal,
     Highlight,
     Inverse,
+    Timestamp,
+    Pid(Color),
+    Number,
+    Error,
+    Fail,
+    Info,
+    NoCrumb,
+    Module(Color),
 }
 /// Line section coloring
 struct RegionColor {
@@ -34,13 +53,56 @@ impl RegionColor {
 
         let style = match self.style {
             PattColor::Normal => style.reset(),
-            PattColor::Highlight => style.with(Color::Red),
+            PattColor::Highlight => style.with(Color::Yellow).on(Color::Blue).bold(),
             PattColor::Inverse => style.negative(),
+            PattColor::Timestamp => style.with(Color::Green).on(Color::Black),
+            PattColor::Pid(c) => style.with(c).on(Color::Black).italic(),
+            PattColor::Number => style.with(Color::DarkGreen).on(Color::Black),
+            PattColor::Error => style.with(Color::Yellow).on(Color::Black),
+            PattColor::Fail => style.with(Color::Red).on(Color::Blue).bold().italic(),
+            PattColor::Info => style.with(Color::White).on(Color::Black),
+            PattColor::NoCrumb => style.with(Color::White).on(Color::Black).italic(),
+            PattColor::Module(c) => style.with(c).on(Color::Black).bold(),
         };
         format!("{}" , style.apply(content))
     }
 }
 
+struct ColorSequence {
+    result: Vec<RegionColor>,
+    default_style: PattColor,
+    len: usize,
+}
+
+impl ColorSequence {
+    fn new(default_style: PattColor) -> Self {
+        Self {
+            result: vec![],
+            default_style,
+            len: 0,
+        }
+    }
+
+    fn push(&mut self, start: usize, end: usize, style: PattColor) -> usize {
+        let last = self.len;
+        assert!( start >= last );
+        assert!( end >= start );
+
+        if start > last {
+            self.result.push(RegionColor {len: (start - last) as u16, style: self.default_style,});
+        }
+        if end > start {
+            self.result.push(RegionColor { len: (end - start) as u16, style,});
+        }
+        self.len = end;
+        end - last
+    }
+
+    // fn finish(&mut self, end: usize) -> Vec<RegionColor> {
+    //     self.push(end, end, self.default_style);
+    //     &self.result
+    // }
+}
 
 struct ScreenBuffer {
     content: String,
@@ -201,14 +263,83 @@ impl Display {
         }
     }
 
-    fn line_colors(&self, line: &str) -> Vec<RegionColor> {
-        let len = line.len();
-        vec![
-            RegionColor { len: 20, style: PattColor::Normal },
-            RegionColor { len: 10, style: PattColor::Highlight },
-            RegionColor { len: len as u16, style: PattColor::Normal },
-        ]
+    fn hash_color(&self, text: &str) -> Color {
+        Color::Red
     }
+
+    // TODO: Move this to another module. "context.rs"?
+    fn line_colors(&self, line: &str) -> Vec<RegionColor> {
+        lazy_static! {
+            // Apr  4 22:21:16.056 E8ABF4F03A6F I      vol.flush.cb ...
+            static ref TIMESTAMP: Regex = Regex::new(r"(?x)
+                ^(...\ [\ 1-3]\d\ [0-2]\d:[0-5]\d:\d{2}\.\d{3})\    # date & time
+                 ([A-F0-9]{12})\                                    # PID
+                 ([A-Z])\                                           # crumb").unwrap();
+
+            static ref MODULE: Regex = Regex::new(r"(?x)
+                 ^\ *([A-Za-z0-9_.]+)\                              # module
+                 (?:\[([a-z0-9_.]+)\]){0,1}                         # submodule").unwrap();
+
+            static ref NUMBER: Regex = Regex::new(r"[^A-Za-z_.](0x[[:xdigit:]]+|(?:[[:digit:]]+\.)*[[:digit:]]+)").unwrap();
+        }
+        let prefix = TIMESTAMP.captures(line);
+
+        let mut result = ColorSequence::new(PattColor::NoCrumb);
+
+        // Match and color PID and TIME
+        if let Some(p) = prefix {
+            let crumb = p.get(3).unwrap().as_str();
+            result.default_style = match crumb.as_ref() {
+                "E" => PattColor::Error,
+                "A" => PattColor::Fail,
+                _ => PattColor::Info,
+            };
+
+            let len = p.get(1).unwrap().end() + 1;
+            result.push(0, len, PattColor::Timestamp );
+
+            // TODO: Calculate timestamp value?
+
+            let pid = p.get(2).unwrap();
+            let start = pid.start();
+            let end = pid.end();
+            let pid = pid.as_str();
+            let pid_color = self.hash_color(pid);
+            result.push( start, end, PattColor::Pid(pid_color));
+
+            // Match modules at start of line
+            let pos = result.len;
+            let module = MODULE.captures(&line[pos..]);
+            if let Some(m) = module {
+                let first = m.get(1).unwrap();
+                let color = self.hash_color(first.as_str());
+                result.push(pos + first.start(), pos + first.end(),PattColor::Module(color) );
+
+                if let Some(second) = m.get(2) {
+                    let color = self.hash_color(second.as_str());
+                    result.push(pos + second.start(), pos + second.end(), PattColor::Module(color));
+                }
+            }
+        }
+
+        let pos = result.len;
+        for m in NUMBER.captures_iter(&line[pos..]) {
+            let start = m.get(1).unwrap().start();
+            let end = m.get(1).unwrap().end();
+            result.push( pos + start, pos + end , PattColor::Number );
+        }
+
+        result.push(line.len(), line.len(),PattColor::Normal );
+
+        // let len = line.len();
+        // vec![
+        //     RegionColor { len: 20, style: PattColor::Normal },
+        //     RegionColor { len: 10, style: PattColor::Highlight },
+        //     RegionColor { len: len as u16, style: PattColor::Normal },
+        // ]
+        result.result
+    }
+
 
     fn status_line_colors(&self, line: &str) -> Vec<RegionColor> {
         let len = line.len();
@@ -230,10 +361,11 @@ impl Display {
             if pos == len { break; }
         }
 
-        queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
+        queue!(buff, crossterm::style::SetBackgroundColor(Color::Black), terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
     fn draw_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String) {
+        // TODO: Memoize the line_colors along with the lines
         self.draw_styled_line(buff, row, line, &self.line_colors(line));
     }
 
