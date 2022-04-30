@@ -3,6 +3,7 @@ mod config;
 mod viewer;
 mod display;
 mod keyboard;
+mod styled_text;
 
 use config::Config;
 fn main() -> crossterm::Result<()> {
