@@ -15,6 +15,10 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use fnv::FnvHasher;
+use std::hash::Hasher;
+
+
 use crossterm::style::Color;
 
 #[derive(PartialEq)]
@@ -32,7 +36,7 @@ enum PattColor {
     Inverse,
     Timestamp,
     Pid(Color),
-    Number,
+    Number(Color),
     Error,
     Fail,
     Info,
@@ -57,7 +61,7 @@ impl RegionColor {
             PattColor::Inverse => style.negative(),
             PattColor::Timestamp => style.with(Color::Green).on(Color::Black),
             PattColor::Pid(c) => style.with(c).on(Color::Black).italic(),
-            PattColor::Number => style.with(Color::DarkGreen).on(Color::Black),
+            PattColor::Number(c) => style.with(c).on(Color::Black),
             PattColor::Error => style.with(Color::Yellow).on(Color::Black),
             PattColor::Fail => style.with(Color::Red).on(Color::Blue).bold().italic(),
             PattColor::Info => style.with(Color::White).on(Color::Black),
@@ -264,7 +268,16 @@ impl Display {
     }
 
     fn hash_color(&self, text: &str) -> Color {
-        Color::Red
+        let mut hasher = FnvHasher::default();
+        hasher.write(text.as_bytes());
+        let hash = hasher.finish();
+
+        let base = 0x80 as u8;
+        let red = (hash & 0xFF) as u8 | base;
+        let green = ((hash >> 8) & 0xFF) as u8 | base;
+        let blue = ((hash >> 16) & 0xFF) as u8 | base;
+
+        Color::Rgb {r: red, g: green, b: blue}
     }
 
     // TODO: Move this to another module. "context.rs"?
@@ -308,7 +321,7 @@ impl Display {
             result.push( start, end, PattColor::Pid(pid_color));
 
             // Match modules at start of line
-            let pos = result.len;
+            let pos = result.len + 3;  // Skip over crumb; it will autocolor later
             let module = MODULE.captures(&line[pos..]);
             if let Some(m) = module {
                 let first = m.get(1).unwrap();
@@ -324,9 +337,11 @@ impl Display {
 
         let pos = result.len;
         for m in NUMBER.captures_iter(&line[pos..]) {
-            let start = m.get(1).unwrap().start();
-            let end = m.get(1).unwrap().end();
-            result.push( pos + start, pos + end , PattColor::Number );
+            let m = m.get(1).unwrap();
+            let start = m.start();
+            let end = m.end();
+            let color = self.hash_color(m.as_str());
+            result.push( pos + start, pos + end , PattColor::Number(color) );
         }
 
         result.push(line.len(), line.len(),PattColor::Normal );
