@@ -200,7 +200,7 @@ impl Reader {
                             None => Ok(UserCommand::None),
                         };
                     }
-                    Event::Resize(width, height) => {
+                    Event::Resize(_, _) => {
                         return Ok(cmd::TerminalResize);
                     }
                 }

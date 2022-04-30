@@ -7,19 +7,20 @@ pub struct Viewer {
     config: Config,
     display: Display,
     input: Input,
-    display_changed: bool,
     file: LogFile,
 }
 
 impl Viewer {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
+        let file = LogFile::new(Some(filename)).expect("Failed to open file");
+        println!("{:?}", file);
+
         Self {
             config: config.clone(),
             display: Display::new(config),
             input: Input::new(),
-            display_changed: true,
-            file: LogFile::new(Some(filename)).expect("Failed to open file"),
+            file,
         }
     }
 

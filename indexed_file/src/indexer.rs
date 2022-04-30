@@ -70,7 +70,7 @@ impl Index {
     fn parse(&mut self, data: &[u8], offset: usize, size: usize) -> usize {
         let bytes = data.len();
         let has_final_eol = data.last().unwrap() == &b'\n';
-        let mut cnt  = offset;
+        let mut cnt = offset;
         // let mut words = 0;
         let mut start = 0;
 
