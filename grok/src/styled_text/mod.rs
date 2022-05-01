@@ -285,6 +285,20 @@ mod tests {
         assert!(line.phrases[1].end == 12);
         assert!(line.phrases[2].end == 20);
         assert!(line.phrases[3].end == 29);
+
+        // Overlap covers multiple
+        line.push(15, 20, PattColor::Normal);
+        line.push(13, 25, PattColor::Normal);
+
+        assert!(line.phrases.len() == 5);
+        assert!(line.phrases[1].end == 12);
+        assert!(line.phrases[2].end == 13);
+        assert!(line.phrases[3].end == 25);
+
+        line.push(0, 29, PattColor::Normal);
+        assert!(line.phrases.len() == 1);
+        assert!(line.phrases[0].start == 0);
+        assert!(line.phrases[0].end == 29);
     }
 
 }
