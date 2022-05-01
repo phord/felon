@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn file_found() {
-        let (path, _) = make_test_file(10 , 10);
+        let (path, _) = make_test_file("file_found", 10 , 10);
         println!("{:?}", path);
         assert!(indexer::LogFile::new(Some(path)).is_ok());
     }
@@ -30,10 +30,10 @@ mod tests {
     use std::fs::File;
     use std::io::{self, BufRead};
 
-    fn make_test_file(words: usize, lines: usize) -> (PathBuf, usize) {
+    fn make_test_file(name: &str, words: usize, lines: usize) -> (PathBuf, usize) {
         let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.push("resources/test");
-        path.push("temp-test-file");
+        path.push(name);
 
         // write some data to the file
         let mut file = std::fs::File::create(path.clone()).unwrap();
@@ -65,13 +65,13 @@ mod tests {
     fn file_parse_lines_bytes() {
         let chunk_size = 1024 * 10;
         let max_line_length: usize = 90;
-        let words = (max_line_length - 40) / 10;
+        let words = max_line_length / 10;
         let size = chunk_size * 10 + chunk_size / 3;
         let lines = size / words;
 
         println!("words: {}  lines: {}", words, lines);
 
-        let (path, bytes) = make_test_file(words, lines);
+        let (path, bytes) = make_test_file("parse_lines_bytes", words, lines);
         let test_file = path.clone();
 
         assert!(bytes > chunk_size * 2);
@@ -119,7 +119,7 @@ mod tests {
 
         println!("words: {}  lines: {}", words, lines);
 
-        let (path, bytes) = make_test_file(words, lines);
+        let (path, bytes) = make_test_file("parse_long_lines_bytes", words, lines);
         let test_file = path.clone();
 
         assert!(bytes > chunk_size * 2);
