@@ -15,10 +15,10 @@ pub trait Stylable {
 /// Defines a style for a portion of a line.  Represents the style and the position within the line.
 /// The line content is included here for easier iteration, but the whole line lives elsewhere.
 #[derive(Copy, Clone)]
-struct Phrase {
-    start: usize,
-    end: usize,
-    patt: PattColor,
+pub struct Phrase {
+    pub start: usize,
+    pub end: usize,
+    pub patt: PattColor,
 }
 
 /// Holds a line of text and the styles for each character.
@@ -26,8 +26,8 @@ struct Phrase {
 /// Phrases are not allowed to overlap. If an overlapping phrase is added, it clips existing conflicting phrases.
 pub struct StyledLine {
     // FIXME: Make this a &str with proper lifetime checking
-    line: String,
-    phrases: Vec<Phrase>,
+    pub line: String,
+    pub phrases: Vec<Phrase>,
 }
 
 /// Holds a block of text as rows of stylable lines.
@@ -152,6 +152,7 @@ impl StyledLine {
 
 #[derive(Copy, Clone)]
 pub enum PattColor {
+    None,
     Normal,
     Highlight,
     Inverse,
@@ -170,10 +171,11 @@ pub struct RegionColor {
     pub(crate) style: PattColor,
 }
 
-fn to_style(patt: PattColor) -> ContentStyle {
+pub fn to_style(patt: PattColor) -> ContentStyle {
     let style = ContentStyle::new();
 
     let style = match patt {
+        PattColor::None => unreachable!("Tried to style with None pattern"),
         PattColor::Normal => style.reset(),
         PattColor::Highlight => style.with(Color::Yellow).on(Color::Blue).bold(),
         PattColor::Inverse => style.negative(),
