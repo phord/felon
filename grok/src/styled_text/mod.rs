@@ -15,8 +15,9 @@ pub struct Phrase {
 }
 
 /// Holds a line of text and the styles for each character.
-/// The styles are stored in phrases, a sorted collection of start,end,style.
-/// Phrases are not allowed to overlap. If an overlapping phrase is added, it clips existing conflicting phrases.
+/// The styles are stored in phrases, a sorted collection of start,style.
+/// Phrases are not allowed to overlap. When a phrase is inserted that overlaps an existing one,
+/// the existing one is clipped to fit around the new one.
 pub struct StyledLine {
     // FIXME: Make this a &str with proper lifetime checking
     pub line: String,
@@ -84,7 +85,6 @@ impl StyledLine {
 
         // We want to insert our phrase at pos.
         // Find the phrase that starts after our end so we can decide if we need to insert or replace.
-
         let until_pos = self.phrases.binary_search_by_key(&end, |orig| orig.start);
         let (right, split_right) = match until_pos {
             Ok(until_pos) => {
@@ -100,54 +100,35 @@ impl StyledLine {
 
         let count = right - left;
 
-        if count == 0 {
-            // We are contained inside the phrase at pos and we split it into two pieces.
-            // AAAAAAA
-            //   BBB
-            // CCCCCCC
-            // DDD
-            //     EEE
-            if split_left {
-                if split_right {
-                    // BBB->
-                    self.phrases.insert(left, Phrase { start: end, ..self.phrases[left-1]});
-                }
-                // <-BBB or <-EEE
-                // self.phrases[left-1].end = start;
-            } else if split_right {
-                // DDD->
-                self.phrases[left].start = end;
-            } else {
-                // CCCCCCCCC
-                self.phrases[left] = phrase;
-            }
 
-            // split_left && count==0   ==>   split_right
-            assert!(split_left || !split_right);
-
-            if split_left {
-                self.phrases.insert(left, phrase);
-            }
-        } else {
-            if count > 1 || (count==1 && !split_right && !split_left) {
-                // We can replace the existing phrase at left
-                self.phrases[left] = phrase;
-
-                if count > 1 {
-                    // Remove the rest of the (count-1) phrases
-                    if split_right {
-                        self.phrases.drain(left+1..right-1);
-                    } else {
-                        self.phrases.drain(left+1..right);
-                    }
-                }
-            } else {
-                // We have to squeeze in between the two phrases we found
-                self.phrases.insert(left, phrase);
-            }
-            assert!(left + 1 < self.phrases.len());
-            self.phrases[left + 1].start = end;
+        // We may be contained inside the phrase at pos and we need to split it into two pieces.
+        // AAAAAAA
+        //   BBB      split_left && split_right: Insert copy of AA; insert our new phrase
+        // CCCCCCC    split_left && split_right: replace CCCCCCCC with our phrase
+        // DDD        split_right && count=1:    Insert our new phrase at left; adjust left+1 to end
+        //     EEE    split_left && count=0:     Insert our new phrase at left; adjust left-1 to end
+        if count == 0 && split_left && split_right {
+            // BBB->  Insert copy of AA
+            self.phrases.insert(left, Phrase { start: end, ..self.phrases[left-1]});
         }
+        if count < 2 && (split_left || split_right) {
+            // <-BBB || DDD-> || <-EEE We have to squeeze in between the two phrases we found
+            self.phrases.insert(left, phrase);
+        } else {
+            assert!(count > 0);
+            // CCCCCCC
+            // We can replace the existing phrase at left
+            self.phrases[left] = phrase;
+
+            // Remove the rest of the (count-1) phrases
+            if split_right {
+                self.phrases.drain(left+1..right-1);
+            } else {
+                self.phrases.drain(left+1..right);
+            }
+        }
+        assert!(left + 1 < self.phrases.len());
+        self.phrases[left + 1].start = end;
     }
 }
 
@@ -226,6 +207,10 @@ mod tests {
         assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 10, 15, 29]);
 
         // Overlap aligns with start of existing
+        line.push(0, 15, PattColor::Normal);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 15, 29]);
+
+        // Patter replaces one existing pattern exactly
         line.push(0, 15, PattColor::Normal);
         assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 15, 29]);
 
