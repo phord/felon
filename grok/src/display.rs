@@ -63,19 +63,21 @@ impl io::Write for ScreenBuffer {
     fn flush(&mut self) -> io::Result<()> {
         let mut buffer = String::new();
         for row in &self.content {
-            for p in row.phrases.iter().filter(|p| p.start < self.width) {
+            let pairs = row.phrases.iter().zip(row.phrases[1..].iter());
+            for (p, pnext) in pairs{
                 match p.patt {
                     PattColor::None => {
                         buffer.push_str(&row.line);
+                        break;
                     }
                     _ => {
-                        // if p.end > p.start
-                        { // FIXME: zero-length phrases??
-                            let end = cmp::min(self.width, p.end);
-                            assert!(end > p.start);
-                            let reg = RegionColor {len: (end - p.start) as u16, style: p.patt};
-                            let content = reg.to_str(&row.line[p.start..end]);
-                            buffer.push_str(content.as_str());
+                        let end = cmp::min(self.width, pnext.start);
+                        assert!(end > p.start || end == 0);
+                        let reg = RegionColor {len: (end - p.start) as u16, style: p.patt};
+                        let content = reg.to_str(&row.line[p.start..end]);
+                        buffer.push_str(content.as_str());
+                        if end == self.width {
+                            break;
                         }
                     }
                 }

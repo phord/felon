@@ -11,7 +11,6 @@ pub trait Stylable {
 #[derive(Copy, Clone)]
 pub struct Phrase {
     pub start: usize,
-    pub end: usize,
     pub patt: PattColor,
 }
 
@@ -36,51 +35,11 @@ pub struct StyledLine {
 // }
 
 impl Phrase {
-    fn new(start: usize, end: usize, patt: PattColor) -> Self {
+    fn new(start: usize, patt: PattColor) -> Self {
         Self {
             start,
-            end,
             patt,
         }
-    }
-
-    // Cleave a phrase in two. Returns a pair of left, right sides.
-    fn partition(&self, pos: usize) -> (Option<Phrase>, Option<Phrase>) {
-        if pos <= self.start {
-            (None, Some(*self))
-        } else if pos >= self.end() {
-            (Some(*self), None)
-        } else {
-            let left = Self {end: pos, ..*self};
-            let right = Self {start: pos, ..*self};
-            (Some(left), Some(right))
-        }
-    }
-
-    // Clip our phrase around other phrase. Returns optional new phrases for left and right unobscured parts.
-    fn clip(&self, other: &Self) -> (Option<Phrase>, Option<Phrase>) {
-        // Remove the overlapping range from self and return the non-overlapping range(s).
-        // It is either 0, 1 or 2 phrases.
-
-        let (left, _) = self.partition(other.start());
-        let (_, right) = self.partition(other.end());
-        (left, right)
-    }
-
-    fn overlaps(&self, other: &Self) -> bool {
-        self.start < other.end() && other.start < self.end()
-    }
-
-    fn start(&self) -> usize {
-        self.start
-    }
-
-    fn end(&self) -> usize {
-        self.start + self.len()
-    }
-
-    fn len(&self) -> usize {
-        self.end - self.start
     }
 }
 
@@ -89,7 +48,7 @@ impl StyledLine {
     pub fn new(line: &str, patt: PattColor) -> Self {
         Self {
             line: str::to_owned(line),
-            phrases: vec![ Phrase::new(0, line.len(), patt) ],
+            phrases: vec![ Phrase::new(0, patt), Phrase::new(line.len(), patt), ],
         }
     }
 
@@ -107,7 +66,7 @@ impl StyledLine {
     // If the new phrase overlaps with existing phrases, it clips them.
     pub fn push(&mut self, start: usize, end: usize, patt: PattColor) {
         assert!(end > start);
-        let phrase = Phrase::new(start, end, patt);
+        let phrase = Phrase::new(start, patt);
 
         let insert_pos = self.phrases.binary_search_by_key(&start, |orig| orig.start);
         let (left, split_left)  = match insert_pos {
@@ -126,25 +85,20 @@ impl StyledLine {
         // We want to insert our phrase at pos.
         // Find the phrase that starts after our end so we can decide if we need to insert or replace.
 
-        // Rust bug?  This crashes:
-        // let until_pos = self.phrases.binary_search_by_key(&end, |orig| orig.end);
+        let until_pos = self.phrases.binary_search_by_key(&end, |orig| orig.start);
+        let (right, split_right) = match until_pos {
+            Ok(until_pos) => {
+                // The phrase at until_pos ends where we end.  Discard right side.
+                (until_pos, false)
+            }
+            Err(until_pos) => {
+                // The phrase before until_pos is clipped by us. We will keep its right side.
+                assert!(until_pos > 0);
+                (until_pos, true)
+            }
+        };
 
-        // let until_pos = self.phrases.binary_search_by_key(&end, |orig| orig.end);
-        let count = self.phrases[left..].iter().take_while(|orig| orig.end < end).count();
-        let split_right = self.phrases[left+count].end != end;
-        // let (count, split_right) = match until_pos {
-        //     Ok(until_pos) => {
-        //         // The phrase at until_pos ends where we end.  Discard right side.
-        //         (until_pos+1, false)
-        //     }
-        //     Err(until_pos) => {
-        //         // The phrase at until_pos is clipped by us. We will keep its right side.
-        //         assert!(until_pos + left <= self.phrases.len());
-        //         (until_pos, true)
-        //     }
-        // };
-
-        // let count = count - left;
+        let count = right - left;
 
         if count == 0 {
             // We are contained inside the phrase at pos and we split it into two pieces.
@@ -159,7 +113,7 @@ impl StyledLine {
                     self.phrases.insert(left, Phrase { start: end, ..self.phrases[left-1]});
                 }
                 // <-BBB or <-EEE
-                self.phrases[left-1].end = start;
+                // self.phrases[left-1].end = start;
             } else if split_right {
                 // DDD->
                 self.phrases[left].start = end;
@@ -167,32 +121,32 @@ impl StyledLine {
                 // CCCCCCCCC
                 self.phrases[left] = phrase;
             }
-            if split_right || split_left {
+
+            // split_left && count==0   ==>   split_right
+            assert!(split_left || !split_right);
+
+            if split_left {
                 self.phrases.insert(left, phrase);
             }
         } else {
-            // XXXXYYYY
-            //   BBB
-            // CCCCCCC
-            // DDD
-            //     EEE
-            if split_left {
-                self.phrases[left-1].end = phrase.start;
-            }
-
-            if count > 1 {
+            if count > 1 || (count==1 && !split_right && !split_left) {
                 // We can replace the existing phrase at left
                 self.phrases[left] = phrase;
 
-                // Remove the rest of the (count-1) phrases
-                self.phrases.drain(left+1..left+count);
+                if count > 1 {
+                    // Remove the rest of the (count-1) phrases
+                    if split_right {
+                        self.phrases.drain(left+1..right-1);
+                    } else {
+                        self.phrases.drain(left+1..right);
+                    }
+                }
             } else {
                 // We have to squeeze in between the two phrases we found
                 self.phrases.insert(left, phrase);
             }
-            if left + 1 < self.phrases.len() {
-                self.phrases[left + 1].start = phrase.end;
-            }
+            assert!(left + 1 < self.phrases.len());
+            self.phrases[left + 1].start = end;
         }
     }
 }
@@ -255,10 +209,10 @@ mod tests {
 
     #[test]
     fn test_styledline_basic() {
-        let mut line = StyledLine::new("hello", PattColor::Normal);
-        assert!(line.phrases.len() == 1);
+        let line = StyledLine::new("hello", PattColor::Normal);
+        assert!(line.phrases.len() == 2);
         assert!(line.phrases[0].start == 0);
-        assert!(line.phrases[0].end == 5);
+        assert!(line.phrases[1].start == 5);
     }
 
 
@@ -269,52 +223,33 @@ mod tests {
 
         // Overlap splits whole line
         line.push(10, 15, PattColor::Normal);
-        assert!(line.phrases.len() == 3);
-        assert!(line.phrases[0].start == 0);
-        assert!(line.phrases[0].end == 10);
-        assert!(line.phrases[1].end == 15);
-        assert!(line.phrases[2].end == 29);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 10, 15, 29]);
 
         // Overlap aligns with start of existing
         line.push(0, 15, PattColor::Normal);
-
-        assert!(line.phrases.len() == 2);
-        assert!(line.phrases[0].start == 0);
-        assert!(line.phrases[0].end == 15);
-        assert!(line.phrases[1].end == 29);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 15, 29]);
 
         // Overlap aligns with end of previous
         line.push(10, 15, PattColor::Normal);
-
-        assert!(line.phrases.len() == 3);
-        assert!(line.phrases[0].start == 0);
-        assert!(line.phrases[0].end == 10);
-        assert!(line.phrases[1].end == 15);
-        assert!(line.phrases[2].end == 29);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 10, 15, 29]);
 
         // Overlap covers end of previous
         line.push(12, 20, PattColor::Normal);
-
-        assert!(line.phrases.len() == 4);
-        assert!(line.phrases[0].start == 0);
-        assert!(line.phrases[0].end == 10);
-        assert!(line.phrases[1].end == 12);
-        assert!(line.phrases[2].end == 20);
-        assert!(line.phrases[3].end == 29);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 10, 12, 20, 29]);
 
         // Overlap covers multiple
         line.push(15, 20, PattColor::Normal);
         line.push(13, 25, PattColor::Normal);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 10, 12, 13, 25, 29]);
 
-        assert!(line.phrases.len() == 5);
-        assert!(line.phrases[1].end == 12);
-        assert!(line.phrases[2].end == 13);
-        assert!(line.phrases[3].end == 25);
+        // Left-aligned, right-disjoint, not at end
+        line.push(13, 20, PattColor::Normal);
+        assert_eq!(line.phrases.iter().map(|p| p.start).collect::<Vec<_>>(), vec![0, 10, 12, 13, 20, 25, 29]);
 
         line.push(0, 29, PattColor::Normal);
-        assert!(line.phrases.len() == 1);
+        assert!(line.phrases.len() == 2);
         assert!(line.phrases[0].start == 0);
-        assert!(line.phrases[0].end == 29);
+        assert!(line.phrases[1].start == 29);
     }
 
 }
