@@ -1,5 +1,5 @@
 use crossterm::style::Color;
-use crossterm::{terminal::ClearType, style::Stylize, style::ContentStyle};
+use crossterm::{terminal::ClearType};
 use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, execute, queue, terminal};
 use crate::config::Config;
@@ -11,7 +11,7 @@ use regex::Regex;
 use fnv::FnvHasher;
 use std::hash::Hasher;
 
-use crate::styled_text::{PattColor, RegionColor, ColorSequence, StyledLine, to_style};
+use crate::styled_text::{PattColor, RegionColor, StyledLine};
 
 #[derive(PartialEq)]
 struct DisplayState {
@@ -69,7 +69,8 @@ impl io::Write for ScreenBuffer {
                         buffer.push_str(&row.line);
                     }
                     _ => {
-                        if p.end > p.start { // FIXME: zero-length phrases??
+                        // if p.end > p.start
+                        { // FIXME: zero-length phrases??
                             let end = cmp::min(self.width, p.end);
                             assert!(end > p.start);
                             let reg = RegionColor {len: (end - p.start) as u16, style: p.patt};

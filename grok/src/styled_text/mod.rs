@@ -1,11 +1,5 @@
-use crossterm::style::{Stylize, ContentStyle, StyledContent};
-use std::{io, io::{stdout, Write}, cmp};
-use crate::config::Config;
-use lazy_static::lazy_static;
-use regex::Regex;
-
-use fnv::FnvHasher;
-use std::hash::Hasher;
+use crossterm::style::{Stylize, ContentStyle};
+use std::cmp;
 use crossterm::style::Color;
 
 pub trait Stylable {
@@ -30,21 +24,6 @@ pub struct StyledLine {
     pub phrases: Vec<Phrase>,
 }
 
-/// Holds a block of text as rows of stylable lines.
-struct StyledText {
-    lines : Vec<StyledLine>,
-}
-
-impl StyledText {
-    fn new() -> Self {
-        Self {
-            lines: Vec::new(),
-        }
-    }
-}
-
-
-
 // TODO: In the future when GATs are stable, we can implement IntoIterator.  Until then, users will
 // just have to use self.phrases.iter() instead.
 //
@@ -64,6 +43,7 @@ impl Phrase {
             patt,
         }
     }
+
     // Cleave a phrase in two. Returns a pair of left, right sides.
     fn partition(&self, pos: usize) -> (Option<Phrase>, Option<Phrase>) {
         if pos <= self.start {
@@ -123,28 +103,96 @@ impl StyledLine {
     // }
 
 
+    // Inserts a new styled region into the line style planner.
+    // If the new phrase overlaps with existing phrases, it clips them.
     pub fn push(&mut self, start: usize, end: usize, patt: PattColor) {
         assert!(end > start);
         let phrase = Phrase::new(start, end, patt);
-        let mut inserted = false;
-        let phrases: Vec<Phrase> = self.phrases.iter()
-            .map(|p| p.clip(&phrase))
-            .fold(vec![], |mut acc, (l, r)| {
-            if let Some(l) = l {
-                acc.push(l);
+
+        let insert_pos = self.phrases.binary_search_by_key(&start, |orig| orig.start);
+        let (left, split_left)  = match insert_pos {
+            Ok(pos) => {
+                // The phrase at pos starts at the same position we do.  We will discard its left side.
+                (pos, false)
             }
-            if let Some(r) = r {
-                if !inserted {
-                    acc.push(phrase);
-                    inserted = true;
+            Err(pos) => {
+                // The phrase at pos-1 is clipped by us.  We will keep its left side.
+                assert!(self.phrases.len() >= pos);
+                assert!(pos > 0);
+                (pos, true)
+            }
+        };
+
+        // We want to insert our phrase at pos.
+        // Find the phrase that starts after our end so we can decide if we need to insert or replace.
+
+        // Rust bug?  This crashes:
+        // let until_pos = self.phrases.binary_search_by_key(&end, |orig| orig.end);
+
+        // let until_pos = self.phrases.binary_search_by_key(&end, |orig| orig.end);
+        let count = self.phrases[left..].iter().take_while(|orig| orig.end < end).count();
+        let split_right = self.phrases[left+count].end != end;
+        // let (count, split_right) = match until_pos {
+        //     Ok(until_pos) => {
+        //         // The phrase at until_pos ends where we end.  Discard right side.
+        //         (until_pos+1, false)
+        //     }
+        //     Err(until_pos) => {
+        //         // The phrase at until_pos is clipped by us. We will keep its right side.
+        //         assert!(until_pos + left <= self.phrases.len());
+        //         (until_pos, true)
+        //     }
+        // };
+
+        // let count = count - left;
+
+        if count == 0 {
+            // We are contained inside the phrase at pos and we split it into two pieces.
+            // AAAAAAA
+            //   BBB
+            // CCCCCCC
+            // DDD
+            //     EEE
+            if split_left {
+                if split_right {
+                    // BBB->
+                    self.phrases.insert(left, Phrase { start: end, ..self.phrases[left-1]});
                 }
-                acc.push(r);
+                // <-BBB or <-EEE
+                self.phrases[left-1].end = start;
+            } else if split_right {
+                // DDD->
+                self.phrases[left].start = end;
+            } else {
+                // CCCCCCCCC
+                self.phrases[left] = phrase;
             }
-            acc
-        });
-        self.phrases = phrases;
-        if !inserted {
-            self.phrases.push(phrase);
+            if split_right || split_left {
+                self.phrases.insert(left, phrase);
+            }
+        } else {
+            // XXXXYYYY
+            //   BBB
+            // CCCCCCC
+            // DDD
+            //     EEE
+            if split_left {
+                self.phrases[left-1].end = phrase.start;
+            }
+
+            if count > 1 {
+                // We can replace the existing phrase at left
+                self.phrases[left] = phrase;
+
+                // Remove the rest of the (count-1) phrases
+                self.phrases.drain(left+1..left+count);
+            } else {
+                // We have to squeeze in between the two phrases we found
+                self.phrases.insert(left, phrase);
+            }
+            if left + 1 < self.phrases.len() {
+                self.phrases[left + 1].start = phrase.end;
+            }
         }
     }
 }
@@ -171,7 +219,7 @@ pub struct RegionColor {
     pub(crate) style: PattColor,
 }
 
-pub fn to_style(patt: PattColor) -> ContentStyle {
+fn to_style(patt: PattColor) -> ContentStyle {
     let style = ContentStyle::new();
 
     let style = match patt {
@@ -200,38 +248,6 @@ impl RegionColor {
         format!("{}" , style.apply(content))
     }
 }
-
-pub struct ColorSequence {
-    pub(crate) result: Vec<RegionColor>,
-    pub(crate) default_style: PattColor,
-    pub(crate) len: usize,
-}
-
-impl ColorSequence {
-    pub(crate) fn new(default_style: PattColor) -> Self {
-        Self {
-            result: vec![],
-            default_style,
-            len: 0,
-        }
-    }
-
-    pub(crate) fn push(&mut self, start: usize, end: usize, style: PattColor) -> usize {
-        let last = self.len;
-        assert!( start >= last );
-        assert!( end >= start );
-
-        if start > last {
-            self.result.push(RegionColor {len: (start - last) as u16, style: self.default_style,});
-        }
-        if end > start {
-            self.result.push(RegionColor { len: (end - start) as u16, style,});
-        }
-        self.len = end;
-        end - last
-    }
-}
-
 
 #[cfg(test)]
 mod tests {
