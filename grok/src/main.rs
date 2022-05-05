@@ -4,6 +4,7 @@ mod viewer;
 mod display;
 mod keyboard;
 mod styled_text;
+mod document;
 
 use config::Config;
 fn main() -> crossterm::Result<()> {
