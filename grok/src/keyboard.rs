@@ -27,6 +27,7 @@ const KEYMAP: &'static [(&'static str, UserCommand)] = &[
     ("PageDown", cmd::PageDown),
     ("Home", cmd::ScrollToTop),
     ("End", cmd::ScrollToBottom),
+    ("/", cmd::SearchPrompt),
 
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
@@ -34,26 +35,32 @@ const KEYMAP: &'static [(&'static str, UserCommand)] = &[
     // probably won't work as they normally do.  We can't emulate those features either since we don't have access
     // to the user's clipboard unless we're on the same X server.
 
-    // ("MouseLeft", cmd::Quit),
+    ("MouseLeft", cmd::SelectWordAt(0,0)),
+    ("MouseLeftDrag", cmd::SelectWordDrag(0,0)),
     // ("Ctrl+MouseLeft", cmd::ScrollDown),
     // ("MouseRight", cmd::MouseRight),
     // ("MouseMiddle", cmd::MouseMiddle),
-    // ("MouseWheelUp", cmd::MouseWheelUp),
-    // ("MouseWheelDown", cmd::MouseWheelDown),
+    ("MouseWheelUp", cmd::MouseScrollUp),
+    ("MouseWheelDown", cmd::MouseScrollDown),
 
 ];
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum UserCommand {
     None,
     Quit,
     ScrollUp,
     ScrollDown,
+    MouseScrollUp,
+    MouseScrollDown,
     PageUp,
     PageDown,
     ScrollToTop,
     ScrollToBottom,
     TerminalResize,
+    SearchPrompt,
+    SelectWordAt(u16, u16),
+    SelectWordDrag(u16, u16),
 }
 
 struct Reader {
@@ -133,8 +140,14 @@ impl Reader {
 
             let mouse_action = match key {
                 "mouseleft" => Some(MouseEventKind::Down(MouseButton::Left)),
+                "mouseleftup" => Some(MouseEventKind::Up(MouseButton::Left)),
+                "mouseleftdrag" => Some(MouseEventKind::Drag(MouseButton::Left)),
                 "mouseright" => Some(MouseEventKind::Down(MouseButton::Right)),
+                "mouserightup" => Some(MouseEventKind::Up(MouseButton::Right)),
+                "mouserightdrag" => Some(MouseEventKind::Drag(MouseButton::Right)),
                 "mousemiddle" => Some(MouseEventKind::Down(MouseButton::Middle)),
+                "mousemiddleup" => Some(MouseEventKind::Up(MouseButton::Middle)),
+                "mousemiddledrag" => Some(MouseEventKind::Drag(MouseButton::Middle)),
                 "mousewheelup" => Some(MouseEventKind::ScrollUp),
                 "mousewheeldown" => Some(MouseEventKind::ScrollDown),
                 _ => None,
@@ -196,7 +209,17 @@ impl Reader {
                         // println!("{:?}", event);
 
                         return match self.mousemap.get(&lookup) {
-                            Some(cmd) => Ok(*cmd),
+                            Some(cmd) => {
+                                match cmd {
+                                    cmd::SelectWordAt(_,_) => {
+                                        Ok(cmd::SelectWordAt(event.column, event.row))
+                                    },
+                                    cmd::SelectWordDrag(_,_) => {
+                                        Ok(cmd::SelectWordDrag(event.column, event.row))
+                                    },
+                                    _ => Ok(*cmd),
+                                }
+                            },
                             None => Ok(UserCommand::None),
                         };
                     }

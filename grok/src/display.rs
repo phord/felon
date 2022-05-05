@@ -13,12 +13,21 @@ use std::hash::Hasher;
 
 use crate::styled_text::{PattColor, RegionColor, StyledLine};
 
+#[derive(PartialEq, Copy, Clone, Debug)]
+pub enum Action {
+    Idle,
+    Progress {percent: usize, },
+    SearchPrompt,
+    Message,
+}
+
 #[derive(PartialEq)]
 struct DisplayState {
     top: usize,
     bottom: usize,
     // offset: usize, // column offset
     width: usize,
+    status: Action,
 }
 
 struct ScreenBuffer {
@@ -110,6 +119,15 @@ pub struct Display {
 
     /// Previously displayed lines
     prev: DisplayState,
+
+    /// Activity mode
+    action: Action,
+
+    /// status message
+    message: String,
+
+    mouse_wheel_height: u16,
+
 }
 
 impl Drop for Display {
@@ -131,10 +149,17 @@ impl Display {
             top: 0,
             panel: 1,
             lines_count: 0,
-            prev: DisplayState { top: 0, bottom: 0, width: 0 },
+            prev: DisplayState { top: 0, bottom: 0, width: 0, status: Action::Idle, },
+            action: Action::Message,
+            message: "status message".to_string(),
+            mouse_wheel_height: config.mouse_scroll,
         };
         s.update_size();
         s
+    }
+
+    pub fn search_prompt(&mut self) {
+        self.action = Action::SearchPrompt;
     }
 
     fn update_size(&mut self) {
@@ -166,8 +191,14 @@ impl Display {
         lines
     }
 
-    fn status_msg(& self) -> String {
-        "Status message".to_string()
+    fn status_msg(&mut  self) -> &str {
+        self.action = Action::Idle;
+        self.message.as_str()
+    }
+
+    fn set_status_msg(&mut self, msg: String) {
+        self.message = msg;
+        self.action = Action::Message;
     }
 
     fn vert_scroll(&mut self, amount: isize) {
@@ -204,6 +235,23 @@ impl Display {
             }
             UserCommand::TerminalResize => {
                 self.update_size();
+            }
+            UserCommand::SelectWordAt(x,y) => {
+                self.set_status_msg(format!("{:?}", cmd));
+            }
+            UserCommand::SelectWordDrag(x,y) => {
+                // println!("{:?}\r", cmd);
+                // FIXME: Highlight the words selected
+                // Add to some search struct and highlight matches
+                self.set_status_msg(format!("{:?}", cmd));
+            }
+            UserCommand::MouseScrollUp => {
+                self.vert_scroll(-(self.mouse_wheel_height as isize));
+                self.set_status_msg(format!("{:?}", cmd));
+            }
+            UserCommand::MouseScrollDown => {
+                self.vert_scroll(self.mouse_wheel_height as isize);
+                self.set_status_msg(format!("{:?}", cmd));
             }
             _ => {}
         }
@@ -326,7 +374,8 @@ impl Display {
         let disp = DisplayState {
             top: self.top,
             bottom: self.top + self.page_size(),
-            width: self.width
+            width: self.width,
+            status: self.action,
         };
 
         if disp == self.prev {
@@ -342,7 +391,7 @@ impl Display {
                 if disp.width <= self.prev.width {
                     if self.page_size() <= self.prev.bottom - self.prev.top {
                         // Screen is the same or smaller. Nothing to do.
-                        (0, 0, 0)
+                        (0, disp.bottom, disp.bottom)
                     } else {
                         // Just need to display new rows at bottom
                         (0, self.prev.bottom, disp.bottom)
@@ -363,13 +412,6 @@ impl Display {
             } else {
                 unreachable!("Unexpected scroll value: {}", scroll);
             };
-
-
-        if top == bottom {
-            // Nothing to do
-            self.prev = disp;
-            return Ok(());
-        }
 
         assert!(top >= disp.top);
 
@@ -398,16 +440,26 @@ impl Display {
 
         if self.panel > 0 {
             for row in self.height-self.panel..self.height as usize {
-                self.draw_status_line(&mut buff, row, &self.status_msg());
+                match self.action {
+                    Action::Idle => {
+                        let line = &self.status_msg().to_string();
+                        self.draw_status_line(&mut buff, row, line);
+                    },
+                    Action::Message => {
+                        let line = &self.status_msg().to_string();
+                        self.draw_status_line(&mut buff, row, line);
+                    }
+                    Action::SearchPrompt => {
+                        self.draw_status_line(&mut buff, row, &"/".to_string());
+                    }
+                    _ => {
+                        self.draw_status_line(&mut buff, row, &"Twiddling thumbs".to_string());
+                }
+                };
             }
         }
 
-        queue!(
-            buff,
-            cursor::MoveTo(0, 0),
-            cursor::Show
-        )?;
-        buff.flush()
+       buff.flush()
     }
 
 }

@@ -43,6 +43,10 @@ impl Viewer {
 
         match cmd {
             UserCommand::Quit => Ok(false),
+            UserCommand::SearchPrompt => {
+                self.display.search_prompt();
+                Ok(true)
+            }
             _ => {
                 self.display.handle_command(cmd);
                 Ok(true)

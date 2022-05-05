@@ -6,6 +6,7 @@ pub struct Config {
     pub filename: Vec<PathBuf>,
     pub chop: bool,
     pub altscreen: bool,
+    pub mouse_scroll: u16,      // Number of lines to scroll with mouse-wheel
 }
 
 
@@ -32,6 +33,7 @@ impl Config {
             filename: Vec::new(),
             chop: false,
             altscreen: true,
+            mouse_scroll: 5,
         }
     }
 
