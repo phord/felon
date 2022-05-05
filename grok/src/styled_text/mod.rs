@@ -7,7 +7,6 @@ pub trait Stylable {
 }
 
 /// Defines a style for a portion of a line.  Represents the style and the position within the line.
-/// The line content is included here for easier iteration, but the whole line lives elsewhere.
 #[derive(Copy, Clone)]
 pub struct Phrase {
     pub start: usize,
@@ -103,10 +102,10 @@ impl StyledLine {
 
         // We may be contained inside the phrase at pos and we need to split it into two pieces.
         // AAAAAAA
-        //   BBB      split_left && split_right: Insert copy of AA; insert our new phrase
-        // CCCCCCC    split_left && split_right: replace CCCCCCCC with our phrase
-        // DDD        split_right && count=1:    Insert our new phrase at left; adjust left+1 to end
-        //     EEE    split_left && count=0:     Insert our new phrase at left; adjust left-1 to end
+        //   BBB      split_left && split_right:   Insert copy of AA; insert our new phrase
+        // CCCCCCC    !split_left && !split_right: replace CCCCCCCC with our phrase
+        // DDD        split_right && count=1:      Insert our new phrase at left; adjust left+1 to end
+        //     EEE    split_left && count=0:       Insert our new phrase at left; adjust left-1 to end
         if count == 0 && split_left && split_right {
             // BBB->  Insert copy of AA
             self.phrases.insert(left, Phrase { start: end, ..self.phrases[left-1]});
