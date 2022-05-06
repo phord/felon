@@ -13,7 +13,10 @@ use std::collections::BTreeSet;
 pub enum FilterType {
     FilterOut,
     FilterIn,
+    Search,
 }
+
+use std::cell::RefCell;
 
 pub enum SearchType {
     SearchWord(String),
@@ -24,23 +27,44 @@ pub enum SearchType {
 struct DocFilter {
     filter_type: FilterType,
     search_type: SearchType,
+    matches: RefCell<Option<BTreeSet<usize>>>,
 }
 
 impl DocFilter {
     fn first(&self, log: &LogFile) -> BTreeSet<usize> {
-        match self.search_type {
-            SearchType::SearchWord(ref word) => {
-                log.search_word(word).as_ref().clone()
-            }
-            SearchType::SearchPhrase(ref _phrase) => {
-                // TODO: parse phrase into words, build set of matches, and search for phrase
-                unreachable!("TODO: implement");
-            }
-            SearchType::SearchRegex(ref _regex) => {
-                // TODO: parse phrase into words, build set of matches, and search for phrase
-                unreachable!("TODO: implement");
+        {
+            // FIXME: Return a reference instead of a clone
+            if self.matches.borrow().is_some() {
+                return self.matches.borrow().as_ref().unwrap().clone();
             }
         }
+        let matches =
+            match self.search_type {
+                SearchType::SearchWord(ref word) => {
+                    Some(log.search_word(word).as_ref().clone())
+                }
+                SearchType::SearchPhrase(ref _phrase) => {
+                    // TODO: parse phrase into words, build set of matches, and search for phrase
+                    unreachable!("TODO: implement");
+                    Some(BTreeSet::<usize>::new())
+                }
+                SearchType::SearchRegex(ref regex) => {
+                    // Search all lines for regex
+                    // FIXME: search only filtered-in lines when possible
+                    let mut matches = BTreeSet::<usize>::new();
+                    for l in 0..log.lines() {
+                        let line = log.readline(l);
+                        if let Some(line) = line {
+                            if regex.is_match(&line) {
+                                matches.insert(log.line_offset(l).unwrap());
+                            }
+                        }
+                    }
+                    Some(matches)
+                }
+            };
+        self.matches.replace(matches);
+        return self.matches.borrow().as_ref().unwrap().clone();
     }
 
     fn apply(&self, log: &LogFile, active: &BTreeSet<usize>) -> BTreeSet<usize> {
@@ -50,6 +74,9 @@ impl DocFilter {
                 active.difference(&matches).copied().collect()
             }
             FilterType::FilterIn => {
+                active.union(&matches).copied().collect()
+            }
+            FilterType::Search => {
                 active.intersection(&matches).copied().collect()
             }
         }
@@ -61,6 +88,7 @@ impl DocFilter {
         Self {
             filter_type,
             search_type,
+            matches : RefCell::new(None),
         }
     }
 }
@@ -108,10 +136,11 @@ impl Document {
             if self.filters.is_empty() {
                              None
             } else {
+                let first = self.filters[0].first(&self.file).clone();
                 Some(self.filters
                             .iter()
                                 .skip(1)
-                                .fold(self.filters[0].first(&self.file).clone(),
+                                .fold(first,
                                     |acc, nxt| {
                                         nxt.apply(&self.file, &acc )
                                     }).into_iter().collect())
