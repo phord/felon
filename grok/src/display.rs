@@ -246,7 +246,7 @@ impl Display {
         // FIXME: Discard unused cached lines
 
         let view_height = self.page_size();
-        self.top = cmp::min(self.top, doc.lines().saturating_sub(view_height));
+        self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
 
         if ! self.on_alt_screen && self.use_alt {
             execute!(stdout(), terminal::EnterAlternateScreen)?;
@@ -297,6 +297,9 @@ impl Display {
             };
 
         assert!(top >= disp.top);
+
+        self.set_status_msg(format!("Top: {}  Showing {} lines   {} filtered",
+            self.top, doc.filtered_line_count(), doc.all_line_count()));
 
         let len = bottom - top;
         let start = top - disp.top;

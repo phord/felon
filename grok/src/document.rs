@@ -91,8 +91,15 @@ impl Document {
         }
     }
 
-    pub fn lines(&self) -> usize {
+    pub fn all_line_count(&self) -> usize {
         self.file.lines()
+    }
+
+    pub fn filtered_line_count(&self) -> usize {
+        match self.filtered_lines {
+            Some(ref lines) => lines.len(),
+            None => self.all_line_count(),
+        }
     }
 
     fn apply_filters(&mut self) {
