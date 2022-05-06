@@ -148,7 +148,8 @@ impl Document {
                  ^\ *([A-Za-z0-9_.]+)\                              # module
                  (?:\[([a-z0-9_.]+)\]){0,1}                         # submodule").unwrap();
 
-            static ref NUMBER: Regex = Regex::new(r"[^A-Za-z_.](0x[[:xdigit:]]+|(?:[[:digit:]]+\.)*[[:digit:]]+)").unwrap();
+            // Match at 0x{hex} number, any 16-digit all-uppercase hex number at word delimiters, or any decimal number which is not part of a word suffix.
+            static ref NUMBER: Regex = Regex::new(r"[^A-Za-z.0-9_](\b0x[[:xdigit:]]+\b|\b[0-9A-F]{16}\b|(?:[[:digit:]]+\.)*[[:digit:]]+)").unwrap();
         }
         let prefix = TIMESTAMP.captures(line);
 
