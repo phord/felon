@@ -207,22 +207,10 @@ impl EventualIndex {
 
     fn line_number(&self, offset: usize) -> Option<usize> {
         // TODO: memoize or hashmap this
-        let mut lo = 0;
-        let mut hi = self.line_offsets.len();
-        while lo < hi {
-            let mid = (lo + hi) / 2;
-            if self.line_offsets[mid] == offset {
-                return Some(mid);
-            } else if self.line_offsets[mid] > offset {
-                hi = mid;
-            } else {
-                lo = mid + 1;
-            }
-        }
-        if self.line_offsets[lo] == offset {
-            return Some(lo)
-        } else {
-            None
+        match self.line_offsets.binary_search(&offset) {
+            Ok(i) => Some(i + 1),
+            Err(0) => Some(0),
+            Err(_) => None,
         }
     }
 
