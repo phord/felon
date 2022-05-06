@@ -205,8 +205,13 @@ impl Document {
     }
 
     pub fn get(&mut self, lrow: usize) -> &str {
-        let lrow = if !self.filtered_lines.is_none() { let lrow = self.filtered_lines.as_ref().unwrap().get(lrow); lrow } else { Some(&lrow) };
-        let line = if let Some(lrow) = lrow { self.file.readline(*lrow) } else { None };
+        let line =
+            match self.filtered_lines {
+                Some(ref lines) =>
+                    if lrow < lines.len() { self.file.readline_at(lines[lrow])} else {None},
+                None =>
+                    self.file.readline(lrow),
+            };
         line.unwrap_or("~")
     }
 }
