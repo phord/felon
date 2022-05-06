@@ -8,13 +8,74 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
 use indexed_file::indexer::LogFile;
+use std::collections::BTreeSet;
 
+pub enum FilterType {
+    FilterOut,
+    FilterIn,
+}
+
+pub enum SearchType {
+    SearchWord(String),
+    SearchPhrase(String),
+    SearchRegex(Regex),
+}
+
+struct DocFilter {
+    filter_type: FilterType,
+    search_type: SearchType,
+}
+
+impl DocFilter {
+    fn first(&self, log: &LogFile) -> BTreeSet<usize> {
+        match self.search_type {
+            SearchType::SearchWord(ref word) => {
+                log.search_word(word).as_ref().clone()
+            }
+            SearchType::SearchPhrase(ref _phrase) => {
+                // TODO: parse phrase into words, build set of matches, and search for phrase
+                unreachable!("TODO: implement");
+            }
+            SearchType::SearchRegex(ref _regex) => {
+                // TODO: parse phrase into words, build set of matches, and search for phrase
+                unreachable!("TODO: implement");
+            }
+        }
+    }
+
+    fn apply(&self, log: &LogFile, active: &BTreeSet<usize>) -> BTreeSet<usize> {
+        let matches = self.first(log);
+        match self.filter_type {
+            FilterType::FilterOut => {
+                active.difference(&matches).copied().collect()
+            }
+            FilterType::FilterIn => {
+                active.intersection(&matches).copied().collect()
+            }
+        }
+    }
+}
+
+impl DocFilter {
+    pub fn new(filter_type: FilterType, search_type: SearchType) -> Self {
+        Self {
+            filter_type,
+            search_type,
+        }
+    }
+}
 
 pub struct Document {
     // File contents
     // FIXME: Replace this with a filtered-view so we can apply filters
-    // FIXME: StyledLine caching
+    // FIXME: StyledLine caching -- premature optimization?
     file: LogFile,
+
+    // Filters are applied in order from first to last
+    filters: Vec<DocFilter>,
+
+    /// Filtered line numbers
+    filtered_lines: Option<Vec<usize>>,
 }
 
 impl Document {
@@ -25,11 +86,34 @@ impl Document {
 
         Self {
             file,
+            filters: vec![],
+            filtered_lines: None, // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
         }
     }
 
     pub fn lines(&self) -> usize {
         self.file.lines()
+    }
+
+    fn apply_filters(&mut self) {
+        //TODO: apply lazily or partially and in a thread
+        self.filtered_lines =
+            if self.filters.is_empty() {
+                             None
+            } else {
+                Some(self.filters
+                            .iter()
+                                .skip(1)
+                                .fold(self.filters[0].first(&self.file).clone(),
+                                    |acc, nxt| {
+                                        nxt.apply(&self.file, &acc )
+                                    }).into_iter().collect())
+        };
+    }
+
+    pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
+        self.filters.push(DocFilter::new(filter_type, search_type));
+        self.apply_filters();
     }
 
     fn hash_color(&self, text: &str) -> Color {
@@ -113,9 +197,9 @@ impl Document {
         styled
     }
 
-    pub fn get(&mut self, lrow: usize) -> String {
-        // let line = self.data.get(&lrow);
-        let line = self.file.readline(lrow);
-        line.unwrap_or("~").to_string().clone()
+    pub fn get(&mut self, lrow: usize) -> &str {
+        let lrow = if !self.filtered_lines.is_none() { let lrow = self.filtered_lines.as_ref().unwrap().get(lrow); lrow } else { Some(&lrow) };
+        let line = if let Some(lrow) = lrow { self.file.readline(*lrow) } else { None };
+        line.unwrap_or("~")
     }
 }

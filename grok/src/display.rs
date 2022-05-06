@@ -316,7 +316,7 @@ impl Display {
 
         for row in start..start+len as usize {
             let lrow = self.top + row;
-            let line = doc.get(lrow);
+            let line = doc.get(lrow).to_string();
             self.draw_line(doc, &mut buff, row, &line);
         }
 
