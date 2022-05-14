@@ -382,16 +382,20 @@ impl LogFile {
         }
     }
 
-    pub fn bytes(&self) -> usize {
+    pub fn count_bytes(&self) -> usize {
         self.index.bytes()
     }
 
-    pub fn lines(&self) -> usize {
+    pub fn count_lines(&self) -> usize {
         self.index.lines()
     }
 
     pub fn line_offset(&self, line_number: usize) -> Option<usize> {
-        self.index.line_offset(line_number)
+        if line_number == 0 {
+            Some(0)
+        } else {
+            self.index.line_offset(line_number-1)
+        }
     }
 
     pub fn readline(&self, line_number: usize) -> Option<&str> {

@@ -88,13 +88,13 @@ mod tests {
         let mut linecount = 0;
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
-        for line in 0..file.lines() {
-            let reported = file.line_offset(line).unwrap();
+        for line in 0..file.count_lines() {
+            let reported = file.line_offset(line+1).unwrap();
             linecount += 1;
             offset += scanlines.next().unwrap().unwrap().len() + 1;
             if reported != offset {
                 for l in std::cmp::max(2,line)-2..line+2 {
-                    println!(">> {}. {}", l, file.line_offset(l).unwrap());
+                    println!(">> {}. {}", l, file.line_offset(l+1).unwrap());
                 }
             }
             assert_eq!(reported, offset);
@@ -105,8 +105,8 @@ mod tests {
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
-        assert_eq!(file.lines(), linecount);
-        assert_eq!(file.bytes(), bytes);
+        assert_eq!(file.count_lines(), linecount);
+        assert_eq!(file.count_bytes(), bytes);
     }
 
     #[test]
@@ -134,13 +134,13 @@ mod tests {
         let mut linecount = 0;
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
-        for line in 0..file.lines() {
-            let reported = file.line_offset(line).unwrap();
+        for line in 0..file.count_lines() {
+            let reported = file.line_offset(line+1).unwrap();
             linecount += 1;
             offset += scanlines.next().unwrap().unwrap().len() + 1;
             if reported != offset {
                 for l in std::cmp::max(2,line)-2..line+2 {
-                    println!(">> {}. {}", l, file.line_offset(l).unwrap());
+                    println!(">> {}. {}", l, file.line_offset(l+1).unwrap());
                 }
             }
             assert_eq!(reported, offset);
@@ -151,8 +151,8 @@ mod tests {
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
-        assert_eq!(file.lines(), linecount);
-        assert_eq!(file.bytes(), bytes);
+        assert_eq!(file.count_lines(), linecount);
+        assert_eq!(file.count_bytes(), bytes);
     }
 
 // ----

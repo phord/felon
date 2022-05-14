@@ -52,7 +52,8 @@ impl DocFilter {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
                     let mut matches = BTreeSet::<usize>::new();
-                    for l in 0..log.lines() {
+                    for l in 0..log.count_lines() {
+                        // FIXME: read by offset and return offset along with line so we don't have to look it up again
                         let line = log.readline(l);
                         if let Some(line) = line {
                             if regex.is_match(&line) {
@@ -120,7 +121,7 @@ impl Document {
     }
 
     pub fn all_line_count(&self) -> usize {
-        self.file.lines()
+        self.file.count_lines()
     }
 
     pub fn filtered_line_count(&self) -> usize {
