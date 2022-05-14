@@ -1,11 +1,13 @@
 use crate::config::Config;
 use crate::display::Display;
+use crate::status_line::StatusLine;
 use crate::keyboard::{Input, UserCommand};
-use crate::document::Document;
+use crate::document::{Document, FilterType, SearchType};
 
 pub struct Viewer {
     config: Config,
     display: Display,
+    status: StatusLine,
     input: Input,
     doc: Document,
 }
@@ -15,7 +17,8 @@ impl Viewer {
         let doc = Document::new(config.clone());
         Self {
             config: config.clone(),
-            display: Display::new(config),
+            display: Display::new(config.clone()),
+            status: StatusLine::new(config),
             input: Input::new(),
             doc,
         }
@@ -24,13 +27,14 @@ impl Viewer {
     pub fn run(&mut self) -> crossterm::Result<bool> {
 
         self.display.refresh_screen(&mut self.doc)?;
+        self.status.refresh_screen(&mut self.doc)?;
 
         let cmd = self.input.get_command()?;
 
         match cmd {
             UserCommand::Quit => Ok(false),
             UserCommand::SearchPrompt => {
-                self.display.search_prompt();
+                // FIXME self.status.search_prompt();
                 Ok(true)
             }
             _ => {

@@ -1,4 +1,3 @@
-use crossterm::style::Color;
 use crossterm::{terminal::ClearType};
 use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, execute, queue, terminal};
@@ -8,13 +7,6 @@ use crate::styled_text::{PattColor, RegionColor, StyledLine};
 use crate::document::Document;
 use crate::styled_text::RGB_BLACK;
 
-#[derive(PartialEq, Copy, Clone, Debug)]
-pub enum Action {
-    Idle,
-    Progress {percent: usize, },
-    SearchPrompt,
-    Message,
-}
 
 #[derive(PartialEq)]
 struct DisplayState {
@@ -22,7 +14,6 @@ struct DisplayState {
     bottom: usize,
     // offset: usize, // column offset
     width: usize,
-    status: Action,
 }
 
 struct ScreenBuffer {
@@ -111,12 +102,6 @@ pub struct Display {
     /// Previously displayed lines
     prev: DisplayState,
 
-    /// Activity mode
-    action: Action,
-
-    /// status message
-    message: String,
-
     mouse_wheel_height: u16,
 
 }
@@ -126,6 +111,7 @@ impl Drop for Display {
         if self.on_alt_screen {
             execute!(stdout(), terminal::LeaveAlternateScreen).expect("Failed to exit alt mode");
         }
+        // FIXME: Show the cursor (and reset other missing things?)
     }
 }
 
@@ -138,17 +124,11 @@ impl Display {
             use_alt: config.altscreen,
             top: 0,
             panel: 1,
-            prev: DisplayState { top: 0, bottom: 0, width: 0, status: Action::Idle, },
-            action: Action::Message,
-            message: "status message".to_string(),
+            prev: DisplayState { top: 0, bottom: 0, width: 0},
             mouse_wheel_height: config.mouse_scroll,
         };
         s.update_size();
         s
-    }
-
-    pub fn search_prompt(&mut self) {
-        self.action = Action::SearchPrompt;
     }
 
     fn update_size(&mut self) {
@@ -161,14 +141,10 @@ impl Display {
         cmp::max(self.height as isize - self.panel as isize, 0) as usize
     }
 
-    fn status_msg(&mut  self) -> &str {
-        self.action = Action::Idle;
-        self.message.as_str()
-    }
-
     fn set_status_msg(&mut self, msg: String) {
-        self.message = msg;
-        self.action = Action::Message;
+        // FIXME
+        // self.message = msg;
+        // self.action = Action::Message;
     }
 
     fn vert_scroll(&mut self, amount: isize) {
@@ -221,10 +197,6 @@ impl Display {
         }
     }
 
-    fn status_line_colors(&self, line: &str) -> StyledLine {
-        StyledLine::new(line, PattColor::Inverse)
-    }
-
     fn draw_styled_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: StyledLine) {
         queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
 
@@ -239,15 +211,13 @@ impl Display {
         self.draw_styled_line(buff, row, doc.line_colors(line));
     }
 
-    fn draw_status_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: &String) {
-        self.draw_styled_line(buff, row, self.status_line_colors(line));
-    }
-
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
         // FIXME: Discard unused cached lines
 
         let view_height = self.page_size();
         self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
+        // FIXME: keep top as real line number; then translate it to visible-line-number for doc traversal
+        //   This way, when visible lines change, we don't lose our place.
 
         if ! self.on_alt_screen && self.use_alt {
             execute!(stdout(), terminal::EnterAlternateScreen)?;
@@ -259,7 +229,6 @@ impl Display {
             top: self.top,
             bottom: self.top + self.page_size(),
             width: self.width,
-            status: self.action,
         };
 
         if disp == self.prev {
@@ -299,9 +268,6 @@ impl Display {
 
         assert!(top >= disp.top);
 
-        self.set_status_msg(format!("Top: {}  Showing {} lines   {} filtered",
-            self.top, doc.filtered_line_count(), doc.all_line_count()));
-
         let len = bottom - top;
         let start = top - disp.top;
 
@@ -323,28 +289,6 @@ impl Display {
             let line = doc.get(lrow).to_string();
             self.draw_line(doc, &mut buff, row, &line);
         }
-
-        if self.panel > 0 {
-            for row in self.height-self.panel..self.height as usize {
-                match self.action {
-                    Action::Idle => {
-                        let line = &self.status_msg().to_string();
-                        self.draw_status_line(&mut buff, row, line);
-                    },
-                    Action::Message => {
-                        let line = &self.status_msg().to_string();
-                        self.draw_status_line(&mut buff, row, line);
-                    }
-                    Action::SearchPrompt => {
-                        self.draw_status_line(&mut buff, row, &"/".to_string());
-                    }
-                    _ => {
-                        self.draw_status_line(&mut buff, row, &"Twiddling thumbs".to_string());
-                }
-                };
-            }
-        }
-
        buff.flush()
     }
 

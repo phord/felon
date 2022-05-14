@@ -5,6 +5,7 @@ mod display;
 mod keyboard;
 mod styled_text;
 mod document;
+mod status_line;
 
 use config::Config;
 fn main() -> crossterm::Result<()> {
