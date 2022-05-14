@@ -8,15 +8,18 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
 use indexed_file::indexer::LogFile;
-use std::collections::BTreeSet;
+// use std::collections::BTreeSet;
+// use std::ops::Bound::{Excluded, Unbounded};
+// use itertools::Itertools;
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FilterType {
     FilterOut,
     FilterIn,
     Search,
 }
 
-use std::cell::RefCell;
+// use std::cell::RefCell;
 
 pub enum SearchType {
     SearchWord(String),
@@ -27,61 +30,7 @@ pub enum SearchType {
 struct DocFilter {
     filter_type: FilterType,
     search_type: SearchType,
-    matches: RefCell<Option<BTreeSet<usize>>>,
-}
-
-impl DocFilter {
-    fn first(&self, log: &LogFile) -> BTreeSet<usize> {
-        {
-            // FIXME: Return a reference instead of a clone
-            if self.matches.borrow().is_some() {
-                return self.matches.borrow().as_ref().unwrap().clone();
-            }
-        }
-        let matches =
-            match self.search_type {
-                SearchType::SearchWord(ref word) => {
-                    Some(log.search_word(word).as_ref().clone())
-                }
-                SearchType::SearchPhrase(ref _phrase) => {
-                    // TODO: parse phrase into words, build set of matches, and search for phrase
-                    unreachable!("TODO: implement");
-                    Some(BTreeSet::<usize>::new())
-                }
-                SearchType::SearchRegex(ref regex) => {
-                    // Search all lines for regex
-                    // FIXME: search only filtered-in lines when possible
-                    let mut matches = BTreeSet::<usize>::new();
-                    for l in 0..log.count_lines() {
-                        // FIXME: read by offset and return offset along with line so we don't have to look it up again
-                        let line = log.readline(l);
-                        if let Some(line) = line {
-                            if regex.is_match(&line) {
-                                matches.insert(log.line_offset(l).unwrap());
-                            }
-                        }
-                    }
-                    Some(matches)
-                }
-            };
-        self.matches.replace(matches);
-        return self.matches.borrow().as_ref().unwrap().clone();
-    }
-
-    fn apply(&self, log: &LogFile, active: &BTreeSet<usize>) -> BTreeSet<usize> {
-        let matches = self.first(log);
-        match self.filter_type {
-            FilterType::FilterOut => {
-                active.difference(&matches).copied().collect()
-            }
-            FilterType::FilterIn => {
-                active.union(&matches).copied().collect()
-            }
-            FilterType::Search => {
-                active.intersection(&matches).copied().collect()
-            }
-        }
-    }
+    matches : Vec<usize>,
 }
 
 impl DocFilter {
@@ -89,9 +38,61 @@ impl DocFilter {
         Self {
             filter_type,
             search_type,
-            matches : RefCell::new(None),
+            matches : Vec::new(),
         }
     }
+
+    // Find partition point of a line position
+    fn after(&self, offset: usize) -> usize {
+        self.matches.binary_search(&offset).unwrap()
+    }
+
+    // Resolve a filter against a LogFile and store the matches
+    fn bind(&mut self, log: &LogFile) {
+        let matches =
+            match self.search_type {
+                SearchType::SearchWord(ref word) => {
+                    unreachable!("TODO: FIXME");
+                    // Vec::<usize>::from(log.search_word(word).clone().into_iter())
+                }
+                SearchType::SearchPhrase(ref _phrase) => {
+                    // TODO: parse phrase into words, build set of matches, and search for phrase
+                    unreachable!("TODO: implement");
+                    // BTreeSet::<usize>::new()
+                }
+                SearchType::SearchRegex(ref regex) => {
+                    // Search all lines for regex
+                    // FIXME: search only filtered-in lines when possible
+                    let mut matches = Vec::<usize>::new();
+                    for l in 0..log.count_lines() {
+                        // FIXME: read by offset and return offset along with line so we don't have to look it up again
+                        let line = log.readline(l);
+                        if let Some(line) = line {
+                            if regex.is_match(&line) {
+                                matches.push(log.line_offset(l).unwrap());
+                            }
+                        }
+                    }
+                    matches
+                }
+            };
+        self.matches = matches;
+    }
+
+    // fn apply(&self, log: &LogFile, active: &BTreeSet<usize>) -> BTreeSet<usize> {
+    //     let matches = self.first(log);
+    //     match self.filter_type {
+    //         FilterType::FilterOut => {
+    //             active.difference(&matches).copied().collect()
+    //         }
+    //         FilterType::FilterIn => {
+    //             active.union(&matches).copied().collect()
+    //         }
+    //         FilterType::Search => {
+    //             active.intersection(&matches).copied().collect()
+    //         }
+    //     }
+    // }
 }
 
 pub struct Document {
@@ -100,8 +101,14 @@ pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     file: LogFile,
 
-    // Filters are applied in order from first to last
-    filters: Vec<DocFilter>,
+    // if any filter_in exist, all matching lines are included; all non-matching lines are excluded
+    filter_in: Vec<DocFilter>,
+
+    // if any filter_out exist, all matching lines are excluded
+    filter_out: Vec<DocFilter>,
+
+    // Highlight-matching lines, even if they're filtered out
+    highlight: Vec<DocFilter>,
 
     /// Filtered line numbers
     filtered_lines: Option<Vec<usize>>,
@@ -115,7 +122,9 @@ impl Document {
 
         Self {
             file,
-            filters: vec![],
+            filter_in: vec![],
+            filter_out: vec![],
+            highlight: vec![],
             filtered_lines: None, // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
         }
     }
@@ -132,24 +141,37 @@ impl Document {
     }
 
     fn apply_filters(&mut self) {
-        //TODO: apply lazily or partially and in a thread
-        self.filtered_lines =
-            if self.filters.is_empty() {
-                             None
-            } else {
-                let first = self.filters[0].first(&self.file).clone();
-                Some(self.filters
-                            .iter()
-                                .skip(1)
-                                .fold(first,
-                                    |acc, nxt| {
-                                        nxt.apply(&self.file, &acc )
-                                    }).into_iter().collect())
-        };
+        // //TODO: apply lazily or partially and in a thread
+        // self.filtered_lines =
+        //     if self.filters.is_empty() {
+        //                      None
+        //     } else {
+        //         // FIXME: Filter-out is not working for single filter. (also for multiple?)
+        //         // FIXME: Lazy-eval filters by just keeping vectors of line offsets. Then iterate lines
+        //         // by finding numbers in common between the sets.
+        //         // XXX: Keep filters in vectors, but keep Searches in a FnvHashMap.
+        //         // XXX: For filters,
+        //         //    1. find the maximum next line in each filter
+        //         //    2. If the difference is small, linearly step the other filters until they match.
+        //         //       If it's large, try a binary search.
+        //         let first = self.filters[0].first(&self.file).clone();
+        //         Some(self.filters
+        //                     .iter()
+        //                         .skip(1)
+        //                         .fold(first,
+        //                             |acc, nxt| {
+        //                                 nxt.apply(&self.file, &acc )
+        //                             }).into_iter().collect())
+        // };
     }
 
     pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        self.filters.push(DocFilter::new(filter_type, search_type));
+        let f = DocFilter::new(filter_type, search_type);
+        match filter_type {
+            FilterType::FilterIn =>   self.filter_in.push(f),
+            FilterType::FilterOut =>  self.filter_out.push(f),
+            FilterType::Search =>     self.highlight.push(f),
+        };
         self.apply_filters();
     }
 
@@ -168,6 +190,7 @@ impl Document {
 
     pub fn line_colors(&self, line: &str) -> StyledLine {
         lazy_static! {
+            // TODO: Move these regexes to a config file
             // Apr  4 22:21:16.056 E8ABF4F03A6F I      vol.flush.cb ...
             static ref TIMESTAMP: Regex = Regex::new(r"(?x)
                 ^(...\ [\ 1-3]\d\ [0-2]\d:[0-5]\d:\d{2}\.\d{3})\    # date & time
@@ -178,7 +201,7 @@ impl Document {
                  ^\ *([A-Za-z0-9_.]+)\                              # module
                  (?:\[([a-z0-9_.]+)\]){0,1}                         # submodule").unwrap();
 
-            // Match at 0x{hex} number, any 16-digit all-uppercase hex number at word delimiters, or any decimal number which is not part of a word suffix.
+            // Match any 0x{hex} number, any 16-digit all-uppercase hex number at word delimiters, or any decimal number which is not part of a word suffix.
             static ref NUMBER: Regex = Regex::new(r"[^A-Za-z.0-9_](\b0x[[:xdigit:]]+\b|\b[0-9A-F]{16}\b|(?:[[:digit:]]+\.)*[[:digit:]]+)").unwrap();
         }
         let prefix = TIMESTAMP.captures(line);
