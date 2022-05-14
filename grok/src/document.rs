@@ -94,13 +94,7 @@ impl DocFilter {
     //     }
     // }
 }
-
-pub struct Document {
-    // File contents
-    // FIXME: Replace this with a filtered-view so we can apply filters
-    // FIXME: StyledLine caching -- premature optimization?
-    file: LogFile,
-
+struct Filters {
     // if any filter_in exist, all matching lines are included; all non-matching lines are excluded
     filter_in: Vec<DocFilter>,
 
@@ -112,16 +106,13 @@ pub struct Document {
 
     /// Filtered line numbers
     filtered_lines: Option<Vec<usize>>,
+
 }
 
-impl Document {
-    pub fn new(config: Config) -> Self {
-        let filename = config.filename.get(0).expect("No filename specified").clone();
-        let file = LogFile::new(Some(filename)).expect("Failed to open file");
-        println!("{:?}", file);
+impl Filters {
+    pub fn new() -> Self {
 
         Self {
-            file,
             filter_in: vec![],
             filter_out: vec![],
             highlight: vec![],
@@ -129,15 +120,14 @@ impl Document {
         }
     }
 
-    pub fn all_line_count(&self) -> usize {
-        self.file.count_lines()
-    }
-
-    pub fn filtered_line_count(&self) -> usize {
-        match self.filtered_lines {
-            Some(ref lines) => lines.len(),
-            None => self.all_line_count(),
-        }
+    pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
+        let f = DocFilter::new(filter_type, search_type);
+        match filter_type {
+            FilterType::FilterIn =>   self.filter_in.push(f),
+            FilterType::FilterOut =>  self.filter_out.push(f),
+            FilterType::Search =>     self.highlight.push(f),
+        };
+        self.apply_filters();
     }
 
     fn apply_filters(&mut self) {
@@ -165,14 +155,80 @@ impl Document {
         // };
     }
 
+}
+
+pub struct Document {
+    // File contents
+    // FIXME: Replace this with a filtered-view so we can apply filters
+    // FIXME: StyledLine caching -- premature optimization?
+    file: LogFile,
+    filters: Filters,
+}
+
+impl<'a> IntoIterator for &'a Document {
+    type Item = &'a str;
+    type IntoIter = DocumentIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        DocumentIterator {
+            doc: self,
+            index: 0,
+        }
+    }
+}
+
+impl<'a> Document {
+    pub fn iter_start(&'a self, start: usize) -> <&'a Document as IntoIterator>::IntoIter {
+        DocumentIterator::<'a> {
+            doc: self,
+            index: start,
+        }
+    }
+}
+
+pub struct DocumentIterator<'a> {
+    doc: &'a Document,
+    index: usize,
+}
+
+impl<'a> Iterator for DocumentIterator<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<&'a str> {
+        if self.index < self.doc.file.count_lines() {
+            let line = self.doc.file.readline(self.index);
+            self.index += 1;
+            line
+        } else {
+            None
+        }
+    }
+}
+
+impl Document {
+    pub fn new(config: Config) -> Self {
+        let filename = config.filename.get(0).expect("No filename specified").clone();
+        let file = LogFile::new(Some(filename)).expect("Failed to open file");
+        println!("{:?}", file);
+
+        Self {
+            file,
+            filters: Filters::new(),
+        }
+    }
+
+    pub fn all_line_count(&self) -> usize {
+        self.file.count_lines()
+    }
+
+    pub fn filtered_line_count(&self) -> usize {
+        match self.filters.filtered_lines {
+            Some(ref lines) => lines.len(),
+            None => self.all_line_count(),
+        }
+    }
+
     pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        let f = DocFilter::new(filter_type, search_type);
-        match filter_type {
-            FilterType::FilterIn =>   self.filter_in.push(f),
-            FilterType::FilterOut =>  self.filter_out.push(f),
-            FilterType::Search =>     self.highlight.push(f),
-        };
-        self.apply_filters();
+        self.filters.add_filter(filter_type, search_type)
     }
 
     fn hash_color(&self, text: &str) -> Color {
@@ -260,7 +316,7 @@ impl Document {
 
     pub fn get(&mut self, lrow: usize) -> &str {
         let line =
-            match self.filtered_lines {
+            match self.filters.filtered_lines {
                 Some(ref lines) =>
                     if lrow < lines.len() { self.file.readline_at(lines[lrow])} else {None},
                 None =>

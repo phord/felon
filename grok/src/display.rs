@@ -206,7 +206,7 @@ impl Display {
         queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
-    fn draw_line(&mut self, doc: &mut Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
+    fn draw_line(&mut self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
         // TODO: Memoize the line_colors along with the lines
         self.draw_styled_line(buff, row, doc.line_colors(line));
     }
@@ -284,10 +284,13 @@ impl Display {
         }
         queue!(buff, cursor::Hide)?;
 
-        for row in start..start+len as usize {
-            let lrow = self.top + row;
-            let line = doc.get(lrow).to_string();
-            self.draw_line(doc, &mut buff, row, &line);
+        let mut row = start;
+        for line in doc.iter_start(self.top + start) {
+            if row == start + len {
+                break;
+            }
+            self.draw_line(doc, &mut buff, row, &line.to_string());
+            row += 1;
         }
        buff.flush()
     }
