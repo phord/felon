@@ -131,6 +131,7 @@ impl StyledLine {
     }
 }
 
+pub static RGB_BLACK: Color = Color::Rgb{r:0,g:0,b:0};
 
 #[derive(Copy, Clone)]
 pub enum PattColor {
@@ -158,17 +159,17 @@ fn to_style(patt: PattColor) -> ContentStyle {
 
     let style = match patt {
         PattColor::None => unreachable!("Tried to style with None pattern"),
-        PattColor::Normal => style.reset(),
+        PattColor::Normal => style.with(Color::Green).on(RGB_BLACK),
         PattColor::Highlight => style.with(Color::Yellow).on(Color::Blue).bold(),
         PattColor::Inverse => style.negative(),
-        PattColor::Timestamp => style.with(Color::Green).on(Color::Black),
-        PattColor::Pid(c) => style.with(c).on(Color::Black).italic(),
-        PattColor::Number(c) => style.with(c).on(Color::Black),
-        PattColor::Error => style.with(Color::Yellow).on(Color::Black),
+        PattColor::Timestamp => style.with(Color::Green).on(RGB_BLACK),
+        PattColor::Pid(c) => style.with(c).on(RGB_BLACK).italic(),
+        PattColor::Number(c) => style.with(c).on(RGB_BLACK),
+        PattColor::Error => style.with(Color::Yellow).on(RGB_BLACK),
         PattColor::Fail => style.with(Color::Red).on(Color::Blue).bold().italic(),
-        PattColor::Info => style.with(Color::White).on(Color::Black),
-        PattColor::NoCrumb => style.with(Color::White).on(Color::Black).italic(),
-        PattColor::Module(c) => style.with(c).on(Color::Black).bold(),
+        PattColor::Info => style.with(Color::White).on(RGB_BLACK),
+        PattColor::NoCrumb => style.with(Color::White).on(RGB_BLACK).italic(),
+        PattColor::Module(c) => style.with(c).on(RGB_BLACK).bold(),
     };
     style
 }

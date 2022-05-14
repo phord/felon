@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::keyboard::UserCommand;
 use crate::styled_text::{PattColor, RegionColor, StyledLine};
 use crate::document::Document;
+use crate::styled_text::RGB_BLACK;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Action {
@@ -230,7 +231,7 @@ impl Display {
         buff.set_width(self.width);
         buff.push(line);
 
-        queue!(buff, crossterm::style::SetBackgroundColor(Color::Black), terminal::Clear(ClearType::UntilNewLine)).unwrap();
+        queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
     fn draw_line(&mut self, doc: &mut Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
