@@ -407,6 +407,14 @@ impl LogFile {
             };
         let end = self.index.line_offset(line_number);
         if let (Some(start), Some(end)) = (start, end) {
+            self.readline_fixed(start, end)
+        } else {
+            None
+        }
+    }
+
+    pub fn readline_fixed(&self, start: usize, end: usize) -> Option<&str> {
+        if end < self.mmap.len() {
             assert!(end > start);
             // FIXME: Handle unwrap error
             Some(std::str::from_utf8(&self.mmap[start..end-1]).unwrap())
@@ -414,4 +422,16 @@ impl LogFile {
             None
         }
     }
+
+    pub fn iter_offsets(&self) -> impl Iterator<Item = (&usize, &usize)> + '_ {
+        let starts = std::iter::once(&0usize).chain(self.index.line_offsets.iter());
+        let ends = self.index.line_offsets.iter();
+        let line_range = starts.zip(ends);
+        line_range
+    }
+
+    pub fn iter_lines(&self) -> impl Iterator<Item = &str> + '_ {
+        self.iter_offsets().map(|(&start, _)| -> &str {self.readline_at(start).unwrap()})
+    }
+
 }

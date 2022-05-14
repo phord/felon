@@ -21,6 +21,7 @@ pub enum FilterType {
 
 // use std::cell::RefCell;
 
+#[derive(Debug)]
 pub enum SearchType {
     SearchWord(String),
     SearchPhrase(String),
@@ -64,12 +65,11 @@ impl DocFilter {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
                     let mut matches = Vec::<usize>::new();
-                    for l in 0..log.count_lines() {
-                        // FIXME: read by offset and return offset along with line so we don't have to look it up again
-                        let line = log.readline(l);
-                        if let Some(line) = line {
+                    for (start, end) in log.iter_offsets() {
+                        if let Some(line) = log.readline_fixed(*start, *end) {
+                            // TODO: For filter-out we will want the unmatched lines instead
                             if regex.is_match(&line) {
-                                matches.push(log.line_offset(l).unwrap());
+                                matches.push(*start);
                             }
                         }
                     }
@@ -94,6 +94,7 @@ impl DocFilter {
     //     }
     // }
 }
+
 struct Filters {
     // if any filter_in exist, all matching lines are included; all non-matching lines are excluded
     filter_in: Vec<DocFilter>,
@@ -120,14 +121,17 @@ impl Filters {
         }
     }
 
-    pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        let f = DocFilter::new(filter_type, search_type);
+    pub fn add_filter(&mut self, log: &LogFile, filter_type: FilterType, search_type: SearchType) {
+        println!("Adding filter {:?} {:?}", filter_type, search_type);
+        let mut f = DocFilter::new(filter_type, search_type);
+        f.bind(log);
+        println!("Done");
         match filter_type {
             FilterType::FilterIn =>   self.filter_in.push(f),
             FilterType::FilterOut =>  self.filter_out.push(f),
             FilterType::Search =>     self.highlight.push(f),
         };
-        self.apply_filters();
+        // self.apply_filters();
     }
 
     fn apply_filters(&mut self) {
@@ -177,15 +181,6 @@ impl<'a> IntoIterator for &'a Document {
     }
 }
 
-impl<'a> Document {
-    pub fn iter_start(&'a self, start: usize) -> <&'a Document as IntoIterator>::IntoIter {
-        DocumentIterator::<'a> {
-            doc: self,
-            index: start,
-        }
-    }
-}
-
 pub struct DocumentIterator<'a> {
     doc: &'a Document,
     index: usize,
@@ -200,6 +195,15 @@ impl<'a> Iterator for DocumentIterator<'a> {
             line
         } else {
             None
+        }
+    }
+}
+
+impl<'a> Document {
+    pub fn iter_start(&'a self, start: usize) -> <&'a Document as IntoIterator>::IntoIter {
+        DocumentIterator::<'a> {
+            doc: self,
+            index: start,
         }
     }
 }
@@ -228,7 +232,7 @@ impl Document {
     }
 
     pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        self.filters.add_filter(filter_type, search_type)
+        self.filters.add_filter(&self.file, filter_type, search_type)
     }
 
     fn hash_color(&self, text: &str) -> Color {
@@ -314,6 +318,7 @@ impl Document {
         styled
     }
 
+    // Deprecated
     pub fn get(&mut self, lrow: usize) -> &str {
         let line =
             match self.filters.filtered_lines {
