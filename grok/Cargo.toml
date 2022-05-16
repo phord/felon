@@ -12,3 +12,4 @@ indexed_file = { path = "../indexed_file" }
 lazy_static = "*"
 regex = "*"
 fnv = "*"
+itertools = "*"
