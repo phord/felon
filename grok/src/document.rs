@@ -28,16 +28,14 @@ pub enum SearchType {
     SearchRegex(Regex),
 }
 
-struct DocFilter {
-    filter_type: FilterType,
+struct DocFilter<'a> {
     search_type: SearchType,
-    matches : Vec<usize>,
+    matches : Vec<(&'a usize, &'a usize)>,
 }
 
-impl DocFilter {
-    pub fn new(filter_type: FilterType, search_type: SearchType) -> Self {
+impl<'a> DocFilter<'a> {
+    pub fn new(search_type: SearchType) -> Self {
         Self {
-            filter_type,
             search_type,
             matches : Vec::new(),
         }
@@ -50,7 +48,7 @@ impl DocFilter {
     }
 
     // Resolve a filter against a LogFile and store the matches
-    fn bind(&mut self, log: &LogFile) {
+    fn bind(&mut self, log: &'a LogFile) {
         let matches =
             match self.search_type {
                 SearchType::SearchWord(ref word) => {
@@ -96,35 +94,35 @@ impl DocFilter {
     // }
 }
 
-struct Filters {
+struct Filters<'a> {
     // if any filter_in exist, all matching lines are included; all non-matching lines are excluded
-    filter_in: Vec<DocFilter>,
+    filter_in: Vec<DocFilter<'a>>,
 
     // if any filter_out exist, all matching lines are excluded
-    filter_out: Vec<DocFilter>,
+    filter_out: Vec<DocFilter<'a>>,
 
     // Highlight-matching lines, even if they're filtered out
-    highlight: Vec<DocFilter>,
+    highlight: Vec<DocFilter<'a>>,
 
     /// Filtered line numbers
     filtered_lines: Vec<(usize, usize)>,
 
 }
 
-impl Filters {
-    pub fn new() -> Self {
+impl<'a> Filters<'a>  {
+    fn new() -> Self {
 
         Self {
             filter_in: vec![],
             filter_out: vec![],
             highlight: vec![],
-            filtered_lines: None, // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
+            filtered_lines: vec![], // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
         }
     }
 
-    pub fn add_filter(&mut self, log: &LogFile, filter_type: FilterType, search_type: SearchType) {
+    fn add_filter(&mut self, log: &'a LogFile, filter_type: FilterType, search_type: SearchType) {
         println!("Adding filter {:?} {:?}", filter_type, search_type);
-        let mut f = DocFilter::new(filter_type, search_type);
+        let mut f = DocFilter::new(search_type);
         f.bind(log);
         println!("Done");
         match filter_type {
@@ -136,28 +134,11 @@ impl Filters {
     }
 
     fn apply_filters(&mut self) {
-        // //TODO: apply lazily or partially and in a thread
-        // self.filtered_lines =
-        //     if self.filters.is_empty() {
-        //                      None
-        //     } else {
-        //         // FIXME: Filter-out is not working for single filter. (also for multiple?)
-        //         // FIXME: Lazy-eval filters by just keeping vectors of line offsets. Then iterate lines
-        //         // by finding numbers in common between the sets.
-        //         // XXX: Keep filters in vectors, but keep Searches in a FnvHashMap.
-        //         // XXX: For filters,
-        //         //    1. find the maximum next line in each filter
-        //         //    2. If the difference is small, linearly step the other filters until they match.
-        //         //       If it's large, try a binary search.
-        //         let first = self.filters[0].first(&self.file).clone();
-        //         Some(self.filters
-        //                     .iter()
-        //                         .skip(1)
-        //                         .fold(first,
-        //                             |acc, nxt| {
-        //                                 nxt.apply(&self.file, &acc )
-        //                             }).into_iter().collect())
-        // };
+        // XXX: Keep filters in vectors, but keep Searches in a FnvHashMap.
+        // XXX: For filter-out,
+        //    1. find the maximum next line in each filter
+        //    2. If the difference is small, linearly step the other filters until they match.
+        //       If it's large, try a binary search.
     }
 
 }
@@ -185,10 +166,10 @@ pub struct Document<'a> {
     // FIXME: Replace this with a filtered-view so we can apply filters
     // FIXME: StyledLine caching -- premature optimization?
     file: LogFile,
-    filters: Filters,
+    filters: Filters<'a>,
 }
 
-impl<'a> IntoIterator for &'a Document {
+impl<'a> IntoIterator for &'a Document<'_> {
     type Item = &'a str;
     type IntoIter = DocumentIterator<'a>;
 
@@ -201,7 +182,7 @@ impl<'a> IntoIterator for &'a Document {
 }
 
 pub struct DocumentIterator<'a> {
-    doc: &'a Document,
+    doc: &'a Document<'a>,
     index: usize,
 }
 
@@ -237,7 +218,7 @@ impl<'a> Document<'a> {
     }
 }
 
-impl Document {
+impl<'a> Document<'a> {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
         let file = LogFile::new(Some(filename)).expect("Failed to open file");
@@ -263,7 +244,7 @@ impl Document {
         self.filters.filtered_lines.len()
     }
 
-    pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
+    pub fn add_filter(&'a mut self, filter_type: FilterType, search_type: SearchType) {
         self.filters.add_filter(&self.file, filter_type, search_type)
     }
 
