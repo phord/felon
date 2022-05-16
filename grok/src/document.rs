@@ -10,7 +10,7 @@ use crate::styled_text::{PattColor, StyledLine};
 use indexed_file::indexer::LogFile;
 // use std::collections::BTreeSet;
 // use std::ops::Bound::{Excluded, Unbounded};
-// use itertools::Itertools;
+use itertools::Itertools;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum FilterType {
@@ -45,7 +45,8 @@ impl DocFilter {
 
     // Find partition point of a line position
     fn after(&self, offset: usize) -> usize {
-        self.matches.binary_search(&offset).unwrap()
+        let pos = self.matches.binary_search_by_key(&offset, |&(&start, _)| start);
+        match pos { Ok(t) => t, Err(e) => e,}
     }
 
     // Resolve a filter against a LogFile and store the matches
@@ -64,12 +65,12 @@ impl DocFilter {
                 SearchType::SearchRegex(ref regex) => {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
-                    let mut matches = Vec::<usize>::new();
+                    let mut matches = Vec::new();
                     for (start, end) in log.iter_offsets() {
                         if let Some(line) = log.readline_fixed(*start, *end) {
                             // TODO: For filter-out we will want the unmatched lines instead
                             if regex.is_match(&line) {
-                                matches.push(*start);
+                                matches.push((start, end));
                             }
                         }
                     }
@@ -106,7 +107,7 @@ struct Filters {
     highlight: Vec<DocFilter>,
 
     /// Filtered line numbers
-    filtered_lines: Option<Vec<usize>>,
+    filtered_lines: Vec<(usize, usize)>,
 
 }
 
@@ -161,7 +162,25 @@ impl Filters {
 
 }
 
-pub struct Document {
+impl<'a>  Filters<'a> {
+    fn iter_includes(&'a self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + 'a>  {
+        if self.filter_in.is_empty() {
+            let start = self.filtered_lines.binary_search_by_key(&start, |&(start, _)| start);
+            let start = match start { Ok(t) => t, Err(e) => e,};
+            Box::new(self.filtered_lines[start..]
+                    .iter()
+                    .map(|&(start, end)| (start, end)))
+        } else {
+            // Find the next line that matches any filter-in.
+            Box::new(self.filter_in.iter()
+                    .map(|x| x.matches[x.after(start)..].iter())
+                    .kmerge()
+                    .dedup()
+                .map(|&(&start, &end)| (start, end)))
+            }
+    }
+}
+pub struct Document<'a> {
     // File contents
     // FIXME: Replace this with a filtered-view so we can apply filters
     // FIXME: StyledLine caching -- premature optimization?
@@ -199,12 +218,22 @@ impl<'a> Iterator for DocumentIterator<'a> {
     }
 }
 
-impl<'a> Document {
-    pub fn iter_start(&'a self, start: usize) -> <&'a Document as IntoIterator>::IntoIter {
-        DocumentIterator::<'a> {
-            doc: self,
-            index: start,
-        }
+impl<'a> Document<'a> {
+    pub fn iter_start(&'a self, start: usize) -> impl Iterator<Item = &'a str> + 'a  {
+        self.iter_filtered(start)
+    //     DocumentIterator::<'a> {
+    //         doc: self,
+    //         index: start,
+    //         inner: Some(Box::new(self.filters.iter_includes()
+    //             .map(|(start, end)| self.file.readline_fixed(start, end).unwrap())))
+    //     }
+    }
+
+    pub fn iter_filtered(&'a self, start: usize) -> impl Iterator<Item = &'a str> + 'a  {
+        // FIXME: Use offsets instead of line numbers
+        let start = self.file.line_offset(start).unwrap_or(usize::MAX);
+        let i = self.filters.iter_includes(start);
+        i.map(|(start, end)| self.file.readline_fixed(start, end).unwrap_or("~"))
     }
 }
 
@@ -214,10 +243,16 @@ impl Document {
         let file = LogFile::new(Some(filename)).expect("Failed to open file");
         println!("{:?}", file);
 
-        Self {
+        let mut s = Self {
             file,
             filters: Filters::new(),
-        }
+        };
+        let v : Vec<_> = s.file.iter_offsets()
+                            .map(|(&start, &end)| (start, end))
+                            .collect();
+
+        s.filters.filtered_lines = v;
+        s
     }
 
     pub fn all_line_count(&self) -> usize {
@@ -225,10 +260,7 @@ impl Document {
     }
 
     pub fn filtered_line_count(&self) -> usize {
-        match self.filters.filtered_lines {
-            Some(ref lines) => lines.len(),
-            None => self.all_line_count(),
-        }
+        self.filters.filtered_lines.len()
     }
 
     pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
@@ -318,15 +350,15 @@ impl Document {
         styled
     }
 
-    // Deprecated
-    pub fn get(&mut self, lrow: usize) -> &str {
-        let line =
-            match self.filters.filtered_lines {
-                Some(ref lines) =>
-                    if lrow < lines.len() { self.file.readline_at(lines[lrow])} else {None},
-                None =>
-                    self.file.readline(lrow),
-            };
-        line.unwrap_or("~")
-    }
+    // // Deprecated
+    // pub fn get(&mut self, lrow: usize) -> &str {
+    //     let line =
+    //         match self.filters.filtered_lines {
+    //             Some(ref lines) =>
+    //                 if lrow < lines.len() { self.file.readline_at(lines[lrow])} else {None},
+    //             None =>
+    //                 self.file.readline(lrow),
+    //         };
+    //     line.unwrap_or("~")
+    // }
 }
