@@ -28,12 +28,12 @@ pub enum SearchType {
     SearchRegex(Regex),
 }
 
-struct DocFilter<'a> {
+struct DocFilter {
     search_type: SearchType,
-    matches : Vec<(&'a usize, &'a usize)>,
+    matches : Vec<(usize, usize)>,
 }
 
-impl<'a> DocFilter<'a> {
+impl DocFilter {
     pub fn new(search_type: SearchType) -> Self {
         Self {
             search_type,
@@ -43,12 +43,12 @@ impl<'a> DocFilter<'a> {
 
     // Find partition point of a line position
     fn after(&self, offset: usize) -> usize {
-        let pos = self.matches.binary_search_by_key(&offset, |&(&start, _)| start);
+        let pos = self.matches.binary_search_by_key(&offset, |&(start, _)| start);
         match pos { Ok(t) => t, Err(e) => e,}
     }
 
     // Resolve a filter against a LogFile and store the matches
-    fn bind(&mut self, log: &'a LogFile) {
+    fn bind(&mut self, log: &LogFile) {
         let matches =
             match self.search_type {
                 SearchType::SearchWord(ref word) => {
@@ -68,7 +68,7 @@ impl<'a> DocFilter<'a> {
                         if let Some(line) = log.readline_fixed(*start, *end) {
                             // TODO: For filter-out we will want the unmatched lines instead
                             if regex.is_match(&line) {
-                                matches.push((start, end));
+                                matches.push((*start, *end));
                             }
                         }
                     }
@@ -94,22 +94,22 @@ impl<'a> DocFilter<'a> {
     // }
 }
 
-struct Filters<'a> {
+struct Filters {
     // if any filter_in exist, all matching lines are included; all non-matching lines are excluded
-    filter_in: Vec<DocFilter<'a>>,
+    filter_in: Vec<DocFilter>,
 
     // if any filter_out exist, all matching lines are excluded
-    filter_out: Vec<DocFilter<'a>>,
+    filter_out: Vec<DocFilter>,
 
     // Highlight-matching lines, even if they're filtered out
-    highlight: Vec<DocFilter<'a>>,
+    highlight: Vec<DocFilter>,
 
     /// Filtered line numbers
     filtered_lines: Vec<(usize, usize)>,
 
 }
 
-impl<'a> Filters<'a>  {
+impl Filters {
     fn new() -> Self {
 
         Self {
@@ -120,7 +120,7 @@ impl<'a> Filters<'a>  {
         }
     }
 
-    fn add_filter(&mut self, log: &'a LogFile, filter_type: FilterType, search_type: SearchType) {
+    pub fn add_filter(&mut self, log: &LogFile, filter_type: FilterType, search_type: SearchType) {
         println!("Adding filter {:?} {:?}", filter_type, search_type);
         let mut f = DocFilter::new(search_type);
         f.bind(log);
@@ -143,8 +143,8 @@ impl<'a> Filters<'a>  {
 
 }
 
-impl<'a>  Filters<'a> {
-    fn iter_includes(&'a self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + 'a>  {
+impl Filters {
+    fn iter_includes(& self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + '_>  {
         if self.filter_in.is_empty() {
             let start = self.filtered_lines.binary_search_by_key(&start, |&(start, _)| start);
             let start = match start { Ok(t) => t, Err(e) => e,};
@@ -157,21 +157,21 @@ impl<'a>  Filters<'a> {
                     .map(|x| x.matches[x.after(start)..].iter())
                     .kmerge()
                     .dedup()
-                .map(|&(&start, &end)| (start, end)))
+                .map(|&(start, end)| (start, end)))
             }
     }
 }
-pub struct Document<'a> {
+pub struct Document {
     // File contents
     // FIXME: Replace this with a filtered-view so we can apply filters
     // FIXME: StyledLine caching -- premature optimization?
     file: LogFile,
-    filters: Filters<'a>,
+    filters: Filters,
 }
 
-impl<'a> IntoIterator for &'a Document<'_> {
-    type Item = &'a str;
-    type IntoIter = DocumentIterator<'a>;
+impl IntoIterator for Document {
+    type Item = String;
+    type IntoIter = DocumentIterator;
 
     fn into_iter(self) -> Self::IntoIter {
         DocumentIterator {
@@ -181,26 +181,31 @@ impl<'a> IntoIterator for &'a Document<'_> {
     }
 }
 
-pub struct DocumentIterator<'a> {
-    doc: &'a Document<'a>,
+pub struct DocumentIterator {
+    doc: Document,
     index: usize,
 }
 
-impl<'a> Iterator for DocumentIterator<'a> {
-    type Item = &'a str;
-    fn next(&mut self) -> Option<&'a str> {
+impl Iterator for DocumentIterator {
+    type Item = String;
+    fn next(&mut self) -> Option<String> {
         if self.index < self.doc.file.count_lines() {
             let line = self.doc.file.readline(self.index);
             self.index += 1;
-            line
+            if line.is_some() {
+                // FIXME: There's a better way to map an optional, right?
+                Some(line.unwrap().to_string())
+            } else {
+                None
+            }
         } else {
             None
         }
     }
 }
 
-impl<'a> Document<'a> {
-    pub fn iter_start(&'a self, start: usize) -> impl Iterator<Item = &'a str> + 'a  {
+impl Document {
+    pub fn iter_start(&self, start: usize) -> impl Iterator<Item = &str>  {
         self.iter_filtered(start)
     //     DocumentIterator::<'a> {
     //         doc: self,
@@ -210,7 +215,7 @@ impl<'a> Document<'a> {
     //     }
     }
 
-    pub fn iter_filtered(&'a self, start: usize) -> impl Iterator<Item = &'a str> + 'a  {
+    pub fn iter_filtered(&self, start: usize) -> impl Iterator<Item = &str> {
         // FIXME: Use offsets instead of line numbers
         let start = self.file.line_offset(start).unwrap_or(usize::MAX);
         let i = self.filters.iter_includes(start);
@@ -218,7 +223,7 @@ impl<'a> Document<'a> {
     }
 }
 
-impl<'a> Document<'a> {
+impl Document {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
         let file = LogFile::new(Some(filename)).expect("Failed to open file");
@@ -244,7 +249,7 @@ impl<'a> Document<'a> {
         self.filters.filtered_lines.len()
     }
 
-    pub fn add_filter(&'a mut self, filter_type: FilterType, search_type: SearchType) {
+    pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
         self.filters.add_filter(&self.file, filter_type, search_type)
     }
 

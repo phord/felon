@@ -4,15 +4,15 @@ use crate::status_line::StatusLine;
 use crate::keyboard::{Input, UserCommand};
 use crate::document::{Document, FilterType, SearchType};
 
-pub struct Viewer<'a> {
+pub struct Viewer {
     config: Config,
     display: Display,
     status: StatusLine,
     input: Input,
-    doc: Document<'a>,
+    doc: Document,
 }
 
-impl<'a> Viewer<'a> {
+impl Viewer {
     pub fn new(config: Config) -> Self {
         let doc = Document::new(config.clone());
         Self {
@@ -46,7 +46,7 @@ impl<'a> Viewer<'a> {
 
 }
 
-impl Drop for Viewer<'_> {
+impl Drop for Viewer {
     fn drop(&mut self) {
         // Output::clear_screen().expect("Error");
     }
