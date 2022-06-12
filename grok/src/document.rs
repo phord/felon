@@ -107,23 +107,33 @@ struct Filters {
     /// Filtered line numbers
     filtered_lines: Vec<(usize, usize)>,
 
+    file: LogFile,
 }
 
 impl Filters {
-    fn new() -> Self {
+    fn new(file: LogFile) -> Self {
 
-        Self {
+        let mut s = Self {
             filter_in: vec![],
             filter_out: vec![],
             highlight: vec![],
             filtered_lines: vec![], // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
-        }
+            file
+        };
+
+        let v : Vec<_> = s.file.iter_offsets()
+            .map(|(&start, &end)| (start, end))
+            .collect();
+
+        s.filtered_lines = v;
+
+        s
     }
 
-    pub fn add_filter(&mut self, log: &LogFile, filter_type: FilterType, search_type: SearchType) {
+    fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
         println!("Adding filter {:?} {:?}", filter_type, search_type);
         let mut f = DocFilter::new(search_type);
-        f.bind(log);
+        f.bind(&self.file);
         println!("Done");
         match filter_type {
             FilterType::FilterIn =>   self.filter_in.push(f),
@@ -165,7 +175,6 @@ pub struct Document {
     // File contents
     // FIXME: Replace this with a filtered-view so we can apply filters
     // FIXME: StyledLine caching -- premature optimization?
-    file: LogFile,
     filters: Filters,
 }
 
@@ -189,8 +198,8 @@ pub struct DocumentIterator {
 impl Iterator for DocumentIterator {
     type Item = String;
     fn next(&mut self) -> Option<String> {
-        if self.index < self.doc.file.count_lines() {
-            let line = self.doc.file.readline(self.index);
+        if self.index < self.doc.filters.file.count_lines() {
+            let line = self.doc.filters.file.readline(self.index);
             self.index += 1;
             if line.is_some() {
                 // FIXME: There's a better way to map an optional, right?
@@ -211,15 +220,15 @@ impl Document {
     //         doc: self,
     //         index: start,
     //         inner: Some(Box::new(self.filters.iter_includes()
-    //             .map(|(start, end)| self.file.readline_fixed(start, end).unwrap())))
+    //             .map(|(start, end)| self.filters.file.readline_fixed(start, end).unwrap())))
     //     }
     }
 
     pub fn iter_filtered(&self, start: usize) -> impl Iterator<Item = &str> {
         // FIXME: Use offsets instead of line numbers
-        let start = self.file.line_offset(start).unwrap_or(usize::MAX);
+        let start = self.filters.file.line_offset(start).unwrap_or(usize::MAX);
         let i = self.filters.iter_includes(start);
-        i.map(|(start, end)| self.file.readline_fixed(start, end).unwrap_or("~"))
+        i.map(|(start, end)| self.filters.file.readline_fixed(start, end).unwrap_or("~"))
     }
 }
 
@@ -229,20 +238,23 @@ impl Document {
         let file = LogFile::new(Some(filename)).expect("Failed to open file");
         println!("{:?}", file);
 
-        let mut s = Self {
-            file,
-            filters: Filters::new(),
-        };
-        let v : Vec<_> = s.file.iter_offsets()
-                            .map(|(&start, &end)| (start, end))
-                            .collect();
 
-        s.filters.filtered_lines = v;
+        let mut s = Self {
+            filters: Filters::new(file),
+        };
+
+        // FIXME: This works for adding filters now. What about in the future?
+        // filters.add_filter(FilterType::FilterOut, SearchType::SearchWord("flutter".to_string()));
+        // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"sectors").unwrap()));
+        // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"foo").unwrap()));
+        // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"segmap.segmap measurement timing").unwrap()));
+        s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"flutter").unwrap()));
+
         s
     }
 
     pub fn all_line_count(&self) -> usize {
-        self.file.count_lines()
+        self.filters.file.count_lines()
     }
 
     pub fn filtered_line_count(&self) -> usize {
@@ -250,7 +262,7 @@ impl Document {
     }
 
     pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        self.filters.add_filter(&self.file, filter_type, search_type)
+        self.filters.add_filter(filter_type, search_type)
     }
 
     fn hash_color(&self, text: &str) -> Color {
@@ -341,9 +353,9 @@ impl Document {
     //     let line =
     //         match self.filters.filtered_lines {
     //             Some(ref lines) =>
-    //                 if lrow < lines.len() { self.file.readline_at(lines[lrow])} else {None},
+    //                 if lrow < lines.len() { self.filters.file.readline_at(lines[lrow])} else {None},
     //             None =>
-    //                 self.file.readline(lrow),
+    //                 self.filters.file.readline(lrow),
     //         };
     //     line.unwrap_or("~")
     // }
