@@ -214,7 +214,7 @@ impl Iterator for DocumentIterator {
 }
 
 impl Document {
-    pub fn iter_start(&self, start: usize) -> impl Iterator<Item = &str>  {
+    pub fn iter_start(&self, start: usize) -> impl Iterator<Item = (usize, &str)>  {
         self.iter_filtered(start)
     //     DocumentIterator::<'a> {
     //         doc: self,
@@ -224,11 +224,10 @@ impl Document {
     //     }
     }
 
-    pub fn iter_filtered(&self, start: usize) -> impl Iterator<Item = &str> {
-        // FIXME: Use offsets instead of line numbers
-        let start = self.filters.file.line_offset(start).unwrap_or(usize::MAX);
-        let i = self.filters.iter_includes(start);
-        i.map(|(start, end)| self.filters.file.readline_fixed(start, end).unwrap_or("~"))
+
+    pub fn iter_filtered(&self, pos: usize) -> impl Iterator<Item = (usize, &str)> {
+        let i = self.filters.iter_includes(pos);
+        i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~")))
     }
 }
 
@@ -248,7 +247,8 @@ impl Document {
         // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"sectors").unwrap()));
         // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"foo").unwrap()));
         // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"segmap.segmap measurement timing").unwrap()));
-        s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"flutter").unwrap()));
+        // s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"flutter").unwrap()));
+        s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"e").unwrap()));
 
         s
     }

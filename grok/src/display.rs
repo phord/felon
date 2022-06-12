@@ -10,9 +10,9 @@ use crate::styled_text::RGB_BLACK;
 
 #[derive(PartialEq)]
 struct DisplayState {
-    top: usize,
-    bottom: usize,
-    // offset: usize, // column offset
+    top: usize,     // deprecated
+    bottom: usize,  // FIXME: height
+    // left_offset: usize, // column offset
     width: usize,
 }
 
@@ -93,7 +93,7 @@ pub struct Display {
     use_alt: bool,
 
 
-    /// First line on the display (line-number in the file)
+    /// First line on the display (line-number in the filtered file)
     top: usize,
 
     /// Size of the bottom status panel
@@ -101,6 +101,10 @@ pub struct Display {
 
     /// Previously displayed lines
     prev: DisplayState,
+
+    /// Previously displayed row offsets
+    top_offset: usize,      // byte-offset of first displayed row
+    bottom_offset: usize,   // byte-offset of last displayed row
 
     mouse_wheel_height: u16,
 
@@ -123,6 +127,8 @@ impl Display {
             on_alt_screen: false,
             use_alt: config.altscreen,
             top: 0,
+            top_offset: 0,
+            bottom_offset: 0,
             panel: 1,
             prev: DisplayState { top: 0, bottom: 0, width: 0},
             mouse_wheel_height: config.mouse_scroll,
@@ -216,8 +222,6 @@ impl Display {
 
         let view_height = self.page_size();
         self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
-        // FIXME: keep top as real line number; then translate it to visible-line-number for doc traversal
-        //   This way, when visible lines change, we don't lose our place.
 
         if ! self.on_alt_screen && self.use_alt {
             execute!(stdout(), terminal::EnterAlternateScreen)?;
@@ -275,17 +279,31 @@ impl Display {
 
         let mut buff = ScreenBuffer::new();
 
-        if scroll < 0 {
-            queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
-        } else if scroll > 0 {
-            queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
-        } else {
-            // Clear the screen? Unnecessary.
-        }
+        let mut offsets = vec![0usize];
+        let mut gap = 0usize;
+        let (iter: impl Iterator<Item = _> , gap) =
+            if scroll < 0 {
+                queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
+                // FIXME: adjust offsets = offsets[...]
+                ( doc.iter_start(offsets[0]).rev(), 0 /* FIXME: Calc gap */)
+            } else if scroll > 0 {
+                queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
+                // FIXME: adjust offsets = offsets[...]
+                ( doc.iter_start(offsets.last()), 0 /* FIXME: Calc gap */)
+            } else {
+                // Clear the screen? Unnecessary.
+                ( doc.iter_start(offsets[0]), 0 )
+            };
         queue!(buff, cursor::Hide)?;
 
         let mut row = start;
-        for line in doc.iter_start(self.top + start) {
+        for (pos, line) in doc.iter_start(self.top + start) {
+            if row == 0 {
+                disp.top_offset = row;
+            }
+            if row == view_height {
+                disp.bottom_offset = row;
+            }
             if row == start + len {
                 break;
             }
