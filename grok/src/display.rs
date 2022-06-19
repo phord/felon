@@ -102,9 +102,8 @@ pub struct Display {
     /// Previously displayed lines
     prev: DisplayState,
 
-    /// Previously displayed row offsets
-    top_offset: usize,      // byte-offset of first displayed row
-    bottom_offset: usize,   // byte-offset of last displayed row
+    // Displayed line offsets
+    displayed_lines: Vec<usize>,
 
     mouse_wheel_height: u16,
 
@@ -127,10 +126,9 @@ impl Display {
             on_alt_screen: false,
             use_alt: config.altscreen,
             top: 0,
-            top_offset: 0,
-            bottom_offset: 0,
             panel: 1,
             prev: DisplayState { top: 0, bottom: 0, width: 0},
+            displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
         };
         s.update_size();
@@ -147,7 +145,7 @@ impl Display {
         cmp::max(self.height as isize - self.panel as isize, 0) as usize
     }
 
-    fn set_status_msg(&mut self, msg: String) {
+    fn set_status_msg(&mut self, _msg: String) {
         // FIXME
         // self.message = msg;
         // self.action = Action::Message;
@@ -279,35 +277,45 @@ impl Display {
 
         let mut buff = ScreenBuffer::new();
 
-        let mut offsets = vec![0usize];
-        let mut gap = 0usize;
-        let (iter: impl Iterator<Item = _> , gap) =
-            if scroll < 0 {
-                queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
-                // FIXME: adjust offsets = offsets[...]
-                ( doc.iter_start(offsets[0]).rev(), 0 /* FIXME: Calc gap */)
-            } else if scroll > 0 {
-                queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
-                // FIXME: adjust offsets = offsets[...]
-                ( doc.iter_start(offsets.last()), 0 /* FIXME: Calc gap */)
+        let lines =
+            if self.displayed_lines.len() == 0 {
+                // Blank slate; start of file
+                doc.get_lines_from(0, len)
+            } else if scroll < 0 {
+                let begin = self.displayed_lines.first().unwrap();
+                doc.get_lines_from_rev(begin-1, len+1)[1..].to_vec()
             } else {
-                // Clear the screen? Unnecessary.
-                ( doc.iter_start(offsets[0]), 0 )
+                // get 'len' lines after the last line displayed
+                let begin = self.displayed_lines.last().unwrap();
+                doc.get_lines_from(begin+1, len)
             };
+
+        if scroll < 0 {
+            queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
+            self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(len));
+            self.displayed_lines.truncate(self.page_size());
+        } else if scroll > 0 || self.displayed_lines.len() == 0 {
+            queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
+            self.displayed_lines = self.displayed_lines[scroll as usize..].to_vec();
+            self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(len));
+            // self.displayed_lines.resize(self.page_size(), 0usize);
+        } else {
+            // Clear the screen? Unnecessary.
+            self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(len));
+        };
+
+        // TODO: Vector is short on last page.  Allow it?
+        // assert!(self.displayed_lines.len() == self.page_size());
+
         queue!(buff, cursor::Hide)?;
 
         let mut row = start;
-        for (pos, line) in doc.iter_start(self.top + start) {
-            if row == 0 {
-                disp.top_offset = row;
-            }
-            if row == view_height {
-                disp.bottom_offset = row;
-            }
+        for (pos, line) in lines.iter(){
             if row == start + len {
                 break;
             }
             self.draw_line(doc, &mut buff, row, &line.to_string());
+            self.displayed_lines[row] = *pos;
             row += 1;
         }
        buff.flush()

@@ -154,6 +154,23 @@ impl Filters {
 }
 
 impl Filters {
+    fn iter_includes_rev(& self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + '_>  {
+        if self.filter_in.is_empty() {
+            let start = self.filtered_lines.binary_search_by_key(&start, |&(start, _)| start);
+            let start = match start { Ok(t) => t, Err(e) => e,};
+            Box::new(self.filtered_lines[..start]
+                    .iter()
+                    .map(|&(start, end)| (start, end)))
+        } else {
+            // Find the next line that matches any filter-in.
+            Box::new(self.filter_in.iter()
+                    .map(|x| x.matches[..x.after(start)].iter())
+                    .kmerge()
+                    .dedup()
+                .map(|&(start, end)| (start, end)))
+            }
+    }
+
     fn iter_includes(& self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + '_>  {
         if self.filter_in.is_empty() {
             let start = self.filtered_lines.binary_search_by_key(&start, |&(start, _)| start);
@@ -214,6 +231,17 @@ impl Iterator for DocumentIterator {
 }
 
 impl Document {
+
+    pub fn get_lines_from_rev(&self, start: usize, len: usize) -> Vec<(usize, &str)> {
+        let iter = self.iter_filtered_rev(start);
+        iter.take(len).collect()
+    }
+
+    pub fn get_lines_from(&self, start: usize, len: usize) -> Vec<(usize, &str)> {
+        let iter = self.iter_filtered(start);
+        iter.take(len).collect()
+    }
+
     pub fn iter_start(&self, start: usize) -> impl Iterator<Item = (usize, &str)>  {
         self.iter_filtered(start)
     //     DocumentIterator::<'a> {
@@ -224,6 +252,11 @@ impl Document {
     //     }
     }
 
+
+    pub fn iter_filtered_rev(&self, pos: usize) -> impl Iterator<Item = (usize, &str)> {
+        let i = self.filters.iter_includes(pos);
+        i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~")))
+    }
 
     pub fn iter_filtered(&self, pos: usize) -> impl Iterator<Item = (usize, &str)> {
         let i = self.filters.iter_includes(pos);
