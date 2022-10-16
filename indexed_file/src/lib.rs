@@ -1,4 +1,5 @@
 pub mod indexer;
+pub mod line_indexer;
 
 #[cfg(test)]
 mod tests {

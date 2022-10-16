@@ -1,4 +1,4 @@
-/// A wrapper for a LogFile that applies color, filtering, caching, etc.
+/// A wrapper for a LogFileLines that applies color, filtering, caching, etc.
 
 use crossterm::style::Color;
 use crate::config::Config;
@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::indexer::LogFile;
+use indexed_file::line_indexer::LogFileLines;
 // use std::collections::BTreeSet;
 // use std::ops::Bound::{Excluded, Unbounded};
 use itertools::Itertools;
@@ -23,8 +23,6 @@ pub enum FilterType {
 
 #[derive(Debug)]
 pub enum SearchType {
-    SearchWord(String),
-    SearchPhrase(String),
     SearchRegex(Regex),
 }
 
@@ -47,19 +45,10 @@ impl DocFilter {
         match pos { Ok(t) => t, Err(e) => e,}
     }
 
-    // Resolve a filter against a LogFile and store the matches
-    fn bind(&mut self, log: &LogFile) {
+    // Resolve a filter against a LogFileLines and store the matches
+    fn bind(&mut self, log: &LogFileLines) {
         let matches =
             match self.search_type {
-                SearchType::SearchWord(ref word) => {
-                    unreachable!("TODO: FIXME");
-                    // Vec::<usize>::from(log.search_word(word).clone().into_iter())
-                }
-                SearchType::SearchPhrase(ref _phrase) => {
-                    // TODO: parse phrase into words, build set of matches, and search for phrase
-                    unreachable!("TODO: implement");
-                    // BTreeSet::<usize>::new()
-                }
                 SearchType::SearchRegex(ref regex) => {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
@@ -78,7 +67,7 @@ impl DocFilter {
         self.matches = matches;
     }
 
-    // fn apply(&self, log: &LogFile, active: &BTreeSet<usize>) -> BTreeSet<usize> {
+    // fn apply(&self, log: &LogFileLines, active: &BTreeSet<usize>) -> BTreeSet<usize> {
     //     let matches = self.first(log);
     //     match self.filter_type {
     //         FilterType::FilterOut => {
@@ -107,11 +96,11 @@ struct Filters {
     /// Filtered line numbers
     filtered_lines: Vec<(usize, usize)>,
 
-    file: LogFile,
+    file: LogFileLines,
 }
 
 impl Filters {
-    fn new(file: LogFile) -> Self {
+    fn new(file: LogFileLines) -> Self {
 
         let mut s = Self {
             filter_in: vec![],
@@ -267,7 +256,7 @@ impl Document {
 impl Document {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
-        let file = LogFile::new(Some(filename)).expect("Failed to open file");
+        let file = LogFileLines::new(Some(filename)).expect("Failed to open file");
         println!("{:?}", file);
 
 
