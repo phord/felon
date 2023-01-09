@@ -11,6 +11,7 @@ use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 
 struct Index {
+    // Byte offset of the end of each line
     line_offsets: Vec<usize>,
 }
 
@@ -271,6 +272,10 @@ impl LogFileLines {
         let ends = self.index.line_offsets.iter();
         let line_range = starts.zip(ends);
         line_range
+    }
+
+    pub fn iter_lines(&self) -> impl Iterator<Item = (&str, usize, usize)> + '_ {
+        self.iter_offsets().map(|(&start, &end)| -> (&str, usize, usize) {(self.readline_fixed(start, end).unwrap_or(""), start, end)})
     }
 
 }

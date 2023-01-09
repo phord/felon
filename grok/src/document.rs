@@ -39,7 +39,7 @@ impl DocFilter {
         }
     }
 
-    // Find partition point of a line position
+    // Find a line position given some offset into file
     fn after(&self, offset: usize) -> usize {
         let pos = self.matches.binary_search_by_key(&offset, |&(start, _)| start);
         match pos { Ok(t) => t, Err(e) => e,}
@@ -53,12 +53,10 @@ impl DocFilter {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
                     let mut matches = Vec::new();
-                    for (start, end) in log.iter_offsets() {
-                        if let Some(line) = log.readline_fixed(*start, *end) {
-                            // TODO: For filter-out we will want the unmatched lines instead
-                            if regex.is_match(&line) {
-                                matches.push((*start, *end));
-                            }
+                    for (line, start, end) in log.iter_lines() {
+                        // TODO: For filter-out we will want the unmatched lines instead
+                        if regex.is_match(&line) {
+                            matches.push((start, end));
                         }
                     }
                     matches
