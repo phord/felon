@@ -1,3 +1,4 @@
+pub mod log_file;
 pub mod indexer;
 pub mod line_indexer;
 

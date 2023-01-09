@@ -1,14 +1,13 @@
-// Structs to index lines in a file
+// Structs to index lines in a text file
 // TODO: Cleanup - This is a clone of indexer (LogFile) that doesn't parse out words and numbers.  It only parses lines.
 //       Needs to be allowed to run in the background better, in a way that Rust can accept.
 
 use std::path::PathBuf;
 
-use std::fs::File;
 use std::fmt;
-use mapr::{MmapOptions, Mmap};
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
+use crate::log_file::{LogFile, LogFileTrait};
 
 struct Index {
     // Byte offset of the end of each line
@@ -118,7 +117,7 @@ impl EventualIndex {
 
 pub struct LogFileLines {
     // pub file_path: PathBuf,
-    mmap: Mmap,
+    file: LogFile,
     index: EventualIndex,
 }
 
@@ -134,52 +133,29 @@ impl fmt::Debug for LogFileLines {
 impl LogFileLines {
     // FIXME: Is there a way to mark this for tests only?
     pub fn test_new(input_file: Option<PathBuf>, chunk_size: usize, max_line_length: usize) -> std::io::Result<LogFileLines> {
-        let mut file = LogFileLines::open(input_file)?;
+        let mut file = LogFileLines::new(LogFile::new_text_file(input_file).expect("Failed to open file"));
         file.index_file(chunk_size, max_line_length);
         Ok(file)
     }
 }
 
-use std::io::{Error, ErrorKind};
 impl LogFileLines {
 
-    fn open(input_file: Option<PathBuf>) -> std::io::Result<LogFileLines> {
-
-        let file = if let Some(file_path) = input_file {
-            // Must have a filename as input.
-            let file = File::open(file_path)?;
-            Some(file)
-        } else {
-
-            // Print error.
-            eprintln!("Expected '<input>' or input over stdin.");
-            return Err(Error::new(ErrorKind::Other, "Expected a filename or stdin"));
-        };
-
-        let mmap = unsafe { MmapOptions::new().map(&file.unwrap()) };
-        let mmap = mmap.expect("Could not mmap file.");
-
-        let file = LogFileLines {
-            // file_path: input_file.unwrap(),
-            mmap,
-            index: EventualIndex::new(),
-        };
-
-        Ok(file)
-    }
-
-    pub fn new(input_file: Option<PathBuf>) -> std::io::Result<LogFileLines> {
+    pub fn new(file: LogFile) -> LogFileLines {
         let chunk_size = 1024 * 1024 * 1;
         let max_line_length: usize = 64 * 1024;
 
-        let mut file = LogFileLines::open(input_file)?;
-        file.index_file(chunk_size, max_line_length);
-        Ok(file)
+        let mut index = LogFileLines {
+            file,
+            index: EventualIndex::new(),
+        };
+        index.index_file(chunk_size, max_line_length);
+        index
     }
 
     fn index_file(&mut self, chunk_size: usize, max_line_length: usize) {
 
-        let bytes = self.mmap.len();
+        let bytes = self.file.len();
         let mut pos = 0;
 
         // TODO: Since lazy merge is free, kick off the threads here and keep them running. Then any readers
@@ -203,14 +179,14 @@ impl LogFileLines {
                 sender.send(true).unwrap();
 
                 // Send the buffer to the parsers
-                let buffer = &self.mmap[pos..overflow];
+                let buffer = self.file.read(pos, overflow-pos).unwrap();
 
                 let tx = tx.clone();
                 let receiver = receiver.clone();
                 let start = pos;
                 scope.spawn(move |_| {
                     let mut index = Index::new();
-                    index.parse(&buffer, start, end - start);
+                    index.parse(buffer, start, end - start);
                     tx.send(index).unwrap();
                     receiver.recv().unwrap();
                 });
@@ -257,11 +233,11 @@ impl LogFileLines {
     }
 
     pub fn readline_fixed(&self, start: usize, end: usize) -> Option<&str> {
-        if end < self.mmap.len() {
+        if end < self.file.len() {
             assert!(end > start);
             // FIXME: Handle unwrap error
             // FIXME: Handle CR+LF endings
-            Some(std::str::from_utf8(&self.mmap[start..end-1]).unwrap())
+            Some(std::str::from_utf8(self.file.read(start, end - start - 1).unwrap()).unwrap())
         } else {
             None
         }
