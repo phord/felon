@@ -201,7 +201,7 @@ impl Display {
         }
     }
 
-    fn draw_styled_line(&mut self, buff: &mut ScreenBuffer, row: usize, line: StyledLine) {
+    fn draw_styled_line(&self, buff: &mut ScreenBuffer, row: usize, line: StyledLine) {
         queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
 
         buff.set_width(self.width);
@@ -210,7 +210,7 @@ impl Display {
         queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
-    fn draw_line(&mut self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
+    fn draw_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
         // TODO: Memoize the line_colors along with the lines
         self.draw_styled_line(buff, row, doc.line_colors(line));
     }
@@ -282,26 +282,34 @@ impl Display {
                 // Blank slate; start of file
                 doc.get_lines_from(0, len)
             } else if scroll < 0 {
+                // // get 'len' lines after the top line
+                // doc.get_lines_from(start + self.prev.top, len)
+                // FIXME: Backwards iterator isn't working
                 let begin = self.displayed_lines.first().unwrap();
                 doc.get_lines_from_rev(begin-1, len+1)[1..].to_vec()
-            } else {
+            } else if scroll > 0 {
                 // get 'len' lines after the last line displayed
                 let begin = self.displayed_lines.last().unwrap();
                 doc.get_lines_from(begin+1, len)
+            } else {
+                // get 'len' lines after the top line
+                doc.get_lines_from(self.prev.top, len)
             };
 
         if scroll < 0 {
+            // Partial screen scroll backwards
             queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
             self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(len));
             self.displayed_lines.truncate(self.page_size());
         } else if scroll > 0 || self.displayed_lines.len() == 0 {
+            // Partial screen scroll forwards
             queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
             self.displayed_lines = self.displayed_lines[scroll as usize..].to_vec();
             self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(len));
             // self.displayed_lines.resize(self.page_size(), 0usize);
         } else {
-            // Clear the screen? Unnecessary.
-            self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(len));
+            // Redraw whole screen
+            self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(len).collect();
         };
 
         // TODO: Vector is short on last page.  Allow it?

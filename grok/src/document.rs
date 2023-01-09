@@ -147,7 +147,7 @@ impl Filters {
             let start = match start { Ok(t) => t, Err(e) => e,};
             Box::new(self.filtered_lines[..start]
                     .iter()
-                    .map(|&(start, end)| (start, end)))
+                    .cloned())
         } else {
             // Find the next line that matches any filter-in.
             Box::new(self.filter_in.iter()
@@ -182,41 +182,6 @@ pub struct Document {
     filters: Filters,
 }
 
-impl IntoIterator for Document {
-    type Item = String;
-    type IntoIter = DocumentIterator;
-
-    fn into_iter(self) -> Self::IntoIter {
-        DocumentIterator {
-            doc: self,
-            index: 0,
-        }
-    }
-}
-
-pub struct DocumentIterator {
-    doc: Document,
-    index: usize,
-}
-
-impl Iterator for DocumentIterator {
-    type Item = String;
-    fn next(&mut self) -> Option<String> {
-        if self.index < self.doc.filters.file.count_lines() {
-            let line = self.doc.filters.file.readline(self.index);
-            self.index += 1;
-            if line.is_some() {
-                // FIXME: There's a better way to map an optional, right?
-                Some(line.unwrap().to_string())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-}
-
 impl Document {
 
     pub fn get_lines_from_rev(&self, start: usize, len: usize) -> Vec<(usize, &str)> {
@@ -241,7 +206,7 @@ impl Document {
 
 
     pub fn iter_filtered_rev(&self, pos: usize) -> impl Iterator<Item = (usize, &str)> {
-        let i = self.filters.iter_includes(pos);
+        let i = self.filters.iter_includes_rev(pos);
         i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~")))
     }
 
@@ -299,6 +264,7 @@ impl Document {
     }
 
     pub fn line_colors(&self, line: &str) -> StyledLine {
+        // FIXME: Doesn't need &self
         lazy_static! {
             // TODO: Move these regexes to a config file
             // Apr  4 22:21:16.056 E8ABF4F03A6F I      vol.flush.cb ...
