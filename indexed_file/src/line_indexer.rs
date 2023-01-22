@@ -30,45 +30,88 @@ impl Index {
         self.line_offsets.len()
     }
 
-    // Accumulate the map of line offsets
-    // Parse buffer starting at `offset` and stopping at the first eol after end_target
-    // Skip the first line unless offset is zero
-    // size is the bytes we must process. After that is overlap with the next buffer.
-    fn parse(&mut self, data: &[u8], offset: usize, size: usize) -> usize {
-        let bytes = data.len();
-        let has_final_eol = data.last().unwrap() == &b'\n';
-        let mut cnt = offset;
-
+    // Accumulate the map of line offsets into self.line_offsets
+    // Parse buffer passed in using `offset` as index of first byte
+    fn parse(&mut self, data: &[u8], offset: usize) {
         let mut pos = 0;
-        let max_pos = if has_final_eol { bytes } else { bytes + 1 };
-
-        // Skip the first line if offset is not zero
-        if offset > 0 {
-            for c in data {
-                pos += 1;
-                if c == &b'\n' {
-                    cnt = offset + pos;
-                    break;
-                }
-            }
-        }
-
-        loop {  // for pos in 0..bytes { //for c in mmap.as_ref() {
-            if pos >= max_pos {
-                break;
-            }
-            let c = if pos < bytes { data[pos] } else { b'\n' };
-            if c == b'\n' {
-                cnt = offset + pos + 1;
-                self.line_offsets.push(offset + pos + 1);
-                if pos >= size {
-                    break;
-                }
-            }
+        for c in data {
             pos += 1;
+            if *c == b'\n' {
+                self.line_offsets.push(offset + pos);
+            }
         }
-        cnt
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::line_indexer::Index;
+    static STRIDE: usize = 11;
+    static DATA: &str = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n";
+    static END: usize = DATA.len();
+    static OFFSETS:[usize; 7] = [11,22,33,44,55,66,77];
+
+    // Verify index.line_offsets match expected set only in the range [start, end]
+    fn check_partial(index: &Index, start:usize, end: usize) {
+        let offsets: Vec<usize> =
+            OFFSETS
+                .iter()
+                .filter(|x| **x >= start && **x <= end)
+                .cloned()
+                .collect();
+        assert_eq!(index.line_offsets, offsets);
+    }
+
+    #[test]
+    fn test_index_whole_file() {
+        let mut index = Index::new();
+        index.parse(DATA.as_bytes(), 0);
+        check_partial(&index, 0, END);
+    }
+
+    #[test]
+    fn test_index_first_part() {
+        let mut index = Index::new();
+        index.parse(DATA[..END/2].as_bytes(), 0);
+        assert!(END/2 % STRIDE > 0 );
+        check_partial(&index, 0, END / 2);
+    }
+
+    #[test]
+    fn test_index_middle() {
+        // Assumes the prev chunk matched the first line, so this matches only the 2nd and 3rd lines.
+        let mut index = Index::new();
+        let start = STRIDE - 1;
+        let end = STRIDE + 2;
+        index.parse(DATA[start..end].as_bytes(), start);
+        check_partial(&index, start, end);
+    }
+
+    #[test]
+    fn test_index_middle_to_end() {
+        // Assumes the prev chunk matched the first line, so this matches the 2nd line until the end.
+        let mut index = Index::new();
+        let start = STRIDE + 1;
+        index.parse(DATA[start..END].as_bytes(), start);
+        check_partial(&index, start, END);
+    }
+
+    #[test]
+    fn test_index_all_chunks() {
+        // Try every chunk size and assemble an entire map
+        for chunk in (STRIDE..END).rev() {
+            let mut index = Index::new();
+            // FIXME: What's the rust way to do chunk windows?
+            for start in 0..=END/chunk {
+                let start = start * chunk;
+                let end = start + chunk;
+                let end = end.min(END);
+                index.parse(DATA[start..end].as_bytes(), start);
+            }
+            check_partial(&index, 0, END);
+        }
+    }
+
 }
 
 struct EventualIndex {
@@ -94,6 +137,7 @@ impl EventualIndex {
 
         // TODO: self.line_offsets is duplicate info; better to move from indexes or to always lookup from indexes
         for index in self.indexes.iter() {
+            // FIXME: Add index for end-of-file if not already present
             self.line_offsets.extend_from_slice(&index.line_offsets);
         }
     }
@@ -133,9 +177,9 @@ impl fmt::Debug for LogFileLines {
 
 #[cfg(test)]
 impl LogFileLines {
-    pub fn test_new(input_file: Option<PathBuf>, chunk_size: usize, max_line_length: usize) -> std::io::Result<LogFileLines> {
+    pub fn test_new(input_file: Option<PathBuf>, chunk_size: usize) -> std::io::Result<LogFileLines> {
         let mut file = LogFileLines::new(LogFile::new_text_file(input_file).expect("Failed to open file"));
-        file.index_file(chunk_size, max_line_length);
+        file.index_file(chunk_size);
         Ok(file)
     }
 }
@@ -144,17 +188,16 @@ impl LogFileLines {
 
     pub fn new(file: LogFile) -> LogFileLines {
         let chunk_size = 1024 * 1024 * 1;
-        let max_line_length: usize = 64 * 1024;
 
         let mut index = LogFileLines {
             file,
             index: EventualIndex::new(),
         };
-        index.index_file(chunk_size, max_line_length);
+        index.index_file(chunk_size);
         index
     }
 
-    fn index_file(&mut self, chunk_size: usize, max_line_length: usize) {
+    fn index_file(&mut self, chunk_size: usize) {
 
         let bytes = self.file.len();
         let mut pos = 0;
@@ -174,20 +217,19 @@ impl LogFileLines {
             // get indexes in chunks in threads
             while pos < bytes {
                 let end = std::cmp::min(pos + chunk_size, bytes);
-                let overflow = std::cmp::min(bytes, end + max_line_length);
 
                 // Count parser threads
                 sender.send(true).unwrap();
 
                 // Send the buffer to the parsers
-                let buffer = self.file.read(pos, overflow-pos).unwrap();
+                let buffer = self.file.read(pos, end-pos).unwrap();
 
                 let tx = tx.clone();
                 let receiver = receiver.clone();
                 let start = pos;
                 scope.spawn(move |_| {
                     let mut index = Index::new();
-                    index.parse(buffer, start, end - start);
+                    index.parse(buffer, start);
                     tx.send(index).unwrap();
                     receiver.recv().unwrap();
                 });
