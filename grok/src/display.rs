@@ -326,7 +326,9 @@ impl Display {
             self.displayed_lines[row] = *pos;
             row += 1;
         }
-       buff.flush()
+        // DEBUG HACK
+        self.draw_line(doc, &mut buff, self.height - 2, &format!("scroll={} displayed={:?}", scroll, self.displayed_lines));
+        buff.flush()
     }
 
 }
