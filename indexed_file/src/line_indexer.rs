@@ -2,6 +2,7 @@
 // TODO: Cleanup - This is a clone of indexer (LogFile) that doesn't parse out words and numbers.  It only parses lines.
 //       Needs to be allowed to run in the background better, in a way that Rust can accept.
 
+#[cfg(test)]
 use std::path::PathBuf;
 
 use std::fmt;
@@ -130,8 +131,8 @@ impl fmt::Debug for LogFileLines {
     }
 }
 
+#[cfg(test)]
 impl LogFileLines {
-    // FIXME: Is there a way to mark this for tests only?
     pub fn test_new(input_file: Option<PathBuf>, chunk_size: usize, max_line_length: usize) -> std::io::Result<LogFileLines> {
         let mut file = LogFileLines::new(LogFile::new_text_file(input_file).expect("Failed to open file"));
         file.index_file(chunk_size, max_line_length);

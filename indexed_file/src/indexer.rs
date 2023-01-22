@@ -35,12 +35,12 @@ impl Index {
         // if word.is_empty() {
         //     return;
         // }
-        let lines = self.words.entry(word.to_vec()).or_insert(Vec::new());
+        let lines = self.words.entry(word.to_vec()).or_default();
         lines.push(line);
     }
 
     fn add_number(&mut self, number: u64, line: usize) {
-        let lines = self.numbers.entry(number).or_insert(Vec::new());
+        let lines = self.numbers.entry(number).or_default();
         lines.push(line);
     }
 
@@ -53,10 +53,7 @@ impl Index {
     }
 
     fn search_word(&self, word: &Vec<u8>) -> Option<BTreeSet<usize>> {
-        match self.words.get(word) {
-            Some(lines) => Some(BTreeSet::from_iter(lines.iter().cloned())),
-            None => None,
-        }
+        self.words.get(word).map(|lines| BTreeSet::from_iter(lines.iter().cloned()))
     }
 
     // TODO: search_line
@@ -371,7 +368,7 @@ impl LogFile {
     }
 
     pub fn search_word<'a>(&'a self, word: &'a str) -> Rc<BTreeSet<usize>> {
-        return self.index.search_word(word);
+        self.index.search_word(word)
     }
 
     pub fn readline_at(&self, offset: usize) -> Option<&str> {
