@@ -1,17 +1,11 @@
 pub mod log_file;
-pub mod indexer;
+mod indexer;
 pub mod line_indexer;
 
 #[cfg(test)]
 mod tests {
     use crate::indexer;
     use std::path::PathBuf;
-
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
 
     #[test]
     fn file_missing() {

@@ -14,7 +14,7 @@ const HELP: &str = "\
 App
 
 USAGE:
-  pgrok [OPTIONS] [INPUT ...]
+  grok [OPTIONS] [INPUT ...]
 
 FLAGS:
   -h, --help            Prints help information

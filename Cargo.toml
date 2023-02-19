@@ -2,6 +2,5 @@
 
 members = [
     "grok",
-    "pgrok",
     "indexed_file",
 ]
