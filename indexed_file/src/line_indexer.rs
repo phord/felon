@@ -33,6 +33,14 @@ impl Index {
     // Accumulate the map of line offsets into self.line_offsets
     // Parse buffer passed in using `offset` as index of first byte
     fn parse(&mut self, data: &[u8], offset: usize) {
+        /* Alternative that works with str and unicode
+            data
+                .chars()
+                .enumerate()
+                .filter(|(_, c)| *c == '\n')
+                .map(|(i, _)| i + offset)
+                .collect::<Vec<_>>();
+            */
         let mut pos = 0;
         for c in data {
             pos += 1;
@@ -111,6 +119,8 @@ mod tests {
             check_partial(&index, 0, END);
         }
     }
+
+    // TODO: Tests for EventualIndex and LogFileLines
 
 }
 
