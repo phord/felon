@@ -51,6 +51,7 @@ impl Index {
     }
 }
 
+// Tests for Index
 #[cfg(test)]
 mod tests {
     use crate::line_indexer::Index;
