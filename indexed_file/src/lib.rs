@@ -1,5 +1,6 @@
 pub mod log_file;
 pub mod line_indexer;
+pub mod filters;
 
 #[cfg(test)]
 mod tests {
