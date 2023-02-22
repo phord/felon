@@ -11,6 +11,10 @@ use crossbeam_channel::{bounded, unbounded};
 use crate::log_file::{LogFile, LogFileTrait};
 
 struct Index {
+    // Offset of buffer we indexed
+    start: usize,
+    // Offset of byte after buffer we indexed
+    end: usize,
     // Byte offset of the end of each line
     line_offsets: Vec<usize>,
 }
@@ -18,6 +22,8 @@ struct Index {
 impl Index {
     fn new() -> Index {
         Index {
+            start: 0,
+            end: 0,
             line_offsets: Vec::new(),
         }
     }
@@ -33,6 +39,8 @@ impl Index {
     // Accumulate the map of line offsets into self.line_offsets
     // Parse buffer passed in using `offset` as index of first byte
     fn parse(&mut self, data: &[u8], offset: usize) {
+        self.start = offset;
+        self.end = offset + data.len();
         /* Alternative that works with str and unicode
             data
                 .chars()
@@ -144,13 +152,21 @@ impl EventualIndex {
     }
 
     fn finalize(&mut self) {
-        self.indexes.sort_by_key(|index| *index.line_offsets.get(0).unwrap_or(&(1usize << 20)));
+        if self.indexes.is_empty() {
+            return;
+        }
 
+        self.indexes.sort_by_key(|index| index.start);
+
+        let mut prev = self.indexes[0].start;
         // TODO: self.line_offsets is duplicate info; better to move from indexes or to always lookup from indexes
         for index in self.indexes.iter() {
-            // FIXME: Add index for end-of-file if not already present
+            assert!(index.start == prev);
+            prev = index.end;
             self.line_offsets.extend_from_slice(&index.line_offsets);
         }
+        // FIXME: Add index for end-of-file if not already present
+        // e.g. if self.line_offsets.last() != self.indexes.last().end { self.line_offsets.push(self.indexes.last().end); }
     }
 
     fn line_offset(&self, line_number: usize) -> Option<usize> {
