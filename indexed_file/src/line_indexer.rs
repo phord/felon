@@ -186,21 +186,12 @@ impl fmt::Debug for LogFileLines {
     }
 }
 
-#[cfg(test)]
-impl LogFileLines {
-    pub fn test_new(input_file: Option<PathBuf>, chunk_size: usize) -> std::io::Result<LogFileLines> {
-        let mut file = LogFileLines::new(LogFile::new_text_file(input_file).expect("Failed to open file"));
-        file.index_file(chunk_size);
-        Ok(file)
-    }
-}
-
 impl LogFileLines {
 
     pub fn new(file: LogFile) -> LogFileLines {
         let chunk_size = 1024 * 1024 * 1;
 
-        let mut index = LogFileLines {
+        let mut index = Self {
             file,
             index: EventualIndex::new(),
         };

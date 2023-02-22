@@ -10,8 +10,8 @@
 /// A FilterBatch represents lines matched within some offset range
 ///   adjacent batches can be merged
 ///   non-adjacent batches can be stored until they become adjacent
-
-// Context modifiers:
+//
+// Random ideas about context modifiers:
 //   Support context lines: -A -B -C
 //   Support context per filter: -A3 foo -A0 bar
 //   Support filtered context: -A3:foo-related foo -A0 bar
