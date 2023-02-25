@@ -9,129 +9,8 @@ use std::fmt;
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
 use crate::log_file::{LogFile, LogFileTrait};
+use crate::index::Index;
 
-struct Index {
-    // Offset of buffer we indexed
-    start: usize,
-    // Offset of byte after buffer we indexed
-    end: usize,
-    // Byte offset of the end of each line
-    line_offsets: Vec<usize>,
-}
-
-impl Index {
-    fn new() -> Index {
-        Index {
-            start: 0,
-            end: 0,
-            line_offsets: Vec::new(),
-        }
-    }
-
-    fn bytes(&self) -> usize {
-        *self.line_offsets.last().unwrap_or(&0)
-    }
-
-    fn lines(&self) -> usize {
-        self.line_offsets.len()
-    }
-
-    // Accumulate the map of line offsets into self.line_offsets
-    // Parse buffer passed in using `offset` as index of first byte
-    fn parse(&mut self, data: &[u8], offset: usize) {
-        self.start = offset;
-        self.end = offset + data.len();
-        /* Alternative that works with str and unicode
-            data
-                .chars()
-                .enumerate()
-                .filter(|(_, c)| *c == '\n')
-                .map(|(i, _)| i + offset)
-                .collect::<Vec<_>>();
-            */
-        let mut pos = 0;
-        for c in data {
-            pos += 1;
-            if *c == b'\n' {
-                self.line_offsets.push(offset + pos);
-            }
-        }
-    }
-}
-
-// Tests for Index
-#[cfg(test)]
-mod tests {
-    use crate::line_indexer::Index;
-    static STRIDE: usize = 11;
-    static DATA: &str = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n";
-    static END: usize = DATA.len();
-    static OFFSETS:[usize; 7] = [11,22,33,44,55,66,77];
-
-    // Verify index.line_offsets match expected set only in the range [start, end]
-    fn check_partial(index: &Index, start:usize, end: usize) {
-        let offsets: Vec<usize> =
-            OFFSETS
-                .iter()
-                .filter(|x| **x >= start && **x <= end)
-                .cloned()
-                .collect();
-        assert_eq!(index.line_offsets, offsets);
-    }
-
-    #[test]
-    fn test_index_whole_file() {
-        let mut index = Index::new();
-        index.parse(DATA.as_bytes(), 0);
-        check_partial(&index, 0, END);
-    }
-
-    #[test]
-    fn test_index_first_part() {
-        let mut index = Index::new();
-        index.parse(DATA[..END/2].as_bytes(), 0);
-        assert!(END/2 % STRIDE > 0 );
-        check_partial(&index, 0, END / 2);
-    }
-
-    #[test]
-    fn test_index_middle() {
-        // Assumes the prev chunk matched the first line, so this matches only the 2nd and 3rd lines.
-        let mut index = Index::new();
-        let start = STRIDE - 1;
-        let end = STRIDE + 2;
-        index.parse(DATA[start..end].as_bytes(), start);
-        check_partial(&index, start, end);
-    }
-
-    #[test]
-    fn test_index_middle_to_end() {
-        // Assumes the prev chunk matched the first line, so this matches the 2nd line until the end.
-        let mut index = Index::new();
-        let start = STRIDE + 1;
-        index.parse(DATA[start..END].as_bytes(), start);
-        check_partial(&index, start, END);
-    }
-
-    #[test]
-    fn test_index_all_chunks() {
-        // Try every chunk size and assemble an entire map
-        for chunk in (STRIDE..END).rev() {
-            let mut index = Index::new();
-            // FIXME: What's the rust way to do chunk windows?
-            for start in 0..=END/chunk {
-                let start = start * chunk;
-                let end = start + chunk;
-                let end = end.min(END);
-                index.parse(DATA[start..end].as_bytes(), start);
-            }
-            check_partial(&index, 0, END);
-        }
-    }
-
-    // TODO: Tests for EventualIndex and LogFileLines
-
-}
 
 struct EventualIndex {
     indexes: Vec<Index>,
@@ -163,7 +42,7 @@ impl EventualIndex {
         for index in self.indexes.iter() {
             assert!(index.start == prev);
             prev = index.end;
-            self.line_offsets.extend_from_slice(&index.line_offsets);
+            self.line_offsets.extend(index.iter());
         }
         // FIXME: Add index for end-of-file if not already present
         // e.g. if self.line_offsets.last() != self.indexes.last().end { self.line_offsets.push(self.indexes.last().end); }
