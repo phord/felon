@@ -14,14 +14,12 @@ use crate::index::Index;
 
 struct EventualIndex {
     indexes: Vec<Index>,
-    line_offsets: Vec<usize>,
 }
 
 impl EventualIndex {
     fn new() -> EventualIndex {
         EventualIndex {
             indexes: Vec::new(),
-            line_offsets: Vec::new(),
         }
     }
 
@@ -37,30 +35,65 @@ impl EventualIndex {
 
         self.indexes.sort_by_key(|index| index.start);
 
-        let mut prev = self.indexes[0].start;
-        // TODO: self.line_offsets is duplicate info; better to move from indexes or to always lookup from indexes
-        for index in self.indexes.iter() {
-            assert!(index.start == prev);
-            prev = index.end;
-            self.line_offsets.extend(index.iter());
-        }
+        // let mut prev = self.indexes[0].start;
+        // for index in self.indexes.iter() {
+        //     assert_eq!(index.start, prev);
+        //     prev = index.end;
+        // }
+
         // FIXME: Add index for end-of-file if not already present
         // e.g. if self.line_offsets.last() != self.indexes.last().end { self.line_offsets.push(self.indexes.last().end); }
     }
 
     fn line_offset(&self, line_number: usize) -> Option<usize> {
-        if line_number >= self.line_offsets.len() {
+        if line_number >= self.lines() {
             return None;
         }
-        Some(self.line_offsets[line_number])
+        self.iter().skip(line_number).cloned().next()
+    }
+
+    pub fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
+        self.indexes.iter().flat_map(|x| x.iter())
     }
 
     fn bytes(&self) -> usize {
-        self.indexes.iter().fold(0, |a, v| std::cmp::max(v.bytes(), a))
+        self.indexes.iter().fold(0, |a, v| a + v.bytes())
     }
 
     fn lines(&self) -> usize {
         self.indexes.iter().fold(0, |a, v| a + v.lines())
+    }
+}
+
+// Tests for EventualIndex
+#[cfg(test)]
+mod tests {
+    use crate::index::Index;
+    use crate::line_indexer::EventualIndex;
+    static DATA: &str = "a\na\na\na\na\n";
+
+    fn get_index(offset: usize) -> Index {
+        let mut index = Index::new();
+        index.parse(DATA.as_bytes(), offset);
+        index
+    }
+
+    fn get_eventual_index(size: usize) -> EventualIndex {
+        let mut index = EventualIndex::new();
+        while index.bytes() < size {
+            let s = index.bytes();
+            println!("Size {s}");
+            index.merge(get_index(index.bytes()));
+        }
+        index.finalize();
+        index
+    }
+
+    #[test]
+    fn test_eventual_index_basic() {
+        let index = get_eventual_index(100);
+        assert_eq!(index.bytes(), 100);
+        assert_eq!(index.lines(), 50);
     }
 
 }
@@ -184,8 +217,8 @@ impl LogFileLines {
     }
 
     pub fn iter_offsets(&self) -> impl Iterator<Item = (&usize, &usize)> + '_ {
-        let starts = std::iter::once(&0usize).chain(self.index.line_offsets.iter());
-        let ends = self.index.line_offsets.iter();
+        let starts = std::iter::once(&0usize).chain(self.index.iter());
+        let ends = self.index.iter();
         let line_range = starts.zip(ends);
         line_range
     }
