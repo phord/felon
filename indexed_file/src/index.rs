@@ -76,6 +76,29 @@ impl Index {
         self.line_offsets.binary_search(&offset)
     }
 
+    pub fn find(self: &Self, offset: usize) -> Option<usize> {
+        if offset < self.start || offset >= self.end {
+            None
+        } else {
+            match self.binary_search(offset) {
+                Ok(line) => Some(line),
+                Err(line) => Some(line),
+            }
+        }
+    }
+
+    // TODO: Is there a standard trait for this?
+    pub fn contains_offset(&self, offset: &usize) -> std::cmp::Ordering {
+        if offset > &self.end {
+            std::cmp::Ordering::Less
+        } else if offset < &self.start {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    }
+
+
 }
 
 // Tests for Index
