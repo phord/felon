@@ -89,7 +89,7 @@ impl Index {
 
     // TODO: Is there a standard trait for this?
     pub fn contains_offset(&self, offset: &usize) -> std::cmp::Ordering {
-        if offset > &self.end {
+        if offset >= &self.end {
             std::cmp::Ordering::Less
         } else if offset < &self.start {
             std::cmp::Ordering::Greater
