@@ -178,46 +178,69 @@ mod tests {
     fn test_cursor_mid_start() {
         let index = get_partial_eventual_index(50, 100);
         let cursor = index.find_index(50);
-        dbg!(cursor);
         match cursor {
             FindIndex::IndexOffset(0, 0) => {},
-            _ => {
-                dbg!(cursor);
-                panic!("Expected Index(0,0); got something else");
-            }
+            _ => panic!("Expected Index(0,0); got something else: {:?}", cursor),
+        }
+        let fault = index.find_index(10);
+        match fault {
+            FindIndex::Missing(0, 50) => {},
+            _ => panic!("Expected Missing(0,50); got something else: {:?}", fault),
         }
     }
 
     #[test]
     fn test_cursor_last() {
         let index = get_eventual_index(100);
-        let cursor = index.find_index(100);
-        dbg!(cursor);
-        // match cursor {
-        //     FindIndex::StartOfFile => {},
-        //     _ => {
-        //         dbg!(cursor);
-        //         panic!("Expected StartOfFile; got something else");
-        //     }
-        // }
-    }
-
-    #[test]
-    fn test_cursor_middle() {
-        let index = get_eventual_index(100);
-        todo!();
+        let cursor = index.find_index(index.bytes()-1);
+        match cursor {
+            FindIndex::IndexOffset(_,_) => {},
+            _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
+        }
+        let fault = index.find_index(index.bytes());
+        match fault {
+            FindIndex::MissingUnbounded(_) => {},
+            _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
+        }
     }
 
     #[test]
     fn test_cursor_forward() {
         let index = get_eventual_index(100);
-        todo!();
+        let mut cursor = index.find_index(0);
+        let mut count = 0;
+        loop {
+            // dbg!(&cursor);
+            match cursor {
+                FindIndex::IndexOffset(_,_) => {},
+                FindIndex::StartOfFile => {},
+                FindIndex::MissingUnbounded(_) => break,
+                _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
+            }
+            count += 1;
+            println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
+            cursor = index.next_line_index(cursor);
+        }
+        assert_eq!(count, index.lines());
     }
 
     #[test]
     fn test_cursor_reverse() {
         let index = get_eventual_index(100);
-        todo!();
+        let mut cursor = index.find_index(99);
+        let mut count = 0;
+        loop {
+            // dbg!(&cursor);
+            count += 1;
+            println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
+            match cursor {
+                FindIndex::IndexOffset(_,_) => {},
+                FindIndex::StartOfFile => break,
+                _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
+            }
+            cursor = index.prev_line_index(cursor);
+        }
+        assert_eq!(count, index.lines());
     }
 }
 
@@ -284,7 +307,7 @@ impl EventualIndex {
                     if self.indexes.is_empty() {
                         self.gap_at(0)
                     } else {
-                        FindIndex::IndexOffset(0, 0)
+                        FindIndex::IndexOffset(0, 1)
                     }
                 },
             FindIndex::IndexOffset(found, line) => {
@@ -309,10 +332,10 @@ impl EventualIndex {
             // next line is in in the same index
             assert!(found < self.indexes.len());
             let i = &self.indexes[found];
-            if line > 0 {
-                FindIndex::IndexOffset(found, line - 1)
-            } else if i.start == 0 {
+            if i.start == 0 && line == 1 {
                 FindIndex::StartOfFile   // TODO: Weird special case for first line in file.
+            } else if line > 0 {
+                FindIndex::IndexOffset(found, line - 1)
             } else if found > 0 && self.next_is_contiguous(found - 1) {
                 let j = &self.indexes[found - 1];
                 FindIndex::IndexOffset(found - 1, j.len() - 1)
