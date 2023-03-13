@@ -242,6 +242,24 @@ mod tests {
         }
         assert_eq!(count, index.lines());
     }
+
+    #[test]
+    fn test_cursor_reverse_gap() {
+        let index = get_partial_eventual_index(50, 100);
+        let mut cursor = index.find_index(149);
+        let mut count = 0;
+        loop {
+            dbg!(&cursor);
+            match cursor {
+                FindIndex::IndexOffset(_,_) => {},
+                FindIndex::Missing(0,50) => break,
+                _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
+            }
+            count += 1;
+            cursor = index.prev_line_index(cursor);
+        }
+        assert_eq!(count, index.lines());
+    }
 }
 
 // Cursor functions for EventualIndex
@@ -329,7 +347,7 @@ impl EventualIndex {
     // Find index to prev EOL before given index
     fn prev_line_index(&self, find: FindIndex) -> FindIndex {
         if let FindIndex::IndexOffset(found, line) = find {
-            // next line is in in the same index
+            // next line is in the same index
             assert!(found < self.indexes.len());
             let i = &self.indexes[found];
             if i.start == 0 && line == 1 {
