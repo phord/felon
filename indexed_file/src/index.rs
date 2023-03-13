@@ -59,10 +59,10 @@ impl Index {
             */
         let mut pos = 0;
         for c in data {
-            pos += 1;
             if *c == b'\n' {
                 self.line_offsets.push(offset + pos);
             }
+            pos += 1;
         }
     }
 
@@ -108,7 +108,7 @@ mod tests {
     static STRIDE: usize = 11;
     static DATA: &str = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n";
     static END: usize = DATA.len();
-    static OFFSETS:[usize; 7] = [11,22,33,44,55,66,77];
+    static OFFSETS:[usize; 7] = [10,21,32,43,54,65,76];
 
     // Verify index.line_offsets match expected set only in the range [start, end]
     fn check_partial(index: &Index, start:usize, end: usize) {
