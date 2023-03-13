@@ -65,12 +65,64 @@ impl EventualIndex {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+enum FindIndex {
+    // Unknown
+    None,
+
+    // Line is index to start of file
+    StartOfFile,
+
+    // Line is in this index at this offset
+    IndexOffset(usize, usize),
+
+    // Position is not indexed; need to index region from given `start` to `end`
+    Missing(usize, usize),
+
+    // Position is not indexed; unknown gap size at end of index needs to be loaded; arg is first unindexed byte
+    MissingUnbounded(usize),
+}
+
+// Holds reference information into an EventualIndex so lines can be navigated before the whole index
+// is known.
+#[derive(Debug,Clone)]
+struct LineCursor {
+    // Expected index and position to find the line
+    index_hint: FindIndex,
+}
+
+impl LineCursor {
+    fn new() -> LineCursor {
+        Self {
+            index_hint: FindIndex::StartOfFile,
+        }
+    }
+}
+
+
 // Tests for EventualIndex
 #[cfg(test)]
 mod tests {
     use crate::index::Index;
     use crate::line_indexer::EventualIndex;
+    use crate::line_indexer::LineCursor;
+
+    use super::FindIndex;
+    static STRIDE: usize = 2;
     static DATA: &str = "a\na\na\na\na\n";
+    static END: usize = DATA.len();
+    static OFFSETS:[usize; 5] = [2,4,6,8,10];
+
+    // // Verify index.line_offsets match expected set only in the range [start, end]
+    // fn check_partial(index: &Index, start:usize, end: usize) {
+    //     let offsets: Vec<usize> =
+    //         OFFSETS
+    //             .iter()
+    //             .filter(|x| **x >= start && **x <= end)
+    //             .cloned()
+    //             .collect();
+    //     assert_eq!(index.iter().cloned().collect::<Vec<usize>>(), offsets);
+    // }
 
     fn get_index(offset: usize) -> Index {
         let mut index = Index::new();
@@ -89,6 +141,17 @@ mod tests {
         index
     }
 
+    fn get_partial_eventual_index(start: usize, size: usize) -> EventualIndex {
+        let mut index = EventualIndex::new();
+        while index.bytes() < size {
+            let s = index.bytes();
+            println!("Size {s}");
+            index.merge(get_index(start + index.bytes()));
+        }
+        index.finalize();
+        index
+    }
+
     #[test]
     fn test_eventual_index_basic() {
         let index = get_eventual_index(100);
@@ -96,8 +159,341 @@ mod tests {
         assert_eq!(index.lines(), 50);
     }
 
+    #[test]
+    fn test_cursor_start() {
+        let index = get_eventual_index(100);
+        let cursor = index.find_index(0);
+        dbg!(cursor);
+        match cursor {
+            FindIndex::StartOfFile => {},
+            _ => {
+                dbg!(cursor);
+                panic!("Expected StartOfFile; got something else");
+            }
+        }
+    }
+
+
+    #[test]
+    fn test_cursor_mid_start() {
+        let index = get_partial_eventual_index(50, 100);
+        let cursor = index.find_index(50);
+        dbg!(cursor);
+        match cursor {
+            FindIndex::IndexOffset(0, 0) => {},
+            _ => {
+                dbg!(cursor);
+                panic!("Expected Index(0,0); got something else");
+            }
+        }
+    }
+
+    #[test]
+    fn test_cursor_last() {
+        let index = get_eventual_index(100);
+        let cursor = index.find_index(100);
+        dbg!(cursor);
+        // match cursor {
+        //     FindIndex::StartOfFile => {},
+        //     _ => {
+        //         dbg!(cursor);
+        //         panic!("Expected StartOfFile; got something else");
+        //     }
+        // }
+    }
+
+    #[test]
+    fn test_cursor_middle() {
+        let index = get_eventual_index(100);
+        todo!();
+    }
+
+    #[test]
+    fn test_cursor_forward() {
+        let index = get_eventual_index(100);
+        todo!();
+    }
+
+    #[test]
+    fn test_cursor_reverse() {
+        let index = get_eventual_index(100);
+        todo!();
+    }
 }
 
+// Cursor functions for EventualIndex
+impl EventualIndex {
+
+    // Identify the gap before a given index position and return a Missing() hint to include it.
+    fn gap_at(&self, pos: usize) -> FindIndex {
+        assert!(pos <= self.indexes.len());
+        if pos == 0 {
+            // gap is at start of file
+            let next = self.indexes[pos].start;
+            FindIndex::Missing(0, next)
+        } else {
+            let prev = self.indexes[pos-1].end;
+            if pos == self.indexes.len() {
+                // gap is at end of file; return unbounded range
+                FindIndex::MissingUnbounded(prev)
+            } else {
+                // There's a gap between two indexes; bracket result by their [end, start)
+                let next = self.indexes[pos].start;
+                FindIndex::Missing(prev, next)
+            }
+        }
+    }
+
+    // Find index to EOL that contains a given offset or the gap that needs to be loaded to have it
+    fn find_index(&self, offset: usize) -> FindIndex {
+        match self.indexes.binary_search_by(|i| i.contains_offset(&offset)) {
+            Ok(found) => {
+                let i = &self.indexes[found];
+                let line = i.find(offset).unwrap();
+                if line == 0 && i.start == 0 {
+                    FindIndex::StartOfFile
+                } else if line < i.len() {
+                    FindIndex::IndexOffset(found, line)
+                } else {
+                    self.next_line_index(FindIndex::IndexOffset(found, line-1))
+                }
+            },
+            Err(after) => {
+                // No index holds our offset; it needs to be loaded
+                self.gap_at(after)
+            }
+        }
+    }
+
+    // True if there is no gap between given index and the next one
+    fn next_is_contiguous(&self, pos: usize) -> bool {
+        assert!(pos < self.indexes.len());
+        pos + 1 < self.indexes.len() && {
+            let i = &self.indexes[pos];
+            let j = &self.indexes[pos + 1];
+            assert!(j.start >= i.end);
+            j.start == i.end
+        }
+    }
+
+    // Find index to next EOL after given index
+    fn next_line_index(&self, find: FindIndex) -> FindIndex {
+        match find {
+            FindIndex::StartOfFile => {
+                    // TODO: Get rid of this weirdo
+                    if self.indexes.is_empty() {
+                        self.gap_at(0)
+                    } else {
+                        FindIndex::IndexOffset(0, 0)
+                    }
+                },
+            FindIndex::IndexOffset(found, line) => {
+                    // next line is in in the same index
+                    assert!(found < self.indexes.len());
+                    let i = &self.indexes[found];
+                    if line + 1 < i.len() {
+                        FindIndex::IndexOffset(found, line + 1)
+                    } else if self.next_is_contiguous(found) {
+                        FindIndex::IndexOffset(found+1, 0)
+                    } else {
+                        self.gap_at(found + 1)
+                    }
+                },
+            _ => find,
+        }
+    }
+
+    // Find index to prev EOL before given index
+    fn prev_line_index(&self, find: FindIndex) -> FindIndex {
+        if let FindIndex::IndexOffset(found, line) = find {
+            // next line is in in the same index
+            assert!(found < self.indexes.len());
+            let i = &self.indexes[found];
+            if line > 0 {
+                FindIndex::IndexOffset(found, line - 1)
+            } else if i.start == 0 {
+                FindIndex::StartOfFile   // TODO: Weird special case for first line in file.
+            } else if found > 0 && self.next_is_contiguous(found - 1) {
+                let j = &self.indexes[found - 1];
+                FindIndex::IndexOffset(found - 1, j.len() - 1)
+            } else {
+                self.gap_at(found)
+            }
+        } else {
+            find
+        }
+    }
+
+    // Return offset of start of indexed line, if known
+    fn start_of_line(&self, find: FindIndex) -> Option<usize> {
+        match find {
+            FindIndex::StartOfFile => Some(0),
+
+            FindIndex::IndexOffset(found, line) => {
+                    // This line starts one byte after the previous one ends
+                    let find = self.prev_line_index(find);
+                    let prev_eol = self.end_of_line(find);
+                    if let Some(eol) = prev_eol {
+                        Some(eol + 1)
+                    } else {
+                        None
+                    }
+                },
+            _ => None,
+        }
+    }
+
+    // Return offset of end of indexed line, if known
+    fn end_of_line(&self, find: FindIndex) -> Option<usize> {
+        match find {
+            FindIndex::StartOfFile => {
+                if self.indexes.is_empty() {
+                    None
+                } else {
+                    let i = &self.indexes[0];
+                    Some(i.get(0))
+                }
+            },
+
+            FindIndex::IndexOffset(found, line) => {
+                    assert!(found < self.indexes.len());
+                    let i = &self.indexes[found];
+                    Some(i.get(line))
+                },
+            _ => None,
+        }
+    }
+
+    // // Verify a cursor's index hint, fill it in, or leave it open if index doesn't exist yet
+    // fn resolve_cursor(&self, c: LineCursor) -> LineCursor {
+    //     let eol = c.offset + c.len;
+    //     if let FindIndex::IndexOffset(ind, pos) = c.index_hint {
+    //         if ind < self.indexes.len() {
+    //             let index = &self.indexes[ind];
+    //             if pos < index.len() && index.get(pos) == eol {
+    //                 // Cursor is already resolved
+    //                 return c;
+    //             }
+    //         }
+    //     }
+
+    //     // Find an existing index that holds our offset
+    //     let end = self.find_index(c.offset);
+    //     if end.is_some() {
+    //         todo!("Find previous entry and calculate offset and length");
+    //         return LineCursor {
+    //             offset: c.offset,
+    //             len: c.len,
+    //             index_hint: Some((i, end)),
+    //         };
+    //     }
+
+    //     // Didn't find our target.  Return empty-handed.
+    //     return LineCursor {
+    //         offset: c.offset,
+    //         len: c.len,
+    //         index_hint: None,
+    //     };
+    // }
+
+    // // Find the index that ends at a given pos and return a cursor to its last line
+    // fn find_cursor_at_end(&self, pos: usize) -> LineCursor {
+    //     // Find an existing index that ends at our offset
+    //     for (i, index) in self.indexes.iter().enumerate() {
+    //         if pos + 1 == index.end {
+    //             // FIXME: Don't allow empty indexes; always merge with neighbors or keep searching
+    //             assert!(index.len() > 0);
+    //             let iter = index.iter().rev();
+    //             let end = iter.next().unwrap();
+    //             let prev = iter.next().unwrap();
+    //             return LineCursor {
+    //                 offset: prev + 1,
+    //                 len: end - prev,
+    //                 index_hint: Some((i, index.len()-1)),
+    //             };
+    //         }
+    //     }
+
+    //     // Didn't find our target.  Return empty-handed.
+    //     return LineCursor {
+    //         offset: pos,
+    //         len: 0,
+    //         index_hint: None,
+    //     };
+    // }
+
+    // // Find the index that begins at a given pos and return a cursor to that line
+    // fn find_cursor_at_start(&self, pos: usize) -> LineCursor {
+    //     // Find an existing index that starts at our offset
+    //     for (i, index) in self.indexes.iter().enumerate() {
+    //         if pos == index.start {
+    //             // FIXME: Don't allow empty indexes; always merge with neighbors or keep searching
+    //             assert!(index.len() > 0);
+    //             return LineCursor {
+    //                 offset: *index.iter().next().unwrap(),
+    //                 index_hint: Some((i, 0)),
+    //             };
+    //         }
+    //     }
+
+    //     // Didn't find our target.  Return empty-handed.
+    //     return LineCursor {
+    //         offset: pos,
+    //         index_hint: None,
+    //     };
+    // }
+
+    // fn get_cursor(&self, ind: usize, pos: usize) -> LineCursor {
+    //     assert!(ind < self.indexes.len());
+    //     let index = &self.indexes[ind];
+    //     assert!(pos < index.len());
+    //     LineCursor {
+    //         offset: index.get(pos),
+    //         index_hint: Some((ind, pos)),
+    //     }
+    // }
+
+    // // Expect: c is already resolved
+    // // Returns cursor for previous line before c, if already indexed
+    // fn prev_line(&self, c: LineCursor) -> LineCursor {
+    //     assert!(c.index_hint.is_some());
+    //     if let Some((ind, pos)) = c.index_hint {
+    //         if pos > 0 {
+    //             return self.get_cursor(ind, pos);
+    //         } else {
+    //             return self.find_cursor_at_end(c.offset - 1);
+    //         }
+    //     } else {
+    //         // Didn't find our target.  Return empty-handed.
+    //         return LineCursor {
+    //             offset: c.offset,
+    //             index_hint: None,
+    //         };
+    //     }
+    // }
+
+    // // Expect: c is already resolved
+    // // Returns cursor for next line after c, if already indexed
+    // fn next_line(&self, c: LineCursor) -> LineCursor {
+    //     assert!(c.index_hint.is_some());
+    //     if let Some((ind, pos)) = c.index_hint {
+    //         assert!(ind < self.indexes.len());
+    //         let index = &self.indexes[ind];
+    //         if pos + 1 < index.len() {
+    //             return self.get_cursor(ind, pos + 1);
+    //         } else {
+    //             let end = index.iter().rev().next().unwrap();
+    //             return self.find_cursor_at_start(*end);
+    //         }
+    //     } else {
+    //         // Didn't find our target.  Return empty-handed.
+    //         return LineCursor {
+    //             offset: c.offset,
+    //             index_hint: None,
+    //         };
+    //     }
+    // }
+}
 
 pub struct LogFileLines {
     // pub file_path: PathBuf,
