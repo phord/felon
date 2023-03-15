@@ -2,9 +2,6 @@
 // TODO: Cleanup - This is a clone of indexer (LogFile) that doesn't parse out words and numbers.  It only parses lines.
 //       Needs to be allowed to run in the background better, in a way that Rust can accept.
 
-#[cfg(test)]
-use std::path::PathBuf;
-
 use std::fmt;
 use crossbeam::scope;
 use crossbeam_channel::{bounded, unbounded};
@@ -92,29 +89,11 @@ enum FindIndex {
     MissingUnbounded(usize),
 }
 
-// Holds reference information into an EventualIndex so lines can be navigated before the whole index
-// is known.
-#[derive(Debug,Clone)]
-struct LineCursor {
-    // Expected index and position to find the line
-    index_hint: FindIndex,
-}
-
-impl LineCursor {
-    fn new() -> LineCursor {
-        Self {
-            index_hint: FindIndex::StartOfFile,
-        }
-    }
-}
-
-
 // Tests for EventualIndex
 #[cfg(test)]
 mod tests {
     use crate::index::Index;
     use crate::line_indexer::EventualIndex;
-    use crate::line_indexer::LineCursor;
 
     use super::FindIndex;
     use super::IndexRef;
@@ -401,136 +380,6 @@ impl EventualIndex {
             _ => None,
         }
     }
-
-    // // Verify a cursor's index hint, fill it in, or leave it open if index doesn't exist yet
-    // fn resolve_cursor(&self, c: LineCursor) -> LineCursor {
-    //     let eol = c.offset + c.len;
-    //     if let FindIndex::IndexOffset(ind, pos) = c.index_hint {
-    //         if ind < self.indexes.len() {
-    //             let index = &self.indexes[ind];
-    //             if pos < index.len() && index.get(pos) == eol {
-    //                 // Cursor is already resolved
-    //                 return c;
-    //             }
-    //         }
-    //     }
-
-    //     // Find an existing index that holds our offset
-    //     let end = self.find_index(c.offset);
-    //     if end.is_some() {
-    //         todo!("Find previous entry and calculate offset and length");
-    //         return LineCursor {
-    //             offset: c.offset,
-    //             len: c.len,
-    //             index_hint: Some((i, end)),
-    //         };
-    //     }
-
-    //     // Didn't find our target.  Return empty-handed.
-    //     return LineCursor {
-    //         offset: c.offset,
-    //         len: c.len,
-    //         index_hint: None,
-    //     };
-    // }
-
-    // // Find the index that ends at a given pos and return a cursor to its last line
-    // fn find_cursor_at_end(&self, pos: usize) -> LineCursor {
-    //     // Find an existing index that ends at our offset
-    //     for (i, index) in self.indexes.iter().enumerate() {
-    //         if pos + 1 == index.end {
-    //             // FIXME: Don't allow empty indexes; always merge with neighbors or keep searching
-    //             assert!(index.len() > 0);
-    //             let iter = index.iter().rev();
-    //             let end = iter.next().unwrap();
-    //             let prev = iter.next().unwrap();
-    //             return LineCursor {
-    //                 offset: prev + 1,
-    //                 len: end - prev,
-    //                 index_hint: Some((i, index.len()-1)),
-    //             };
-    //         }
-    //     }
-
-    //     // Didn't find our target.  Return empty-handed.
-    //     return LineCursor {
-    //         offset: pos,
-    //         len: 0,
-    //         index_hint: None,
-    //     };
-    // }
-
-    // // Find the index that begins at a given pos and return a cursor to that line
-    // fn find_cursor_at_start(&self, pos: usize) -> LineCursor {
-    //     // Find an existing index that starts at our offset
-    //     for (i, index) in self.indexes.iter().enumerate() {
-    //         if pos == index.start {
-    //             // FIXME: Don't allow empty indexes; always merge with neighbors or keep searching
-    //             assert!(index.len() > 0);
-    //             return LineCursor {
-    //                 offset: *index.iter().next().unwrap(),
-    //                 index_hint: Some((i, 0)),
-    //             };
-    //         }
-    //     }
-
-    //     // Didn't find our target.  Return empty-handed.
-    //     return LineCursor {
-    //         offset: pos,
-    //         index_hint: None,
-    //     };
-    // }
-
-    // fn get_cursor(&self, ind: usize, pos: usize) -> LineCursor {
-    //     assert!(ind < self.indexes.len());
-    //     let index = &self.indexes[ind];
-    //     assert!(pos < index.len());
-    //     LineCursor {
-    //         offset: index.get(pos),
-    //         index_hint: Some((ind, pos)),
-    //     }
-    // }
-
-    // // Expect: c is already resolved
-    // // Returns cursor for previous line before c, if already indexed
-    // fn prev_line(&self, c: LineCursor) -> LineCursor {
-    //     assert!(c.index_hint.is_some());
-    //     if let Some((ind, pos)) = c.index_hint {
-    //         if pos > 0 {
-    //             return self.get_cursor(ind, pos);
-    //         } else {
-    //             return self.find_cursor_at_end(c.offset - 1);
-    //         }
-    //     } else {
-    //         // Didn't find our target.  Return empty-handed.
-    //         return LineCursor {
-    //             offset: c.offset,
-    //             index_hint: None,
-    //         };
-    //     }
-    // }
-
-    // // Expect: c is already resolved
-    // // Returns cursor for next line after c, if already indexed
-    // fn next_line(&self, c: LineCursor) -> LineCursor {
-    //     assert!(c.index_hint.is_some());
-    //     if let Some((ind, pos)) = c.index_hint {
-    //         assert!(ind < self.indexes.len());
-    //         let index = &self.indexes[ind];
-    //         if pos + 1 < index.len() {
-    //             return self.get_cursor(ind, pos + 1);
-    //         } else {
-    //             let end = index.iter().rev().next().unwrap();
-    //             return self.find_cursor_at_start(*end);
-    //         }
-    //     } else {
-    //         // Didn't find our target.  Return empty-handed.
-    //         return LineCursor {
-    //             offset: c.offset,
-    //             index_hint: None,
-    //         };
-    //     }
-    // }
 }
 
 pub struct LogFileLines {
