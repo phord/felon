@@ -65,6 +65,15 @@ impl EventualIndex {
     }
 }
 
+// Delineates [start, end) of a region of the file.  end is not inclusive.
+#[derive(Debug, Copy, Clone)]
+struct OffsetRange(usize, usize);
+
+// Literally a reference by subscript to the Index/Line in an EventualIndex.
+// Becomes invalid if the EventualIndex changes, but since we use this as a hint only, it's not fatal.
+#[derive(Debug, Copy, Clone)]
+struct IndexRef(usize, usize);
+
 #[derive(Debug, Copy, Clone)]
 enum FindIndex {
     // Unknown
@@ -74,10 +83,10 @@ enum FindIndex {
     StartOfFile,
 
     // Line is in this index at this offset
-    IndexOffset(usize, usize),
+    IndexOffset(IndexRef),
 
     // Position is not indexed; need to index region from given `start` to `end`
-    Missing(usize, usize),
+    Missing(OffsetRange),
 
     // Position is not indexed; unknown gap size at end of index needs to be loaded; arg is first unindexed byte
     MissingUnbounded(usize),
@@ -108,21 +117,9 @@ mod tests {
     use crate::line_indexer::LineCursor;
 
     use super::FindIndex;
-    static STRIDE: usize = 2;
+    use super::IndexRef;
+    use super::OffsetRange;
     static DATA: &str = "a\na\na\na\na\n";
-    static END: usize = DATA.len();
-    static OFFSETS:[usize; 5] = [2,4,6,8,10];
-
-    // // Verify index.line_offsets match expected set only in the range [start, end]
-    // fn check_partial(index: &Index, start:usize, end: usize) {
-    //     let offsets: Vec<usize> =
-    //         OFFSETS
-    //             .iter()
-    //             .filter(|x| **x >= start && **x <= end)
-    //             .cloned()
-    //             .collect();
-    //     assert_eq!(index.iter().cloned().collect::<Vec<usize>>(), offsets);
-    // }
 
     fn get_index(offset: usize) -> Index {
         let mut index = Index::new();
@@ -179,12 +176,12 @@ mod tests {
         let index = get_partial_eventual_index(50, 100);
         let cursor = index.find_index(50);
         match cursor {
-            FindIndex::IndexOffset(0, 0) => {},
+            FindIndex::IndexOffset(IndexRef(0, 0)) => {},
             _ => panic!("Expected Index(0,0); got something else: {:?}", cursor),
         }
         let fault = index.find_index(10);
         match fault {
-            FindIndex::Missing(0, 50) => {},
+            FindIndex::Missing(OffsetRange(0, 50)) => {},
             _ => panic!("Expected Missing(0,50); got something else: {:?}", fault),
         }
     }
@@ -194,7 +191,7 @@ mod tests {
         let index = get_eventual_index(100);
         let cursor = index.find_index(index.bytes()-1);
         match cursor {
-            FindIndex::IndexOffset(_,_) => {},
+            FindIndex::IndexOffset(_) => {},
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
         let fault = index.find_index(index.bytes());
@@ -212,7 +209,7 @@ mod tests {
         loop {
             // dbg!(&cursor);
             match cursor {
-                FindIndex::IndexOffset(_,_) => {},
+                FindIndex::IndexOffset(_) => {},
                 FindIndex::StartOfFile => {},
                 FindIndex::MissingUnbounded(_) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
@@ -234,7 +231,7 @@ mod tests {
             count += 1;
             println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
             match cursor {
-                FindIndex::IndexOffset(_,_) => {},
+                FindIndex::IndexOffset(_) => {},
                 FindIndex::StartOfFile => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
@@ -251,8 +248,8 @@ mod tests {
         loop {
             dbg!(&cursor);
             match cursor {
-                FindIndex::IndexOffset(_,_) => {},
-                FindIndex::Missing(0,50) => break,
+                FindIndex::IndexOffset(_) => {},
+                FindIndex::Missing(OffsetRange(0,50)) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -271,7 +268,7 @@ impl EventualIndex {
         if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
-            FindIndex::Missing(0, next)
+            FindIndex::Missing(OffsetRange(0, next))
         } else {
             let prev = self.indexes[pos-1].end;
             if pos == self.indexes.len() {
@@ -280,7 +277,7 @@ impl EventualIndex {
             } else {
                 // There's a gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
-                FindIndex::Missing(prev, next)
+                FindIndex::Missing(OffsetRange(prev, next))
             }
         }
     }
@@ -294,9 +291,9 @@ impl EventualIndex {
                 if line == 0 && i.start == 0 {
                     FindIndex::StartOfFile
                 } else if line < i.len() {
-                    FindIndex::IndexOffset(found, line)
+                    FindIndex::IndexOffset(IndexRef(found, line))
                 } else {
-                    self.next_line_index(FindIndex::IndexOffset(found, line-1))
+                    self.next_line_index(FindIndex::IndexOffset(IndexRef(found, line-1)))
                 }
             },
             Err(after) => {
@@ -325,17 +322,17 @@ impl EventualIndex {
                     if self.indexes.is_empty() {
                         self.gap_at(0)
                     } else {
-                        FindIndex::IndexOffset(0, 1)
+                        FindIndex::IndexOffset(IndexRef(0, 1))
                     }
                 },
-            FindIndex::IndexOffset(found, line) => {
+            FindIndex::IndexOffset(IndexRef(found, line)) => {
                     // next line is in in the same index
                     assert!(found < self.indexes.len());
                     let i = &self.indexes[found];
                     if line + 1 < i.len() {
-                        FindIndex::IndexOffset(found, line + 1)
+                        FindIndex::IndexOffset(IndexRef(found, line + 1))
                     } else if self.next_is_contiguous(found) {
-                        FindIndex::IndexOffset(found+1, 0)
+                        FindIndex::IndexOffset(IndexRef(found+1, 0))
                     } else {
                         self.gap_at(found + 1)
                     }
@@ -346,17 +343,17 @@ impl EventualIndex {
 
     // Find index to prev EOL before given index
     fn prev_line_index(&self, find: FindIndex) -> FindIndex {
-        if let FindIndex::IndexOffset(found, line) = find {
+        if let FindIndex::IndexOffset(IndexRef(found, line)) = find {
             // next line is in the same index
             assert!(found < self.indexes.len());
             let i = &self.indexes[found];
             if i.start == 0 && line == 1 {
                 FindIndex::StartOfFile   // TODO: Weird special case for first line in file.
             } else if line > 0 {
-                FindIndex::IndexOffset(found, line - 1)
+                FindIndex::IndexOffset(IndexRef(found, line - 1))
             } else if found > 0 && self.next_is_contiguous(found - 1) {
                 let j = &self.indexes[found - 1];
-                FindIndex::IndexOffset(found - 1, j.len() - 1)
+                FindIndex::IndexOffset(IndexRef(found - 1, j.len() - 1))
             } else {
                 self.gap_at(found)
             }
@@ -370,7 +367,7 @@ impl EventualIndex {
         match find {
             FindIndex::StartOfFile => Some(0),
 
-            FindIndex::IndexOffset(found, line) => {
+            FindIndex::IndexOffset(IndexRef(found, line)) => {
                     // This line starts one byte after the previous one ends
                     let find = self.prev_line_index(find);
                     let prev_eol = self.end_of_line(find);
@@ -396,7 +393,7 @@ impl EventualIndex {
                 }
             },
 
-            FindIndex::IndexOffset(found, line) => {
+            FindIndex::IndexOffset(IndexRef(found, line)) => {
                     assert!(found < self.indexes.len());
                     let i = &self.indexes[found];
                     Some(i.get(line))
