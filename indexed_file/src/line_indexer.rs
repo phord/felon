@@ -388,6 +388,7 @@ pub struct LogFileLines {
     // pub file_path: PathBuf,
     file: LogFile,
     index: EventualIndex,
+    chunk_size: usize,
 }
 
 impl fmt::Debug for LogFileLines {
@@ -395,99 +396,89 @@ impl fmt::Debug for LogFileLines {
         f.debug_struct("LogFileLines")
          .field("bytes", &self.count_bytes())
          .field("lines", &self.count_lines())
+         .field("chunk_size", &self.chunk_size)
          .finish()
+    }
+}
+
+struct LogFileLinesIterator<'a> {
+    file: &'a LogFileLines,
+    pos: FindIndex,
+}
+
+impl<'a> LogFileLinesIterator<'a> {
+    fn new(file: &'a LogFileLines) -> Self {
+        Self {
+            file,
+            pos: FindIndex::StartOfFile,
+        }
+    }
+}
+
+impl<'a> Iterator for LogFileLinesIterator<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // FIXME: Let StartOfFile be a hole that leads to IndexOffset(0,0)?
+        self.pos = self.file.index.next_line_index(self.pos);
+
+        loop {
+            match self.pos {
+                FindIndex::Missing(OffsetRange(start, end)) => todo!(),
+                FindIndex::MissingUnbounded(start) => todo!(),
+                FindIndex::IndexOffset(_) => break,
+                FindIndex::StartOfFile => panic!("Still?"),
+                FindIndex::None => panic!("None?"),
+            };
+        }
+        self.file.index.start_of_line(self.pos)
+    }
+}
+
+#[test]
+fn test_iterator() {
+    let file = LogFile::new_mock_file("filler\n", 10000);
+    let mut file = LogFileLines::new(file);
+    for i in file.iter().take(5) {
+        println!("{}", i);
     }
 }
 
 impl LogFileLines {
 
     pub fn new(file: LogFile) -> LogFileLines {
-        let chunk_size = 1024 * 1024 * 1;
-
-        let mut index = Self {
+        Self {
             file,
             index: EventualIndex::new(),
-        };
-        index.index_file(chunk_size);
-        index
+            chunk_size: 1024 * 1024 * 1,
+        }
     }
 
-    fn index_file(&mut self, chunk_size: usize) {
+    fn index_chunk(&mut self, gap: FindIndex, near_offset: usize) {
+        // TODO: find chunk near `near_offset`
+        let (start, end) = match gap {
+            FindIndex::Missing(OffsetRange(start, end)) => (start, end),
+            FindIndex::MissingUnbounded(start) => (start, start + self.chunk_size),
+            _ => (0, 0),
+        };
 
-        let bytes = self.file.len();
-        let mut pos = 0;
+        if start < end {
+            // Send the buffer to the parsers
+            let buffer = self.file.read(start, end-start).unwrap();
+            let mut index = Index::new();
+            index.parse(buffer, start);
+            self.index.merge(index);
+        }
 
-        // TODO: Since lazy merge is free, kick off the threads here and keep them running. Then any readers
-        // can collect results and merge them to get completed progress in real-time. This also give us a
-        // chance to add a stop-signal so we can exit early.
-
-        // Finalize needs to adapt, and this loop needs to run in its own thread.
-        // In the future this mechanism can serve to read like tail -f or to read from stdin.
-
-        let (tx, rx):(crossbeam_channel::Sender<Index>, crossbeam_channel::Receiver<_>) = unbounded();
-        // Limit threadpool of parsers by relying on sender queue length
-        let (sender, receiver) = bounded(6); // inexplicably, 6 threads is ideal according to empirical evidence on my 8-core machine
-
-        scope(|scope| {
-            // get indexes in chunks in threads
-            while pos < bytes {
-                let end = std::cmp::min(pos + chunk_size, bytes);
-
-                // Count parser threads
-                sender.send(true).unwrap();
-
-                // Send the buffer to the parsers
-                let buffer = self.file.read(pos, end-pos).unwrap();
-
-                let tx = tx.clone();
-                let receiver = receiver.clone();
-                let start = pos;
-                scope.spawn(move |_| {
-                    let mut index = Index::new();
-                    index.parse(buffer, start);
-                    tx.send(index).unwrap();
-                    receiver.recv().unwrap();
-                });
-                pos = end;
-            }
-
-            // We don't need our own handle for this channel
-            drop(tx);
-
-            // Wait for results and merge them in
-            while let Ok(index) = rx.recv() {
-                self.index.merge(index);
-            }
-        }).unwrap();
-
-        // Partially coalesce merged info
         self.index.finalize();
     }
 
     fn count_bytes(&self) -> usize {
-        self.index.bytes()
+        self.file.len()
     }
 
     pub fn count_lines(&self) -> usize {
         self.index.lines()
-    }
-
-    fn line_offset(&self, line_number: usize) -> Option<usize> {
-        if line_number == 0 {
-            Some(0)
-        } else {
-            self.index.line_offset(line_number - 1)
-        }
-    }
-
-    pub fn readline(&self, line_number: usize) -> Option<&str> {
-        let start = self.line_offset(line_number);
-        let end = self.line_offset(line_number + 1);
-        if let (Some(start), Some(end)) = (start, end) {
-            self.readline_fixed(start, end)
-        } else {
-            None
-        }
     }
 
     pub fn readline_fixed(&self, start: usize, end: usize) -> Option<&str> {
@@ -501,6 +492,10 @@ impl LogFileLines {
         }
     }
 
+    pub fn iter(&mut self) -> impl Iterator<Item = usize> + '_ {
+        LogFileLinesIterator::new(self)
+    }
+
     pub fn iter_offsets(&self) -> impl Iterator<Item = (&usize, &usize)> + '_ {
         let starts = std::iter::once(&0usize).chain(self.index.iter());
         let ends = self.index.iter();
@@ -508,7 +503,7 @@ impl LogFileLines {
         line_range
     }
 
-    pub fn iter_lines(&self) -> impl Iterator<Item = (&str, usize, usize)> + '_ {
+    pub fn iter_lines(&mut self) -> impl Iterator<Item = (&str, usize, usize)> + '_ {
         self.iter_offsets().map(|(&start, &end)| -> (&str, usize, usize) {(self.readline_fixed(start, end).unwrap_or(""), start, end)})
     }
 
