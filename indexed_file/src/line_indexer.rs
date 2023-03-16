@@ -147,7 +147,7 @@ mod tests {
         let cursor = index.locate(0);
         dbg!(cursor);
         match cursor {
-            Location::Virtual(VirtualLocation::Start) => {},
+            Location::Indexed(IndexRef(0, 0)) => {},
             _ => {
                 dbg!(cursor);
                 panic!("Expected StartOfFile; got something else");
@@ -162,7 +162,7 @@ mod tests {
         let cursor = index.locate(50);
         match cursor {
             Location::Indexed(IndexRef(0, 0)) => {},
-            _ => panic!("Expected Index(0,0); got something else: {:?}", cursor),
+            _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
         }
         let fault = index.locate(10);
         match fault {
@@ -195,7 +195,6 @@ mod tests {
             // dbg!(&cursor);
             match cursor {
                 Location::Indexed(_) => {},
-                Location::Virtual(VirtualLocation::Start) => {},
                 Location::Gap(GapRange::MissingUnbounded(_)) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
@@ -212,14 +211,16 @@ mod tests {
         let mut cursor = index.locate(99);
         let mut count = 0;
         loop {
-            // dbg!(&cursor);
-            count += 1;
-            println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
             match cursor {
-                Location::Indexed(_) => {},
                 Location::Virtual(VirtualLocation::Start) => break,
+                Location::Indexed(_) => {},
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
+            // dbg!(&cursor);
+            count += 1;
+            let (start, end)  = (index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
+            println!("Line {}  Cursor: {} {}", count, start, end);
+            assert!(start <= end);
             cursor = index.prev_line_index(cursor);
         }
         assert_eq!(count, index.lines());
@@ -250,29 +251,34 @@ impl EventualIndex {
     // Identify the gap before a given index position and return a Missing() hint to include it.
     // panics if there is no gap
     fn gap_at(&self, pos: usize) -> Location {
+        self.try_gap_at(pos).unwrap()
+    }
+
+    // Returns None if there is no gap
+    fn try_gap_at(&self, pos: usize) -> Option<Location> {
         assert!(pos <= self.indexes.len());
         if self.indexes.is_empty() {
-            Location::Gap(GapRange::MissingUnbounded(0))
+            Some(Location::Gap(GapRange::MissingUnbounded(0)))
         } else if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
             if next > 0 {
-                Location::Gap(GapRange::Missing(OffsetRange(0, next)))
+                Some(Location::Gap(GapRange::Missing(OffsetRange(0, next))))
             } else {
-                unreachable!()
+                None
             }
         } else {
             let prev = self.indexes[pos-1].end;
             if pos == self.indexes.len() {
                 // gap is at end of file; return unbounded range
-                Location::Gap(GapRange::MissingUnbounded(prev))
+                Some(Location::Gap(GapRange::MissingUnbounded(prev)))
             } else {
                 // There's a gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
                 if next > prev {
-                    Location::Gap(GapRange::Missing(OffsetRange(prev, next)))
+                    Some(Location::Gap(GapRange::Missing(OffsetRange(prev, next))))
                 } else {
-                    unreachable!()
+                    None
                 }
             }
         }
@@ -284,9 +290,7 @@ impl EventualIndex {
             Ok(found) => {
                 let i = &self.indexes[found];
                 let line = i.find(offset).unwrap();
-                if line == 0 && i.start == 0 {
-                    Location::Virtual(VirtualLocation::Start)
-                } else if line < i.len() {
+                if line < i.len() {
                     Location::Indexed(IndexRef(found, line))
                 } else {
                     self.next_line_index(Location::Indexed(IndexRef(found, line-1)))
@@ -299,38 +303,39 @@ impl EventualIndex {
         }
     }
 
-    // True if there is no gap between given index and the next one
-    fn next_is_contiguous(&self, pos: usize) -> bool {
-        assert!(pos < self.indexes.len());
-        pos + 1 < self.indexes.len() && {
-            let i = &self.indexes[pos];
-            let j = &self.indexes[pos + 1];
-            assert!(j.start >= i.end);
-            j.start == i.end
+    // Resolve virtual locations to real indexed or gap locations
+    fn resolve(&self, find: Location) -> Location {
+        match find {
+            Location::Virtual(loc) => match loc {
+                VirtualLocation::Start => {
+                    if let Some(gap) = self.try_gap_at(0) {
+                        gap
+                    } else {
+                        Location::Indexed(IndexRef(0, 1))
+                    }
+                },
+                VirtualLocation::End => {
+                    unimplemented!("Don't know the end byte!");
+                },
+            },
+            _ => find,
         }
     }
 
     // Find index to next EOL after given index
     fn next_line_index(&self, find: Location) -> Location {
+        let find = self.resolve(find);
         match find {
-            Location::Virtual(VirtualLocation::Start) => {
-                    // TODO: Get rid of this weirdo
-                    if self.indexes.is_empty() {
-                        self.gap_at(0)
-                    } else {
-                        Location::Indexed(IndexRef(0, 1))
-                    }
-                },
             Location::Indexed(IndexRef(found, line)) => {
                     // next line is in in the same index
                     assert!(found < self.indexes.len());
                     let i = &self.indexes[found];
                     if line + 1 < i.len() {
                         Location::Indexed(IndexRef(found, line + 1))
-                    } else if self.next_is_contiguous(found) {
-                        Location::Indexed(IndexRef(found+1, 0))
+                    } else if let Some(gap) = self.try_gap_at(found + 1) {
+                        gap
                     } else {
-                        self.gap_at(found + 1)
+                        Location::Indexed(IndexRef(found+1, 0))
                     }
                 },
             _ => find,
@@ -342,16 +347,16 @@ impl EventualIndex {
         if let Location::Indexed(IndexRef(found, line)) = find {
             // next line is in the same index
             assert!(found < self.indexes.len());
-            let i = &self.indexes[found];
-            if i.start == 0 && line == 1 {
-                Location::Virtual(VirtualLocation::Start)   // TODO: Weird special case for first line in file.
-            } else if line > 0 {
+            if line > 0 {
                 Location::Indexed(IndexRef(found, line - 1))
-            } else if found > 0 && self.next_is_contiguous(found - 1) {
+            } else if let Some(gap) = self.try_gap_at(found) {
+                gap
+            } else if found > 0 {
                 let j = &self.indexes[found - 1];
                 Location::Indexed(IndexRef(found - 1, j.len() - 1))
             } else {
-                self.gap_at(found)
+                // There's no gap before this index, and no lines before it either.  We must be at StartOfFile.
+                Location::Virtual(VirtualLocation::Start)
             }
         } else {
             find
@@ -360,18 +365,22 @@ impl EventualIndex {
 
     // Return offset of start of indexed line, if known
     fn start_of_line(&self, find: Location) -> Option<usize> {
+        let find = self.resolve(find);
         match find {
-            Location::Virtual(VirtualLocation::Start) => Some(0),
-
-            Location::Indexed(_) => {
+                Location::Indexed(_) => {
                     // This line starts one byte after the previous one ends
-                    let find = self.prev_line_index(find);
-                    let prev_eol = self.end_of_line(find);
-                    if let Some(eol) = prev_eol {
-                        Some(eol + 1)
-                    } else {
-                        None
-                    }
+                    match self.prev_line_index(find) {
+                        // FIXME: Store BOL in indexes so we don't have to special case the edges?
+                        Location::Virtual(VirtualLocation::Start) => Some(0),  // virtual line before line 1
+                        prev => {
+                                let prev_eol = self.end_of_line(prev);
+                                if let Some(eol) = prev_eol {
+                                    Some(eol + 1)
+                                } else {
+                                    None
+                                }
+                            },
+                        }
                 },
             _ => None,
         }
@@ -379,16 +388,8 @@ impl EventualIndex {
 
     // Return offset of end of indexed line, if known
     fn end_of_line(&self, find: Location) -> Option<usize> {
+        let find = self.resolve(find);
         match find {
-            Location::Virtual(VirtualLocation::Start) => {
-                if self.indexes.is_empty() {
-                    None
-                } else {
-                    let i = &self.indexes[0];
-                    Some(i.get(0))
-                }
-            },
-
             Location::Indexed(IndexRef(found, line)) => {
                     assert!(found < self.indexes.len());
                     let i = &self.indexes[found];
@@ -434,7 +435,6 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // FIXME: Let StartOfFile be a hole that leads to IndexOffset(0,0)?
         self.pos = self.file.index.next_line_index(self.pos);
 
         loop {
