@@ -400,6 +400,15 @@ impl EventualIndex {
     }
 }
 
+
+// NEXT: Replace LogFileLines with something that (generically) loads the EventualIndex on-demand by parsing
+// sections as-needed.  If we're smart we can predefine chunks to be demand-loaded that we can later replace
+// with zstdlib::frame offsets in some other implementation.
+// Our caller can decide when he needs to demand-load everything for searching, counting lines, etc.
+// fn load_chunk(offset:usize) -> OffsetRange
+//
+// Some outer wrapper can hold a cache of recently loaded chunks.
+
 pub struct LogFileLines {
     // pub file_path: PathBuf,
     file: LogFile,
@@ -418,12 +427,12 @@ impl fmt::Debug for LogFileLines {
 }
 
 struct LogFileLinesIterator<'a> {
-    file: &'a LogFileLines,
+    file: &'a mut LogFileLines,
     pos: Location,
 }
 
 impl<'a> LogFileLinesIterator<'a> {
-    fn new(file: &'a LogFileLines) -> Self {
+    fn new(file: &'a mut LogFileLines) -> Self {
         Self {
             file,
             pos: Location::Virtual(VirtualLocation::Start),
@@ -437,9 +446,12 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.pos = self.file.index.next_line_index(self.pos);
 
+        // FIXME: Get this from self.file; don't even pass it to index_chunk
+        let chunk_size = 1024;
+
         loop {
             match self.pos {
-                Location::Gap(_) => todo!(),
+                Location::Gap(gap) => self.pos = self.file.index_chunk(gap, chunk_size),
                 Location::Indexed(_) => break,
                 Location::Virtual(_) => panic!("Still?"),
             };
@@ -450,10 +462,17 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
 
 #[test]
 fn test_iterator() {
-    let file = LogFile::new_mock_file("filler\n", 10000);
+    let patt = "filler\n";
+    let patt_len = patt.len();
+    let lines = 6000;
+    let file = LogFile::new_mock_file(patt, patt_len * lines);
     let mut file = LogFileLines::new(file);
-    for i in file.iter().take(5) {
-        println!("{}", i);
+    let mut it = file.iter();
+    let mut prev = it.next().unwrap();
+    assert_eq!(prev, 0);
+    for i in it.take(lines - 1) {
+        assert_eq!(i - prev, patt_len);
+        prev = i;
     }
 }
 
