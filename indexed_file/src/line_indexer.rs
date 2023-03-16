@@ -244,7 +244,9 @@ impl EventualIndex {
     // Identify the gap before a given index position and return a Missing() hint to include it.
     fn gap_at(&self, pos: usize) -> FindIndex {
         assert!(pos <= self.indexes.len());
-        if pos == 0 {
+        if self.indexes.is_empty() {
+            FindIndex::MissingUnbounded(0)
+        } else if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
             FindIndex::Missing(OffsetRange(0, next))
