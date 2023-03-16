@@ -1,4 +1,5 @@
 pub mod log_file;
+pub mod mock_log_file;
 pub mod index;
 pub mod line_indexer;
 pub mod filters;

@@ -7,10 +7,12 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::fmt;
 use mapr::{MmapOptions, Mmap};
+use crate::mock_log_file::MockLogFile;
 
 enum DataSource {
     NullFile,
     TextFile(TextLogFile),
+    MockFile(MockLogFile),
 }
 
 pub struct LogFile {
@@ -24,12 +26,20 @@ impl LogFile {
             file: DataSource::TextFile(file),
         })
     }
+
+    pub fn new_mock_file(fill: &str, size: usize) -> LogFile {
+        let file = MockLogFile::new(fill.to_string(), size);
+        LogFile {
+            file: DataSource::MockFile(file),
+        }
+    }
 }
 
 impl LogFileTrait for LogFile {
     fn len(&self) -> usize {
         match &self.file {
             DataSource::TextFile(file) => file.len(),
+            DataSource::MockFile(file) => file.len(),
             _ => unimplemented!(),
         }
     }
@@ -37,6 +47,7 @@ impl LogFileTrait for LogFile {
     fn read(&self, offset: usize, len: usize) -> Option<&[u8]> {
         match &self.file {
             DataSource::TextFile(file) => file.read(offset, len),
+            DataSource::MockFile(file) => file.read(offset, len),
             _ => unimplemented!(),
         }
     }
