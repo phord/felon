@@ -72,16 +72,13 @@ struct OffsetRange(usize, usize);
 struct IndexRef(usize, usize);
 
 #[derive(Debug, Copy, Clone)]
-enum FindIndex {
-    // Unknown
-    None,
+enum VirtualLocation {
+    Start,
+    End
+}
 
-    // Line is index to start of file
-    StartOfFile,
-
-    // Line is in this index at this offset
-    IndexOffset(IndexRef),
-
+#[derive(Debug, Copy, Clone)]
+enum GapRange {
     // Position is not indexed; need to index region from given `start` to `end`
     Missing(OffsetRange),
 
@@ -89,13 +86,22 @@ enum FindIndex {
     MissingUnbounded(usize),
 }
 
+#[derive(Debug, Copy, Clone)]
+enum Location {
+    Virtual(VirtualLocation),
+    Indexed(IndexRef),
+    Gap(GapRange)
+}
+
 // Tests for EventualIndex
 #[cfg(test)]
 mod tests {
     use crate::index::Index;
-    use crate::line_indexer::EventualIndex;
+    use super::EventualIndex;
 
-    use super::FindIndex;
+    use super::Location;
+    use super::GapRange;
+    use super::VirtualLocation;
     use super::IndexRef;
     use super::OffsetRange;
     static DATA: &str = "a\na\na\na\na\n";
@@ -138,10 +144,10 @@ mod tests {
     #[test]
     fn test_cursor_start() {
         let index = get_eventual_index(100);
-        let cursor = index.find_index(0);
+        let cursor = index.locate(0);
         dbg!(cursor);
         match cursor {
-            FindIndex::StartOfFile => {},
+            Location::Virtual(VirtualLocation::Start) => {},
             _ => {
                 dbg!(cursor);
                 panic!("Expected StartOfFile; got something else");
@@ -153,14 +159,14 @@ mod tests {
     #[test]
     fn test_cursor_mid_start() {
         let index = get_partial_eventual_index(50, 100);
-        let cursor = index.find_index(50);
+        let cursor = index.locate(50);
         match cursor {
-            FindIndex::IndexOffset(IndexRef(0, 0)) => {},
+            Location::Indexed(IndexRef(0, 0)) => {},
             _ => panic!("Expected Index(0,0); got something else: {:?}", cursor),
         }
-        let fault = index.find_index(10);
+        let fault = index.locate(10);
         match fault {
-            FindIndex::Missing(OffsetRange(0, 50)) => {},
+            Location::Gap(GapRange::Missing(OffsetRange(0, 50))) => {},
             _ => panic!("Expected Missing(0,50); got something else: {:?}", fault),
         }
     }
@@ -168,14 +174,14 @@ mod tests {
     #[test]
     fn test_cursor_last() {
         let index = get_eventual_index(100);
-        let cursor = index.find_index(index.bytes()-1);
+        let cursor = index.locate(index.bytes()-1);
         match cursor {
-            FindIndex::IndexOffset(_) => {},
+            Location::Indexed(_) => {},
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
-        let fault = index.find_index(index.bytes());
+        let fault = index.locate(index.bytes());
         match fault {
-            FindIndex::MissingUnbounded(_) => {},
+            Location::Gap(GapRange::MissingUnbounded(_)) => {},
             _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
         }
     }
@@ -183,14 +189,14 @@ mod tests {
     #[test]
     fn test_cursor_forward() {
         let index = get_eventual_index(100);
-        let mut cursor = index.find_index(0);
+        let mut cursor = index.locate(0);
         let mut count = 0;
         loop {
             // dbg!(&cursor);
             match cursor {
-                FindIndex::IndexOffset(_) => {},
-                FindIndex::StartOfFile => {},
-                FindIndex::MissingUnbounded(_) => break,
+                Location::Indexed(_) => {},
+                Location::Virtual(VirtualLocation::Start) => {},
+                Location::Gap(GapRange::MissingUnbounded(_)) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -203,15 +209,15 @@ mod tests {
     #[test]
     fn test_cursor_reverse() {
         let index = get_eventual_index(100);
-        let mut cursor = index.find_index(99);
+        let mut cursor = index.locate(99);
         let mut count = 0;
         loop {
             // dbg!(&cursor);
             count += 1;
             println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
             match cursor {
-                FindIndex::IndexOffset(_) => {},
-                FindIndex::StartOfFile => break,
+                Location::Indexed(_) => {},
+                Location::Virtual(VirtualLocation::Start) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             cursor = index.prev_line_index(cursor);
@@ -222,13 +228,13 @@ mod tests {
     #[test]
     fn test_cursor_reverse_gap() {
         let index = get_partial_eventual_index(50, 100);
-        let mut cursor = index.find_index(149);
+        let mut cursor = index.locate(149);
         let mut count = 0;
         loop {
             dbg!(&cursor);
             match cursor {
-                FindIndex::IndexOffset(_) => {},
-                FindIndex::Missing(OffsetRange(0,50)) => break,
+                Location::Indexed(_) => {},
+                Location::Gap(GapRange::Missing(OffsetRange(0,50))) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -242,39 +248,48 @@ mod tests {
 impl EventualIndex {
 
     // Identify the gap before a given index position and return a Missing() hint to include it.
-    fn gap_at(&self, pos: usize) -> FindIndex {
+    // panics if there is no gap
+    fn gap_at(&self, pos: usize) -> Location {
         assert!(pos <= self.indexes.len());
         if self.indexes.is_empty() {
-            FindIndex::MissingUnbounded(0)
+            Location::Gap(GapRange::MissingUnbounded(0))
         } else if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
-            FindIndex::Missing(OffsetRange(0, next))
+            if next > 0 {
+                Location::Gap(GapRange::Missing(OffsetRange(0, next)))
+            } else {
+                unreachable!()
+            }
         } else {
             let prev = self.indexes[pos-1].end;
             if pos == self.indexes.len() {
                 // gap is at end of file; return unbounded range
-                FindIndex::MissingUnbounded(prev)
+                Location::Gap(GapRange::MissingUnbounded(prev))
             } else {
                 // There's a gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
-                FindIndex::Missing(OffsetRange(prev, next))
+                if next > prev {
+                    Location::Gap(GapRange::Missing(OffsetRange(prev, next)))
+                } else {
+                    unreachable!()
+                }
             }
         }
     }
 
     // Find index to EOL that contains a given offset or the gap that needs to be loaded to have it
-    fn find_index(&self, offset: usize) -> FindIndex {
+    fn locate(&self, offset: usize) -> Location {
         match self.indexes.binary_search_by(|i| i.contains_offset(&offset)) {
             Ok(found) => {
                 let i = &self.indexes[found];
                 let line = i.find(offset).unwrap();
                 if line == 0 && i.start == 0 {
-                    FindIndex::StartOfFile
+                    Location::Virtual(VirtualLocation::Start)
                 } else if line < i.len() {
-                    FindIndex::IndexOffset(IndexRef(found, line))
+                    Location::Indexed(IndexRef(found, line))
                 } else {
-                    self.next_line_index(FindIndex::IndexOffset(IndexRef(found, line-1)))
+                    self.next_line_index(Location::Indexed(IndexRef(found, line-1)))
                 }
             },
             Err(after) => {
@@ -296,24 +311,24 @@ impl EventualIndex {
     }
 
     // Find index to next EOL after given index
-    fn next_line_index(&self, find: FindIndex) -> FindIndex {
+    fn next_line_index(&self, find: Location) -> Location {
         match find {
-            FindIndex::StartOfFile => {
+            Location::Virtual(VirtualLocation::Start) => {
                     // TODO: Get rid of this weirdo
                     if self.indexes.is_empty() {
                         self.gap_at(0)
                     } else {
-                        FindIndex::IndexOffset(IndexRef(0, 1))
+                        Location::Indexed(IndexRef(0, 1))
                     }
                 },
-            FindIndex::IndexOffset(IndexRef(found, line)) => {
+            Location::Indexed(IndexRef(found, line)) => {
                     // next line is in in the same index
                     assert!(found < self.indexes.len());
                     let i = &self.indexes[found];
                     if line + 1 < i.len() {
-                        FindIndex::IndexOffset(IndexRef(found, line + 1))
+                        Location::Indexed(IndexRef(found, line + 1))
                     } else if self.next_is_contiguous(found) {
-                        FindIndex::IndexOffset(IndexRef(found+1, 0))
+                        Location::Indexed(IndexRef(found+1, 0))
                     } else {
                         self.gap_at(found + 1)
                     }
@@ -323,18 +338,18 @@ impl EventualIndex {
     }
 
     // Find index to prev EOL before given index
-    fn prev_line_index(&self, find: FindIndex) -> FindIndex {
-        if let FindIndex::IndexOffset(IndexRef(found, line)) = find {
+    fn prev_line_index(&self, find: Location) -> Location {
+        if let Location::Indexed(IndexRef(found, line)) = find {
             // next line is in the same index
             assert!(found < self.indexes.len());
             let i = &self.indexes[found];
             if i.start == 0 && line == 1 {
-                FindIndex::StartOfFile   // TODO: Weird special case for first line in file.
+                Location::Virtual(VirtualLocation::Start)   // TODO: Weird special case for first line in file.
             } else if line > 0 {
-                FindIndex::IndexOffset(IndexRef(found, line - 1))
+                Location::Indexed(IndexRef(found, line - 1))
             } else if found > 0 && self.next_is_contiguous(found - 1) {
                 let j = &self.indexes[found - 1];
-                FindIndex::IndexOffset(IndexRef(found - 1, j.len() - 1))
+                Location::Indexed(IndexRef(found - 1, j.len() - 1))
             } else {
                 self.gap_at(found)
             }
@@ -344,11 +359,11 @@ impl EventualIndex {
     }
 
     // Return offset of start of indexed line, if known
-    fn start_of_line(&self, find: FindIndex) -> Option<usize> {
+    fn start_of_line(&self, find: Location) -> Option<usize> {
         match find {
-            FindIndex::StartOfFile => Some(0),
+            Location::Virtual(VirtualLocation::Start) => Some(0),
 
-            FindIndex::IndexOffset(IndexRef(found, line)) => {
+            Location::Indexed(_) => {
                     // This line starts one byte after the previous one ends
                     let find = self.prev_line_index(find);
                     let prev_eol = self.end_of_line(find);
@@ -363,9 +378,9 @@ impl EventualIndex {
     }
 
     // Return offset of end of indexed line, if known
-    fn end_of_line(&self, find: FindIndex) -> Option<usize> {
+    fn end_of_line(&self, find: Location) -> Option<usize> {
         match find {
-            FindIndex::StartOfFile => {
+            Location::Virtual(VirtualLocation::Start) => {
                 if self.indexes.is_empty() {
                     None
                 } else {
@@ -374,7 +389,7 @@ impl EventualIndex {
                 }
             },
 
-            FindIndex::IndexOffset(IndexRef(found, line)) => {
+            Location::Indexed(IndexRef(found, line)) => {
                     assert!(found < self.indexes.len());
                     let i = &self.indexes[found];
                     Some(i.get(line))
@@ -403,14 +418,14 @@ impl fmt::Debug for LogFileLines {
 
 struct LogFileLinesIterator<'a> {
     file: &'a LogFileLines,
-    pos: FindIndex,
+    pos: Location,
 }
 
 impl<'a> LogFileLinesIterator<'a> {
     fn new(file: &'a LogFileLines) -> Self {
         Self {
             file,
-            pos: FindIndex::StartOfFile,
+            pos: Location::Virtual(VirtualLocation::Start),
         }
     }
 }
@@ -424,11 +439,9 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
 
         loop {
             match self.pos {
-                FindIndex::Missing(OffsetRange(start, end)) => todo!(),
-                FindIndex::MissingUnbounded(start) => todo!(),
-                FindIndex::IndexOffset(_) => break,
-                FindIndex::StartOfFile => panic!("Still?"),
-                FindIndex::None => panic!("None?"),
+                Location::Gap(_) => todo!(),
+                Location::Indexed(_) => break,
+                Location::Virtual(_) => panic!("Still?"),
             };
         }
         self.file.index.start_of_line(self.pos)
@@ -454,11 +467,11 @@ impl LogFileLines {
         }
     }
 
-    fn index_chunk(&mut self, gap: FindIndex, near_offset: usize) {
+    fn index_chunk(&mut self, gap: GapRange, near_offset: usize) {
         // TODO: find chunk near `near_offset`
         let (start, end) = match gap {
-            FindIndex::Missing(OffsetRange(start, end)) => (start, end),
-            FindIndex::MissingUnbounded(start) => (start, start + self.chunk_size),
+            GapRange::Missing(OffsetRange(start, end)) => (start, end),
+            GapRange::MissingUnbounded(start) => (start, start + self.chunk_size),
             _ => (0, 0),
         };
 
