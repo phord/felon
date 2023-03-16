@@ -46,7 +46,7 @@ impl DocFilter {
     }
 
     // Resolve a filter against a LogFileLines and store the matches
-    fn bind(&mut self, log: &LogFileLines) {
+    fn bind(&mut self, log: &mut LogFileLines) {
         let matches =
             match self.search_type {
                 SearchType::SearchRegex(ref regex) => {
@@ -120,7 +120,7 @@ impl Filters {
     fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
         println!("Adding filter {:?} {:?}", filter_type, search_type);
         let mut f = DocFilter::new(search_type);
-        f.bind(&self.file);
+        f.bind(&mut self.file);
         println!("Done");
         match filter_type {
             FilterType::FilterIn =>   self.filter_in.push(f),
