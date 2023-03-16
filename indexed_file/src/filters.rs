@@ -27,9 +27,6 @@
 //
 
 use regex::Regex;
-// use line_indexer::LogFileLines;
-// use log_file::LogFile;
-// use itertools::Itertools;
 
 #[derive(Debug, Clone)]
 pub enum SearchType {
