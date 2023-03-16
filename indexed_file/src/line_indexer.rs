@@ -3,8 +3,6 @@
 //       Needs to be allowed to run in the background better, in a way that Rust can accept.
 
 use std::fmt;
-use crossbeam::scope;
-use crossbeam_channel::{bounded, unbounded};
 use crate::log_file::{LogFile, LogFileTrait};
 use crate::index::Index;
 
@@ -77,13 +75,15 @@ enum VirtualLocation {
     End
 }
 
+type TargetOffset = usize;
+
 #[derive(Debug, Copy, Clone)]
 enum GapRange {
-    // Position is not indexed; need to index region from given `start` to `end`
-    Missing(OffsetRange),
+    // Position is not indexed; need to index region from given `start` to `end` to resolve offset
+    Missing(TargetOffset, OffsetRange),
 
     // Position is not indexed; unknown gap size at end of index needs to be loaded; arg is first unindexed byte
-    MissingUnbounded(usize),
+    MissingUnbounded(TargetOffset, usize),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -166,7 +166,7 @@ mod tests {
         }
         let fault = index.locate(10);
         match fault {
-            Location::Gap(GapRange::Missing(OffsetRange(0, 50))) => {},
+            Location::Gap(GapRange::Missing(_, OffsetRange(0, 50))) => {},
             _ => panic!("Expected Missing(0,50); got something else: {:?}", fault),
         }
     }
@@ -181,7 +181,7 @@ mod tests {
         }
         let fault = index.locate(index.bytes());
         match fault {
-            Location::Gap(GapRange::MissingUnbounded(_)) => {},
+            Location::Gap(GapRange::MissingUnbounded(_, _)) => {},
             _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
         }
     }
@@ -195,7 +195,7 @@ mod tests {
             // dbg!(&cursor);
             match cursor {
                 Location::Indexed(_) => {},
-                Location::Gap(GapRange::MissingUnbounded(_)) => break,
+                Location::Gap(GapRange::MissingUnbounded(_,_)) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -235,7 +235,7 @@ mod tests {
             dbg!(&cursor);
             match cursor {
                 Location::Indexed(_) => {},
-                Location::Gap(GapRange::Missing(OffsetRange(0,50))) => break,
+                Location::Gap(GapRange::Missing(_, OffsetRange(0,50))) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -250,20 +250,20 @@ impl EventualIndex {
 
     // Identify the gap before a given index position and return a Missing() hint to include it.
     // panics if there is no gap
-    fn gap_at(&self, pos: usize) -> Location {
-        self.try_gap_at(pos).unwrap()
+    fn gap_at(&self, pos: usize, target: usize) -> Location {
+        self.try_gap_at(pos, target).unwrap()
     }
 
     // Returns None if there is no gap
-    fn try_gap_at(&self, pos: usize) -> Option<Location> {
+    fn try_gap_at(&self, pos: usize, target: usize) -> Option<Location> {
         assert!(pos <= self.indexes.len());
         if self.indexes.is_empty() {
-            Some(Location::Gap(GapRange::MissingUnbounded(0)))
+            Some(Location::Gap(GapRange::MissingUnbounded(target, 0)))
         } else if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
             if next > 0 {
-                Some(Location::Gap(GapRange::Missing(OffsetRange(0, next))))
+                Some(Location::Gap(GapRange::Missing(target, OffsetRange(0, next))))
             } else {
                 None
             }
@@ -271,12 +271,12 @@ impl EventualIndex {
             let prev = self.indexes[pos-1].end;
             if pos == self.indexes.len() {
                 // gap is at end of file; return unbounded range
-                Some(Location::Gap(GapRange::MissingUnbounded(prev)))
+                Some(Location::Gap(GapRange::MissingUnbounded(target, prev)))
             } else {
                 // There's a gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
                 if next > prev {
-                    Some(Location::Gap(GapRange::Missing(OffsetRange(prev, next))))
+                    Some(Location::Gap(GapRange::Missing(target, OffsetRange(prev, next))))
                 } else {
                     None
                 }
@@ -298,7 +298,7 @@ impl EventualIndex {
             },
             Err(after) => {
                 // No index holds our offset; it needs to be loaded
-                self.gap_at(after)
+                self.gap_at(after, offset)
             }
         }
     }
@@ -308,7 +308,7 @@ impl EventualIndex {
         match find {
             Location::Virtual(loc) => match loc {
                 VirtualLocation::Start => {
-                    if let Some(gap) = self.try_gap_at(0) {
+                    if let Some(gap) = self.try_gap_at(0, 0) {
                         gap
                     } else {
                         Location::Indexed(IndexRef(0, 1))
@@ -332,7 +332,7 @@ impl EventualIndex {
                     let i = &self.indexes[found];
                     if line + 1 < i.len() {
                         Location::Indexed(IndexRef(found, line + 1))
-                    } else if let Some(gap) = self.try_gap_at(found + 1) {
+                    } else if let Some(gap) = self.try_gap_at(found + 1, i.end) {
                         gap
                     } else {
                         Location::Indexed(IndexRef(found+1, 0))
@@ -349,7 +349,7 @@ impl EventualIndex {
             assert!(found < self.indexes.len());
             if line > 0 {
                 Location::Indexed(IndexRef(found, line - 1))
-            } else if let Some(gap) = self.try_gap_at(found) {
+            } else if let Some(gap) = self.try_gap_at(found, self.indexes[found].start.max(1) - 1) {
                 gap
             } else if found > 0 {
                 let j = &self.indexes[found - 1];
@@ -467,23 +467,46 @@ impl LogFileLines {
         }
     }
 
-    fn index_chunk(&mut self, gap: GapRange, near_offset: usize) {
-        // TODO: find chunk near `near_offset`
-        let (start, end) = match gap {
-            GapRange::Missing(OffsetRange(start, end)) => (start, end),
-            GapRange::MissingUnbounded(start) => (start, start + self.chunk_size),
-            _ => (0, 0),
+    fn index_chunk(&mut self, gap: GapRange, chunk_size: usize) -> Location {
+        let (offset, start, end) = match gap {
+            GapRange::Missing(offset, OffsetRange(start, end)) => (offset, start, end),
+            GapRange::MissingUnbounded(offset, start) => (offset, start, start + self.chunk_size),
         };
 
+        assert!(start <= offset);
+        assert!(offset < end);
+        assert!(start < end);
+
         if start < end {
+            let (start, end) =
+                if end - start <= chunk_size {
+                    (start, end)
+                } else {
+                    let offset = offset.max(start).min(end);
+                    if offset - start <= chunk_size {
+                        // Prefer to load near the front
+                        (start, start + chunk_size)
+                    } else if end - offset <= chunk_size {
+                        // But load near the end if it's closer to our target
+                        (end - chunk_size, end)
+                    } else {
+                        // otherwise, load the chunk centered around our target
+                        let start = offset - chunk_size / 2;
+                        (start, start + chunk_size)
+                    }
+                };
+
             // Send the buffer to the parsers
             let buffer = self.file.read(start, end-start).unwrap();
             let mut index = Index::new();
             index.parse(buffer, start);
             self.index.merge(index);
-        }
 
-        self.index.finalize();
+            self.index.finalize();
+            self.index.locate(offset)
+        } else {
+            Location::Gap(gap)
+        }
     }
 
     fn count_bytes(&self) -> usize {
