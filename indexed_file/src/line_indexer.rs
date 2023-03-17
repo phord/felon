@@ -311,7 +311,7 @@ impl EventualIndex {
                     if let Some(gap) = self.try_gap_at(0, 0) {
                         gap
                     } else {
-                        Location::Indexed(IndexRef(0, 1))
+                        Location::Indexed(IndexRef(0, 0))
                     }
                 },
                 VirtualLocation::End => {
@@ -444,7 +444,7 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.pos = self.file.index.next_line_index(self.pos);
+        self.pos = self.file.index.resolve(self.pos);
 
         // FIXME: Get this from self.file; don't even pass it to index_chunk
         let chunk_size = 1024;
@@ -459,6 +459,7 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
         }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
+                self.pos = self.file.index.next_line_index(self.pos);
                 return Some((bol, eol + 1));
             }
         }
@@ -466,37 +467,99 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
     }
 }
 
-#[test]
-fn test_iterator() {
-    let patt = "filler\n";
-    let patt_len = patt.len();
-    let lines = 6000;
-    let file = LogFile::new_mock_file(patt, patt_len * lines);
-    let mut file = LogFileLines::new(file);
-    let mut it = file.iter();
-    let (prev, _) = it.next().unwrap();
-    let mut prev = prev;
-    assert_eq!(prev, 0);
-    for i in it.take(lines - 1) {
-        let (bol, eol) = i;
-        assert_eq!(bol - prev, patt_len);
-        assert_eq!(eol - bol, patt_len);
-        prev = bol;
-    }
-}
+// Tests for LogFileIterator
+#[cfg(test)]
+mod logfile_iterator_tests {
+    use super::LogFile;
+    use super::LogFileLines;
 
-#[test]
-fn test_iterator_exhaust() {
-    let patt = "filler\n";
-    let patt_len = patt.len();
-    let lines = 6000;
-    let file = LogFile::new_mock_file(patt, patt_len * lines);
-    let mut file = LogFileLines::new(file);
-    let mut count = 0;
-    for i in file.iter() {
-        count += 1;
+    #[test]
+    fn test_iterator() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut it = file.iter();
+        let (prev, _) = it.next().unwrap();
+        let mut prev = prev;
+        assert_eq!(prev, 0);
+        for i in it.take(lines - 1) {
+            let (bol, eol) = i;
+            assert_eq!(bol - prev, patt_len);
+            assert_eq!(eol - bol, patt_len);
+            prev = bol;
+        }
     }
-    assert_eq!(count, lines);
+
+    #[test]
+    fn test_iterator_exhaust() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut count = 0;
+        for _ in file.iter() {
+            count += 1;
+        }
+        assert_eq!(count, lines);
+    }
+
+    #[test]
+    fn test_iterator_exhaust_twice() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut count = 0;
+        for _ in file.iter() {
+            count += 1;
+        }
+        assert_eq!(count, lines);
+
+        let mut it = file.iter();
+        // Iterate again and measure per-line and offsets
+        let (prev, _) = it.next().unwrap();
+        let mut prev = prev;
+        assert_eq!(prev, 0);
+        for i in it.take(lines - 1) {
+            let (bol, eol) = i;
+            assert_eq!(bol - prev, patt_len);
+            assert_eq!(eol - bol, patt_len);
+            prev = bol;
+        }
+    }
+
+
+    #[test]
+    fn test_iterator_exhaust_half_and_twice() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut count = 0;
+        for _ in file.iter().take(lines/2) {
+            count += 1;
+        }
+        assert_eq!(count, lines/2);
+
+        for _ in 0..2 {
+            let mut it = file.iter();
+            // Iterate again and measure per-line and offsets
+            let (prev, _) = it.next().unwrap();
+            let mut prev = prev;
+            assert_eq!(prev, 0);
+            for i in it.take(lines - 1) {
+                let (bol, eol) = i;
+                assert_eq!(bol - prev, patt_len);
+                assert_eq!(eol - bol, patt_len);
+                prev = bol;
+            }
+        }
+    }
 }
 
 impl LogFileLines {

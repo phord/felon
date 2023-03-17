@@ -85,15 +85,14 @@ mod tests {
 
         assert!(bytes > chunk_size * 2);
 
-        let file = open_log_file_lines(path);
-        println!("{:?}", file);
+        let mut file = open_log_file_lines(path);
 
         // Walk the file and compare each line offset to the expected offset
         let mut offset = 0;
         let mut linecount = 0;
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
-        for (&start, &end) in file.iter_offsets() {
+        for (start, end) in file.iter_offsets() {
             linecount += 1;
             assert_eq!(start, offset);
             offset += scanlines.next().unwrap().unwrap().len() + 1;
@@ -106,7 +105,7 @@ mod tests {
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
         assert_eq!(file.count_lines(), linecount);
-        let (_, &count_bytes) = file.iter_offsets().last().unwrap();
+        let (_, count_bytes) = file.iter_offsets().last().unwrap();
         assert_eq!(count_bytes, bytes);
     }
 
@@ -124,7 +123,7 @@ mod tests {
 
         assert!(bytes > chunk_size * 2);
 
-        let file = open_log_file_lines(path);
+        let mut file = open_log_file_lines(path);
         println!("{:?}", file);
 
         // Walk the file and compare each line offset to the expected offset
@@ -132,7 +131,7 @@ mod tests {
         let mut linecount = 0;
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
-        for (&start, &end) in file.iter_offsets() {
+        for (start, end) in file.iter_offsets() {
             linecount += 1;
             assert_eq!(start, offset);
             offset += scanlines.next().unwrap().unwrap().len() + 1;
@@ -144,7 +143,7 @@ mod tests {
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
         assert_eq!(file.count_lines(), linecount);
-        let (_, &count_bytes) = file.iter_offsets().last().unwrap();
+        let (_, count_bytes) = file.iter_offsets().last().unwrap();
         assert_eq!(count_bytes, bytes);
     }
 }
