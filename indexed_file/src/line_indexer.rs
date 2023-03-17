@@ -441,7 +441,7 @@ impl<'a> LogFileLinesIterator<'a> {
 }
 
 impl<'a> Iterator for LogFileLinesIterator<'a> {
-    type Item = usize;
+    type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.pos = self.file.index.next_line_index(self.pos);
@@ -457,7 +457,12 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
                 Location::Virtual(_) => panic!("Still?"),
             };
         }
-        self.file.index.start_of_line(self.pos)
+        if let Some(bol) = self.file.index.start_of_line(self.pos) {
+            if let Some(eol) = self.file.index.end_of_line(self.pos) {
+                return Some((bol, eol + 1));
+            }
+        }
+        unreachable!();
     }
 }
 
@@ -469,11 +474,14 @@ fn test_iterator() {
     let file = LogFile::new_mock_file(patt, patt_len * lines);
     let mut file = LogFileLines::new(file);
     let mut it = file.iter();
-    let mut prev = it.next().unwrap();
+    let (prev, _) = it.next().unwrap();
+    let mut prev = prev;
     assert_eq!(prev, 0);
     for i in it.take(lines - 1) {
-        assert_eq!(i - prev, patt_len);
-        prev = i;
+        let (bol, eol) = i;
+        assert_eq!(bol - prev, patt_len);
+        assert_eq!(eol - bol, patt_len);
+        prev = bol;
     }
 }
 
@@ -484,13 +492,11 @@ fn test_iterator_exhaust() {
     let lines = 6000;
     let file = LogFile::new_mock_file(patt, patt_len * lines);
     let mut file = LogFileLines::new(file);
-    let mut it = file.iter();
-    let mut prev = it.next().unwrap();
-    assert_eq!(prev, 0);
-    for i in it {
-        assert_eq!(i - prev, patt_len);
-        prev = i;
+    let mut count = 0;
+    for i in file.iter() {
+        count += 1;
     }
+    assert_eq!(count, lines);
 }
 
 impl LogFileLines {
@@ -566,19 +572,17 @@ impl LogFileLines {
         }
     }
 
-    pub fn iter(&mut self) -> impl Iterator<Item = usize> + '_ {
+    pub fn iter(&mut self) -> impl Iterator<Item = (usize, usize)> + '_ {
         LogFileLinesIterator::new(self)
     }
 
-    pub fn iter_offsets(&self) -> impl Iterator<Item = (&usize, &usize)> + '_ {
-        let starts = std::iter::once(&0usize).chain(self.index.iter());
-        let ends = self.index.iter();
-        let line_range = starts.zip(ends);
-        line_range
+    pub fn iter_offsets(&mut self) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.iter()
     }
 
-    pub fn iter_lines(&mut self) -> impl Iterator<Item = (&str, usize, usize)> + '_ {
-        self.iter_offsets().map(|(&start, &end)| -> (&str, usize, usize) {(self.readline_fixed(start, end).unwrap_or(""), start, end)})
-    }
+    // pub fn iter_lines(&mut self) -> impl Iterator<Item = (&str, usize, usize)> + '_ {
+    //     todo!(); //self.iter_offsets().map(|(start, end)| -> (&str, usize, usize) {(self.readline_fixed(start, end).unwrap_or(""), start, end)})
+    //     None
+    // }
 
 }
