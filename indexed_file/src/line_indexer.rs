@@ -453,6 +453,7 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
             match self.pos {
                 Location::Gap(gap) => self.pos = self.file.index_chunk(gap, chunk_size),
                 Location::Indexed(_) => break,
+                Location::Virtual(VirtualLocation::End) => return None,
                 Location::Virtual(_) => panic!("Still?"),
             };
         }
@@ -471,6 +472,22 @@ fn test_iterator() {
     let mut prev = it.next().unwrap();
     assert_eq!(prev, 0);
     for i in it.take(lines - 1) {
+        assert_eq!(i - prev, patt_len);
+        prev = i;
+    }
+}
+
+#[test]
+fn test_iterator_exhaust() {
+    let patt = "filler\n";
+    let patt_len = patt.len();
+    let lines = 6000;
+    let file = LogFile::new_mock_file(patt, patt_len * lines);
+    let mut file = LogFileLines::new(file);
+    let mut it = file.iter();
+    let mut prev = it.next().unwrap();
+    assert_eq!(prev, 0);
+    for i in it {
         assert_eq!(i - prev, patt_len);
         prev = i;
     }
@@ -495,6 +512,8 @@ impl LogFileLines {
         assert!(start <= offset);
         assert!(offset < end);
         assert!(start < end);
+
+        let end = end.min(self.file.len());
 
         if start < end {
             let (start, end) =
@@ -524,7 +543,7 @@ impl LogFileLines {
             self.index.finalize();
             self.index.locate(offset)
         } else {
-            Location::Gap(gap)
+            Location::Virtual(VirtualLocation::End)
         }
     }
 
