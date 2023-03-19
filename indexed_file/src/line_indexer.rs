@@ -38,6 +38,8 @@ impl EventualIndex {
 
         // FIXME: Add index for end-of-file if not already present
         // e.g. if self.line_offsets.last() != self.indexes.last().end { self.line_offsets.push(self.indexes.last().end); }
+
+        // FIXME: Merge adjacent indexes if one of them is empty
     }
 
     fn line_offset(&self, line_number: usize) -> Option<usize> {
