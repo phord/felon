@@ -42,17 +42,18 @@ impl EventualIndex {
         // FIXME: Merge adjacent indexes if one of them is empty
     }
 
-    fn line_offset(&self, line_number: usize) -> Option<usize> {
-        if line_number >= self.lines() {
-            return None;
-        }
-        self.iter().skip(line_number).cloned().next()
-    }
+    // fn line_offset(&self, line_number: usize) -> Option<usize> {
+    //     if line_number >= self.lines() {
+    //         return None;
+    //     }
+    //     self.iter().skip(line_number).cloned().next()
+    // }
 
-    pub fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
-        self.indexes.iter().flat_map(|x| x.iter())
-    }
+    // fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
+    //     self.indexes.iter().flat_map(|x| x.iter())
+    // }
 
+    #[cfg(test)]
     fn bytes(&self) -> usize {
         self.indexes.iter().fold(0, |a, v| a + v.bytes())
     }
