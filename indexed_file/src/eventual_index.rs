@@ -1,11 +1,58 @@
-// An index of some lines in a file, possibly with gaps, but eventually a whole index
 
 use crate::index::Index;
 
 
+// An index of some lines in a file, possibly with gaps, but eventually a whole index
 pub struct EventualIndex {
     indexes: Vec<Index>,
 }
+
+// A cursor, representing a location in the EventualIndex
+#[derive(Debug, Copy, Clone)]
+pub enum Location {
+    Virtual(VirtualLocation),
+    Indexed(IndexRef),
+    Gap(GapRange)
+}
+
+// Delineates [start, end) of a region of the file.  end is not inclusive.
+#[derive(Debug, Copy, Clone)]
+pub enum Missing {
+    // Range has start and end; end is not inclusive
+    Bounded(usize, usize),
+
+    // Range has start; end is unknown
+    Unbounded(usize),
+}
+
+// Literally a reference by subscript to the Index/Line in an EventualIndex.
+// Becomes invalid if the EventualIndex changes, but since we use this as a hint only, it's not fatal.
+#[derive(Debug, Copy, Clone)]
+pub struct IndexRef(usize, usize);
+
+// A logical location in a file, like "Start"
+#[derive(Debug, Copy, Clone)]
+pub enum VirtualLocation {
+    Start,
+    End
+}
+
+// The target offset we wanted to reach
+type TargetOffset = usize;
+
+// A cursor to some gap in the indexed coverage
+#[derive(Debug, Copy, Clone)]
+// Position at `target` is not indexed; need to index region from `gap`
+pub struct GapRange {
+    // The approximate offset we wanted to reach
+    pub target: TargetOffset,
+
+    // The type and size of the gap
+    pub gap: Missing,
+}
+
+use Missing::{Bounded, Unbounded};
+
 
 impl EventualIndex {
     pub fn new() -> EventualIndex {
@@ -59,43 +106,6 @@ impl EventualIndex {
     }
 }
 
-// Delineates [start, end) of a region of the file.  end is not inclusive.
-#[derive(Debug, Copy, Clone)]
-pub enum Missing {
-    // Range has start and end; end is not inclusive
-    Bounded(usize, usize),
-
-    // Range has start; end is unknown
-    Unbounded(usize),
-}
-
-// Literally a reference by subscript to the Index/Line in an EventualIndex.
-// Becomes invalid if the EventualIndex changes, but since we use this as a hint only, it's not fatal.
-#[derive(Debug, Copy, Clone)]
-pub struct IndexRef(usize, usize);
-
-#[derive(Debug, Copy, Clone)]
-pub enum VirtualLocation {
-    Start,
-    End
-}
-
-type TargetOffset = usize;
-
-#[derive(Debug, Copy, Clone)]
-// Position at `target` is not indexed; need to index region from `gap`
-pub struct GapRange {
-    pub target: TargetOffset,
-    pub gap: Missing,
-}
-use Missing::{Bounded, Unbounded};
-
-#[derive(Debug, Copy, Clone)]
-pub enum Location {
-    Virtual(VirtualLocation),
-    Indexed(IndexRef),
-    Gap(GapRange)
-}
 
 // Tests for EventualIndex
 #[cfg(test)]
@@ -158,7 +168,6 @@ mod tests {
             }
         }
     }
-
 
     #[test]
     fn test_cursor_mid_start() {
