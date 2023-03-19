@@ -28,7 +28,7 @@ pub enum Missing {
 // Literally a reference by subscript to the Index/Line in an EventualIndex.
 // Becomes invalid if the EventualIndex changes, but since we use this as a hint only, it's not fatal.
 #[derive(Debug, Copy, Clone)]
-pub struct IndexRef(usize, usize);
+pub struct IndexRef(pub usize, pub usize);
 
 // A logical location in a file, like "Start"
 #[derive(Debug, Copy, Clone)]
@@ -96,8 +96,8 @@ impl EventualIndex {
     //     self.indexes.iter().flat_map(|x| x.iter())
     // }
 
-    #[cfg(test)]
-    fn bytes(&self) -> usize {
+    // #[cfg(test)]
+    pub fn bytes(&self) -> usize {
         self.indexes.iter().fold(0, |a, v| a + v.bytes())
     }
 
@@ -107,158 +107,7 @@ impl EventualIndex {
 }
 
 
-// Tests for EventualIndex
-#[cfg(test)]
-mod tests {
-    use crate::index::Index;
-    use super::EventualIndex;
-
-    use super::Location;
-    use super::GapRange;
-    use super::Missing::{Bounded, Unbounded};
-    use super::VirtualLocation;
-    use super::IndexRef;
-    static DATA: &str = "a\na\na\na\na\n";
-
-    fn get_index(offset: usize) -> Index {
-        let mut index = Index::new();
-        index.parse(DATA.as_bytes(), offset);
-        index
-    }
-
-    fn get_eventual_index(size: usize) -> EventualIndex {
-        let mut index = EventualIndex::new();
-        while index.bytes() < size {
-            let s = index.bytes();
-            println!("Size {s}");
-            index.merge(get_index(index.bytes()));
-        }
-        index.finalize();
-        index
-    }
-
-    fn get_partial_eventual_index(start: usize, size: usize) -> EventualIndex {
-        let mut index = EventualIndex::new();
-        while index.bytes() < size {
-            let s = index.bytes();
-            println!("Size {s}");
-            index.merge(get_index(start + index.bytes()));
-        }
-        index.finalize();
-        index
-    }
-
-    #[test]
-    fn test_eventual_index_basic() {
-        let index = get_eventual_index(100);
-        assert_eq!(index.bytes(), 100);
-        assert_eq!(index.lines(), 50);
-    }
-
-    #[test]
-    fn test_cursor_start() {
-        let index = get_eventual_index(100);
-        let cursor = index.locate(0);
-        dbg!(cursor);
-        match cursor {
-            Location::Indexed(IndexRef(0, 0)) => {},
-            _ => {
-                dbg!(cursor);
-                panic!("Expected StartOfFile; got something else");
-            }
-        }
-    }
-
-    #[test]
-    fn test_cursor_mid_start() {
-        let index = get_partial_eventual_index(50, 100);
-        let cursor = index.locate(50);
-        match cursor {
-            Location::Indexed(IndexRef(0, 0)) => {},
-            _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
-        }
-        let fault = index.locate(10);
-        match fault {
-            Location::Gap(GapRange { gap: Bounded(0, 50), .. } ) => {},
-            _ => panic!("Expected Missing(0,50); got something else: {:?}", fault),
-        }
-    }
-
-    #[test]
-    fn test_cursor_last() {
-        let index = get_eventual_index(100);
-        let cursor = index.locate(index.bytes()-1);
-        match cursor {
-            Location::Indexed(_) => {},
-            _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
-        }
-        let fault = index.locate(index.bytes());
-        match fault {
-            Location::Gap(GapRange { gap: Unbounded(_), .. }) => {},
-            _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
-        }
-    }
-
-    #[test]
-    fn test_cursor_forward() {
-        let index = get_eventual_index(100);
-        let mut cursor = index.locate(0);
-        let mut count = 0;
-        loop {
-            // dbg!(&cursor);
-            match cursor {
-                Location::Indexed(_) => {},
-                Location::Gap(GapRange { gap: Unbounded(_), .. }) => break,
-                _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
-            }
-            count += 1;
-            println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
-            cursor = index.next_line_index(cursor);
-        }
-        assert_eq!(count, index.lines());
-    }
-
-    #[test]
-    fn test_cursor_reverse() {
-        let index = get_eventual_index(100);
-        let mut cursor = index.locate(99);
-        let mut count = 0;
-        loop {
-            match cursor {
-                Location::Virtual(VirtualLocation::Start) => break,
-                Location::Indexed(_) => {},
-                _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
-            }
-            // dbg!(&cursor);
-            count += 1;
-            let (start, end)  = (index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
-            println!("Line {}  Cursor: {} {}", count, start, end);
-            assert!(start <= end);
-            cursor = index.prev_line_index(cursor);
-        }
-        assert_eq!(count, index.lines());
-    }
-
-    #[test]
-    fn test_cursor_reverse_gap() {
-        let index = get_partial_eventual_index(50, 100);
-        let mut cursor = index.locate(149);
-        let mut count = 0;
-        loop {
-            dbg!(&cursor);
-            match cursor {
-                Location::Indexed(_) => {},
-                Location::Gap(GapRange { gap: Bounded(0, 50), .. } ) => break,
-                _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
-            }
-            count += 1;
-            cursor = index.prev_line_index(cursor);
-        }
-        assert_eq!(count, index.lines());
-    }
-}
-
-// Cursor functions for EventualIndex
+// Gap handlers
 impl EventualIndex {
 
     // Identify the gap before a given index position and return a Missing() hint to include it.
@@ -299,7 +148,10 @@ impl EventualIndex {
             }
         }
     }
+}
 
+// Cursor functions for EventualIndex
+impl EventualIndex {
     // Find index to EOL that contains a given offset or the gap that needs to be loaded to have it
     pub fn locate(&self, offset: usize) -> Location {
         match self.indexes.binary_search_by(|i| i.contains_offset(&offset)) {
@@ -359,7 +211,7 @@ impl EventualIndex {
     }
 
     // Find index to prev EOL before given index
-    fn prev_line_index(&self, find: Location) -> Location {
+    pub fn prev_line_index(&self, find: Location) -> Location {
         if let Location::Indexed(IndexRef(found, line)) = find {
             // next line is in the same index
             assert!(found < self.indexes.len());
