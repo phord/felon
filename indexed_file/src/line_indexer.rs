@@ -64,7 +64,13 @@ impl EventualIndex {
 
 // Delineates [start, end) of a region of the file.  end is not inclusive.
 #[derive(Debug, Copy, Clone)]
-struct OffsetRange(usize, usize);
+enum Missing {
+    // Range has start and end; end is not inclusive
+    Bounded(usize, usize),
+
+    // Range has start; end is unknown
+    Unbounded(usize),
+}
 
 // Literally a reference by subscript to the Index/Line in an EventualIndex.
 // Becomes invalid if the EventualIndex changes, but since we use this as a hint only, it's not fatal.
@@ -80,13 +86,12 @@ enum VirtualLocation {
 type TargetOffset = usize;
 
 #[derive(Debug, Copy, Clone)]
-enum GapRange {
-    // Position is not indexed; need to index region from given `start` to `end` to resolve offset
-    Missing(TargetOffset, OffsetRange),
-
-    // Position is not indexed; unknown gap size at end of index needs to be loaded; arg is first unindexed byte
-    MissingUnbounded(TargetOffset, usize),
+// Position at `target` is not indexed; need to index region from `gap`
+struct GapRange {
+    target: TargetOffset,
+    gap: Missing,
 }
+use Missing::{Bounded, Unbounded};
 
 #[derive(Debug, Copy, Clone)]
 enum Location {
@@ -103,9 +108,9 @@ mod tests {
 
     use super::Location;
     use super::GapRange;
+    use super::Missing::{Bounded, Unbounded};
     use super::VirtualLocation;
     use super::IndexRef;
-    use super::OffsetRange;
     static DATA: &str = "a\na\na\na\na\n";
 
     fn get_index(offset: usize) -> Index {
@@ -168,7 +173,7 @@ mod tests {
         }
         let fault = index.locate(10);
         match fault {
-            Location::Gap(GapRange::Missing(_, OffsetRange(0, 50))) => {},
+            Location::Gap(GapRange { gap: Bounded(0, 50), .. } ) => {},
             _ => panic!("Expected Missing(0,50); got something else: {:?}", fault),
         }
     }
@@ -183,7 +188,7 @@ mod tests {
         }
         let fault = index.locate(index.bytes());
         match fault {
-            Location::Gap(GapRange::MissingUnbounded(_, _)) => {},
+            Location::Gap(GapRange { gap: Unbounded(_), .. }) => {},
             _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
         }
     }
@@ -197,7 +202,7 @@ mod tests {
             // dbg!(&cursor);
             match cursor {
                 Location::Indexed(_) => {},
-                Location::Gap(GapRange::MissingUnbounded(_,_)) => break,
+                Location::Gap(GapRange { gap: Unbounded(_), .. }) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -237,7 +242,7 @@ mod tests {
             dbg!(&cursor);
             match cursor {
                 Location::Indexed(_) => {},
-                Location::Gap(GapRange::Missing(_, OffsetRange(0,50))) => break,
+                Location::Gap(GapRange { gap: Bounded(0, 50), .. } ) => break,
                 _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
             }
             count += 1;
@@ -260,26 +265,29 @@ impl EventualIndex {
     fn try_gap_at(&self, pos: usize, target: usize) -> Option<Location> {
         assert!(pos <= self.indexes.len());
         if self.indexes.is_empty() {
-            Some(Location::Gap(GapRange::MissingUnbounded(target, 0)))
+            Some(Location::Gap(GapRange { target, gap: Unbounded(0) } ))
         } else if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
             if next > 0 {
-                Some(Location::Gap(GapRange::Missing(target, OffsetRange(0, next))))
+                Some(Location::Gap(GapRange { target, gap: Bounded(0, next) } ))
             } else {
+                // There is no gap at start of file
                 None
             }
         } else {
             let prev = self.indexes[pos-1].end;
             if pos == self.indexes.len() {
                 // gap is at end of file; return unbounded range
-                Some(Location::Gap(GapRange::MissingUnbounded(target, prev)))
+                Some(Location::Gap(GapRange { target, gap: Unbounded(prev) } ))
             } else {
-                // There's a gap between two indexes; bracket result by their [end, start)
+                // Find the gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
                 if next > prev {
-                    Some(Location::Gap(GapRange::Missing(target, OffsetRange(prev, next))))
+                    Some(Location::Gap(GapRange { target, gap: Bounded(prev, next) } ))
                 } else {
+                    // There is no gap between these indexes
+                    assert!(next == prev);
                     None
                 }
             }
@@ -726,8 +734,8 @@ impl LogFileLines {
 
     fn index_chunk(&mut self, gap: GapRange, chunk_size: usize) -> Location {
         let (offset, start, end) = match gap {
-            GapRange::Missing(offset, OffsetRange(start, end)) => (offset, start, end),
-            GapRange::MissingUnbounded(offset, start) => (offset, start, start + self.chunk_size),
+            GapRange { target, gap: Bounded(start, end) } => (target, start, end),
+            GapRange { target, gap: Unbounded(start) } => (target, start, start + self.chunk_size),
         };
 
         assert!(start <= offset);
