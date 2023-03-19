@@ -7,6 +7,7 @@ pub struct MockLogFile {
     filler: String,
     size: usize,
     buffer: String,
+    pub chunk_size: usize,
 }
 
 impl fmt::Debug for MockLogFile {
@@ -33,11 +34,19 @@ impl LogFileTrait for MockLogFile {
             Some(self.buffer[offset..end].as_bytes())
         }
     }
+
+    fn chunk(&self, target: usize) -> (usize, usize) {
+        let start = target.saturating_sub(self.chunk_size / 2);
+        let end = (start + self.chunk_size).min(self.len());
+        let start = end.saturating_sub(self.chunk_size);
+        (start, end)
+    }
+
 }
 
 impl MockLogFile {
 
-    pub fn new(fill: String, size: usize) -> MockLogFile {
+    pub fn new(fill: String, size: usize, chunk_size: usize) -> MockLogFile {
         assert!(fill.len() > 0);
         let copies = 1024 * 1024 * 16 / fill.len() + 1;
         let buffer = (0..copies)
@@ -48,6 +57,7 @@ impl MockLogFile {
         MockLogFile {
             filler: fill,
             size,
+            chunk_size,
             buffer,
         }
     }
@@ -65,7 +75,7 @@ mod tests {
     #[test]
     fn test_mock_log_file_basic() {
         let size = 16 * 1024;
-        let file = LogFile::new_mock_file("fill", size);
+        let file = LogFile::new_mock_file("fill", size, 100);
         assert_eq!(file.len(), size);
     }
 
@@ -73,7 +83,7 @@ mod tests {
     fn test_mock_log_file_read_basic() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size);
+        let file = LogFile::new_mock_file(fill, size, 100);
         assert_eq!(file.read(0, 10), Some(fill[..10].as_bytes()));
     }
 
@@ -81,7 +91,7 @@ mod tests {
     fn test_mock_log_file_read_offset() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size);
+        let file = LogFile::new_mock_file(fill, size, 100);
         let offset = fill.len() * 10;
         assert_eq!(file.read(offset, 10), Some(fill[..10].as_bytes()));
     }
@@ -90,7 +100,7 @@ mod tests {
     fn test_mock_log_file_read_multiline() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size);
+        let file = LogFile::new_mock_file(fill, size, 100);
         let mut ret = fill.to_string();
         ret.push_str(&fill[..]);
         let offset = fill.len() * 10;
@@ -103,7 +113,7 @@ mod tests {
     fn test_mock_log_file_read_multiline_middle() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size);
+        let file = LogFile::new_mock_file(fill, size, 100);
 
         let ofs = fill.len()/2;
         let end = fill.len() - 1;
@@ -114,5 +124,21 @@ mod tests {
 
         assert_eq!(file.read(offset, len), Some(ret.as_bytes()));
     }
+
+    #[test]
+    fn test_mock_log_file_chunk_sizes() {
+        let size = 3 * 1024;
+        let fill = "this is a test\n";
+        let file = LogFile::new_mock_file(fill, size, 100);
+
+        for i in 0..file.len() {
+            let (start, end) = file.chunk(i);
+            println!("{}: {} - {}", i, start, end);
+            assert!(start <= i);
+            assert!(i <= end);
+            assert_eq!(end - start, 100);
+        }
+    }
+
 
 }

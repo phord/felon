@@ -19,7 +19,6 @@ pub struct LogFileLines {
     // pub file_path: PathBuf,
     file: LogFile,
     index: EventualIndex,
-    chunk_size: usize,
 }
 
 impl fmt::Debug for LogFileLines {
@@ -27,7 +26,6 @@ impl fmt::Debug for LogFileLines {
         f.debug_struct("LogFileLines")
          .field("bytes", &self.count_bytes())
          .field("lines", &self.count_lines())
-         .field("chunk_size", &self.chunk_size)
          .finish()
     }
 }
@@ -52,12 +50,9 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.pos = self.file.index.resolve(self.pos);
 
-        // FIXME: Get this from self.file; don't even pass it to index_chunk
-        let chunk_size = 1024;
-
         loop {
             match self.pos {
-                Location::Gap(gap) => self.pos = self.file.index_chunk(gap, chunk_size),
+                Location::Gap(gap) => self.pos = self.file.index_chunk(gap),
                 Location::Indexed(_) => break,
                 Location::Virtual(VirtualLocation::End) => return None,
                 Location::Virtual(_) => panic!("Still?"),
@@ -84,7 +79,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut it = file.iter();
         let (prev, _) = it.next().unwrap();
@@ -103,7 +98,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut count = 0;
         for _ in file.iter() {
@@ -117,7 +112,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut count = 0;
         for _ in file.iter() {
@@ -144,7 +139,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut count = 0;
         for _ in file.iter().take(lines/2) {
@@ -181,7 +176,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut it = file.iter_lines();
         let (line, prev, _) = it.next().unwrap();
@@ -202,7 +197,7 @@ mod logfile_data_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut count = 0;
         for _ in file.iter_lines() {
@@ -217,7 +212,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut count = 0;
         for _ in file.iter_lines() {
@@ -246,7 +241,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
         let mut file = LogFileLines::new(file);
         let mut count = 0;
         for _ in file.iter_lines().take(lines/2) {
@@ -292,12 +287,9 @@ impl<'a> Iterator for LogFileDataIterator<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.pos = self.file.index.resolve(self.pos);
 
-        // FIXME: Get this from self.file; don't even pass it to index_chunk
-        let chunk_size = 1024;
-
         loop {
             match self.pos {
-                Location::Gap(gap) => self.pos = self.file.index_chunk(gap, chunk_size),
+                Location::Gap(gap) => self.pos = self.file.index_chunk(gap),
                 Location::Indexed(_) => break,
                 Location::Virtual(VirtualLocation::End) => return None,
                 Location::Virtual(_) => panic!("Still?"),
@@ -324,40 +316,27 @@ impl LogFileLines {
         Self {
             file,
             index: EventualIndex::new(),
-            chunk_size: 1024 * 1024 * 1,
         }
     }
 
-    fn index_chunk(&mut self, gap: GapRange, chunk_size: usize) -> Location {
+    fn index_chunk(&mut self, gap: GapRange) -> Location {
         let (offset, start, end) = match gap {
-            GapRange { target, gap: Bounded(start, end) } => (target, start, end),
-            GapRange { target, gap: Unbounded(start) } => (target, start, start + self.chunk_size),
+            GapRange { target, gap: Bounded(start, end) } => (target, start, end.min(self.file.len())),
+            GapRange { target, gap: Unbounded(start) } => (target, start, self.file.len()),
         };
 
         assert!(start <= offset);
-        assert!(offset < end);
-        assert!(start < end);
+        assert!(end <= self.file.len());
 
-        let end = end.min(self.file.len());
+        if start >= end {
+            Location::Virtual(VirtualLocation::End)
+        } else {
+            let (chunk_start, chunk_end) = self.file.chunk(offset);
+            let start = start.max(chunk_start);
+            let end = end.min(chunk_end);
 
-        if start < end {
-            let (start, end) =
-                if end - start <= chunk_size {
-                    (start, end)
-                } else {
-                    let offset = offset.max(start).min(end);
-                    if offset - start <= chunk_size {
-                        // Prefer to load near the front
-                        (start, start + chunk_size)
-                    } else if end - offset <= chunk_size {
-                        // But load near the end if it's closer to our target
-                        (end - chunk_size, end)
-                    } else {
-                        // otherwise, load the chunk centered around our target
-                        let start = offset - chunk_size / 2;
-                        (start, start + chunk_size)
-                    }
-                };
+            assert!(start <= offset);
+            assert!(offset < end);
 
             // Send the buffer to the parsers
             let buffer = self.file.read(start, end-start).unwrap();
@@ -367,8 +346,6 @@ impl LogFileLines {
 
             self.index.finalize();
             self.index.locate(offset)
-        } else {
-            Location::Virtual(VirtualLocation::End)
         }
     }
 

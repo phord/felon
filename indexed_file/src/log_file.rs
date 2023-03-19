@@ -27,8 +27,8 @@ impl LogFile {
         })
     }
 
-    pub fn new_mock_file(fill: &str, size: usize) -> LogFile {
-        let file = MockLogFile::new(fill.to_string(), size);
+    pub fn new_mock_file(fill: &str, size: usize, chunk_size: usize) -> LogFile {
+        let file = MockLogFile::new(fill.to_string(), size, chunk_size);
         LogFile {
             file: DataSource::MockFile(file),
         }
@@ -51,12 +51,22 @@ impl LogFileTrait for LogFile {
             _ => unimplemented!(),
         }
     }
+
+    fn chunk(&self, target: usize) -> (usize, usize) {
+        match &self.file {
+            DataSource::TextFile(file) => file.chunk(target),
+            DataSource::MockFile(file) => file.chunk(target),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 // generic representation of text we can show in our pager
 pub trait LogFileTrait {
     fn len(&self) -> usize;
     fn read(&self, offset: usize, len: usize) -> Option<&[u8]>;
+    // Determine the preferred chunk to read to include the target offset
+    fn chunk(&self, target: usize) -> (usize, usize);
 }
 
 pub struct TextLogFile {
@@ -84,6 +94,14 @@ impl LogFileTrait for TextLogFile {
             let end = (offset + len).min(self.len());
             Some(&self.mmap[offset..end])
         }
+    }
+
+    fn chunk(&self, target: usize) -> (usize, usize) {
+        let chunk_size = 1024 * 1024;
+        let start = target.saturating_sub(chunk_size / 2);
+        let end = (start + chunk_size).min(self.len());
+        let start = end.saturating_sub(chunk_size);
+        (start, end)
     }
 }
 
