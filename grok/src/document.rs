@@ -109,7 +109,6 @@ impl Filters {
         };
 
         let v : Vec<_> = s.file.iter_offsets()
-            .map(|(&start, &end)| (start, end))
             .collect();
 
         s.filtered_lines = v;

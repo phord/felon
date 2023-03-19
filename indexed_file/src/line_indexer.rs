@@ -575,8 +575,13 @@ impl<'a> LogFileDataIterator<'a> {
             pos: Location::Virtual(VirtualLocation::Start),
         }
     }
+}
 
-    fn ref_next(&'a mut self) -> Option<(&'a str, usize, usize)> {
+// Iterate over lines as position, string
+impl<'a> Iterator for LogFileDataIterator<'a> {
+    type Item = (String, usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
         self.pos = self.file.index.resolve(self.pos);
 
         // FIXME: Get this from self.file; don't even pass it to index_chunk
@@ -592,22 +597,15 @@ impl<'a> LogFileDataIterator<'a> {
         }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                if let Some(line) = self.file.readline_fixed(bol, eol + 1) {   // FIXME: +1?
+                if let Some(line) = self.file.readline_fixed(bol, eol + 1) {   // FIXME: do we want this +1?
                     self.pos = self.file.index.next_line_index(self.pos);
-                    return Some((line, bol, eol + 1));
+                    return Some((line.to_string(), bol, eol));
+                } else {
+                    panic!("Unhandled file read error?");
                 }
             }
         }
         unreachable!();
-    }
-
-}
-
-impl<'a> Iterator for LogFileDataIterator<'a> {
-    type Item = (&'a str, usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.ref_next()
     }
 
 }
@@ -693,9 +691,8 @@ impl LogFileLines {
         self.iter()
     }
 
-    // pub fn iter_lines(&mut self) -> impl Iterator<Item = (&str, usize, usize)> + '_ {
-    //     todo!(); //self.iter_offsets().map(|(start, end)| -> (&str, usize, usize) {(self.readline_fixed(start, end).unwrap_or(""), start, end)})
-    //     None
-    // }
+    pub fn iter_lines(&mut self) -> impl Iterator<Item = (String, usize, usize)> + '_ {
+        LogFileDataIterator::new(self)
+    }
 
 }
