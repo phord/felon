@@ -562,6 +562,56 @@ mod logfile_iterator_tests {
     }
 }
 
+
+struct LogFileDataIterator<'a> {
+    file: &'a mut LogFileLines,
+    pos: Location,
+}
+
+impl<'a> LogFileDataIterator<'a> {
+    fn new(file: &'a mut LogFileLines) -> Self {
+        Self {
+            file,
+            pos: Location::Virtual(VirtualLocation::Start),
+        }
+    }
+
+    fn ref_next(&'a mut self) -> Option<(&'a str, usize, usize)> {
+        self.pos = self.file.index.resolve(self.pos);
+
+        // FIXME: Get this from self.file; don't even pass it to index_chunk
+        let chunk_size = 1024;
+
+        loop {
+            match self.pos {
+                Location::Gap(gap) => self.pos = self.file.index_chunk(gap, chunk_size),
+                Location::Indexed(_) => break,
+                Location::Virtual(VirtualLocation::End) => return None,
+                Location::Virtual(_) => panic!("Still?"),
+            };
+        }
+        if let Some(bol) = self.file.index.start_of_line(self.pos) {
+            if let Some(eol) = self.file.index.end_of_line(self.pos) {
+                if let Some(line) = self.file.readline_fixed(bol, eol + 1) {   // FIXME: +1?
+                    self.pos = self.file.index.next_line_index(self.pos);
+                    return Some((line, bol, eol + 1));
+                }
+            }
+        }
+        unreachable!();
+    }
+
+}
+
+impl<'a> Iterator for LogFileDataIterator<'a> {
+    type Item = (&'a str, usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ref_next()
+    }
+
+}
+
 impl LogFileLines {
 
     pub fn new(file: LogFile) -> LogFileLines {
@@ -624,7 +674,7 @@ impl LogFileLines {
         self.index.lines()
     }
 
-    pub fn readline_fixed(&self, start: usize, end: usize) -> Option<&str> {
+    pub fn readline_fixed<'a>(&'a self, start: usize, end: usize) -> Option<&'a str> {
         if end < self.file.len() {
             assert!(end > start);
             // FIXME: Handle unwrap error
