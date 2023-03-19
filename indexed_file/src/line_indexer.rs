@@ -563,6 +563,108 @@ mod logfile_iterator_tests {
 }
 
 
+// Tests for LogFileIterator
+#[cfg(test)]
+mod logfile_data_iterator_tests {
+    use super::LogFile;
+    use super::LogFileLines;
+
+    #[test]
+    fn test_iterator() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let trim_patt = &patt[..patt_len-1];
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut it = file.iter_lines();
+        let (line, prev, _) = it.next().unwrap();
+        let mut prev = prev;
+        assert_eq!(prev, 0);
+        assert_eq!(line, trim_patt);
+        for i in it.take(lines - 1) {
+            let (line, bol, eol) = i;
+            assert_eq!(bol - prev, patt_len);
+            assert_eq!(eol - bol, patt_len);
+            assert_eq!(line, trim_patt);
+            prev = bol;
+        }
+    }
+
+    #[test]
+    fn test_iterator_exhaust() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut count = 0;
+        for _ in file.iter_lines() {
+            count += 1;
+        }
+        assert_eq!(count, lines);
+    }
+
+    #[test]
+    fn test_iterator_exhaust_twice() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let trim_patt = &patt[..patt_len-1];
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut count = 0;
+        for _ in file.iter_lines() {
+            count += 1;
+        }
+        assert_eq!(count, lines);
+
+        let mut it = file.iter_lines();
+        // Iterate again and measure per-line and offsets
+        let (_, prev, _) = it.next().unwrap();
+        let mut prev = prev;
+        assert_eq!(prev, 0);
+        for i in it.take(lines - 1) {
+            let (line, bol, eol) = i;
+            assert_eq!(bol - prev, patt_len);
+            assert_eq!(eol - bol, patt_len);
+            assert_eq!(line, trim_patt);
+            prev = bol;
+        }
+    }
+
+
+    #[test]
+    fn test_iterator_exhaust_half_and_twice() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let trim_patt = &patt[..patt_len-1];
+        let lines = 6000;
+        let file = LogFile::new_mock_file(patt, patt_len * lines);
+        let mut file = LogFileLines::new(file);
+        let mut count = 0;
+        for _ in file.iter_lines().take(lines/2) {
+            count += 1;
+        }
+        assert_eq!(count, lines/2);
+
+        for _ in 0..2 {
+            let mut it = file.iter_lines();
+            // Iterate again and measure per-line and offsets
+            let (_, prev, _) = it.next().unwrap();
+            let mut prev = prev;
+            assert_eq!(prev, 0);
+            for i in it.take(lines - 1) {
+                let (line, bol, eol) = i;
+                assert_eq!(bol - prev, patt_len);
+                assert_eq!(eol - bol, patt_len);
+                assert_eq!(line, trim_patt);
+                prev = bol;
+            }
+        }
+    }
+}
+
 struct LogFileDataIterator<'a> {
     file: &'a mut LogFileLines,
     pos: Location,
@@ -597,9 +699,9 @@ impl<'a> Iterator for LogFileDataIterator<'a> {
         }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                if let Some(line) = self.file.readline_fixed(bol, eol + 1) {   // FIXME: do we want this +1?
+                if let Some(line) = self.file.readline_fixed(bol, eol + 1) {
                     self.pos = self.file.index.next_line_index(self.pos);
-                    return Some((line.to_string(), bol, eol));
+                    return Some((line.to_string(), bol, eol + 1));
                 } else {
                     panic!("Unhandled file read error?");
                 }
@@ -673,10 +775,11 @@ impl LogFileLines {
     }
 
     pub fn readline_fixed<'a>(&'a self, start: usize, end: usize) -> Option<&'a str> {
-        if end < self.file.len() {
+        if end <= self.file.len() {
             assert!(end > start);
             // FIXME: Handle unwrap error
             // FIXME: Handle CR+LF endings
+            // FIXME: Can't read last byte of file (for the case where it's not EOL)
             Some(std::str::from_utf8(self.file.read(start, end - start - 1).unwrap()).unwrap())
         } else {
             None
