@@ -1,8 +1,9 @@
-pub mod log_file;
-pub mod mock_log_file;
-pub mod index;
-pub mod line_indexer;
+pub mod eventual_index;
 pub mod filters;
+pub mod index;
+pub mod log_file;
+pub mod line_indexer;
+pub mod mock_log_file;
 
 #[cfg(test)]
 mod tests {
