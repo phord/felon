@@ -1,14 +1,13 @@
 pub mod eventual_index;
+pub mod files;
 pub mod filters;
 pub mod index;
-pub mod log_file;
 pub mod line_indexer;
-pub mod mock_log_file;
 
 #[cfg(test)]
 mod tests {
     use crate::line_indexer::LineIndexer;
-    use crate::log_file::LogFile;
+    use crate::files::LogFile;
     use std::path::PathBuf;
 
     fn open_log_file(filename: &str) -> std::io::Result<LogFile> {

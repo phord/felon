@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{line_indexer::LineIndexer, log_file::LogFile};
+use indexed_file::{line_indexer::LineIndexer, files::LogFile};
 // use std::collections::BTreeSet;
 // use std::ops::Bound::{Excluded, Unbounded};
 use itertools::Itertools;

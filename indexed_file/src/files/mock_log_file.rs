@@ -1,7 +1,7 @@
 // Mock log file helper
 
 use std::fmt;
-use crate::log_file::LogFileTrait;
+use crate::files::LogFileTrait;
 
 pub struct MockLogFile {
     filler: String,
@@ -69,8 +69,8 @@ impl MockLogFile {
 // Tests for MockLogFile
 #[cfg(test)]
 mod tests {
-    use crate::log_file::LogFile;
-    use crate::log_file::LogFileTrait;
+    use crate::files::LogFile;
+    use crate::files::LogFileTrait;
 
     #[test]
     fn test_mock_log_file_basic() {

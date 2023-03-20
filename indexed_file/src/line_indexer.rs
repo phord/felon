@@ -1,7 +1,7 @@
 // Generic log file source to discover and iterate individual log lines from a LogFile
 
 use std::fmt;
-use crate::log_file::{LogFile, LogFileTrait};
+use crate::files::{LogFile, LogFileTrait};
 use crate::index::Index;
 use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, Missing::{Bounded, Unbounded}};
 
