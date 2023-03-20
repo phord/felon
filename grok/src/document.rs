@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{line_indexer::LogFileLines, log_file::LogFile};
+use indexed_file::{line_indexer::LineIndexer, log_file::LogFile};
 // use std::collections::BTreeSet;
 // use std::ops::Bound::{Excluded, Unbounded};
 use itertools::Itertools;
@@ -46,7 +46,7 @@ impl DocFilter {
     }
 
     // Resolve a filter against a LogFileLines and store the matches
-    fn bind(&mut self, log: &mut LogFileLines) {
+    fn bind(&mut self, log: &mut LineIndexer) {
         let matches =
             match self.search_type {
                 SearchType::SearchRegex(ref regex) => {
@@ -94,11 +94,11 @@ struct Filters {
     /// Filtered line numbers
     filtered_lines: Vec<(usize, usize)>,
 
-    file: LogFileLines,
+    file: LineIndexer,
 }
 
 impl Filters {
-    fn new(file: LogFileLines) -> Self {
+    fn new(file: LineIndexer) -> Self {
 
         let mut s = Self {
             filter_in: vec![],
@@ -218,7 +218,7 @@ impl Document {
 impl Document {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
-        let file = LogFileLines::new(LogFile::new_text_file(Some(filename)).expect("Failed to open file"));
+        let file = LineIndexer::new(LogFile::new_text_file(Some(filename)).expect("Failed to open file"));
         println!("{:?}", file);
 
 

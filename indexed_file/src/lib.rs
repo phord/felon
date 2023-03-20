@@ -7,7 +7,7 @@ pub mod mock_log_file;
 
 #[cfg(test)]
 mod tests {
-    use crate::line_indexer::LogFileLines;
+    use crate::line_indexer::LineIndexer;
     use crate::log_file::LogFile;
     use std::path::PathBuf;
 
@@ -16,9 +16,9 @@ mod tests {
         LogFile::new_text_file(Some(path))
     }
 
-    fn open_log_file_lines(path: PathBuf) -> LogFileLines {
+    fn open_log_file_lines(path: PathBuf) -> LineIndexer {
         let file = LogFile::new_text_file(Some(path)).expect("Failed to open file");
-        LogFileLines::new(file)
+        LineIndexer::new(file)
     }
 
     #[test]

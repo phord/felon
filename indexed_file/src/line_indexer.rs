@@ -1,42 +1,32 @@
-// Structs to index lines in a text file
-// TODO: Cleanup - This is a clone of indexer (LogFile) that doesn't parse out words and numbers.  It only parses lines.
-//       Needs to be allowed to run in the background better, in a way that Rust can accept.
+// Generic log file source to discover and iterate individual log lines from a LogFile
 
 use std::fmt;
 use crate::log_file::{LogFile, LogFileTrait};
 use crate::index::Index;
 use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, Missing::{Bounded, Unbounded}};
 
-// NEXT: Replace LogFileLines with something that (generically) loads the EventualIndex on-demand by parsing
-// sections as-needed.  If we're smart we can predefine chunks to be demand-loaded that we can later replace
-// with zstdlib::frame offsets in some other implementation.
-// Our caller can decide when he needs to demand-load everything for searching, counting lines, etc.
-// fn load_chunk(offset:usize) -> OffsetRange
-//
-// Some outer wrapper can hold a cache of recently loaded chunks.
-
-pub struct LogFileLines {
+pub struct LineIndexer {
     // pub file_path: PathBuf,
     file: LogFile,
     index: EventualIndex,
 }
 
-impl fmt::Debug for LogFileLines {
+impl fmt::Debug for LineIndexer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("LogFileLines")
+        f.debug_struct("LineIndexer")
          .field("bytes", &self.count_bytes())
          .field("lines", &self.count_lines())
          .finish()
     }
 }
 
-struct LogFileLinesIterator<'a> {
-    file: &'a mut LogFileLines,
+struct LineIndexerIterator<'a> {
+    file: &'a mut LineIndexer,
     pos: Location,
 }
 
-impl<'a> LogFileLinesIterator<'a> {
-    fn new(file: &'a mut LogFileLines) -> Self {
+impl<'a> LineIndexerIterator<'a> {
+    fn new(file: &'a mut LineIndexer) -> Self {
         Self {
             file,
             pos: Location::Virtual(VirtualLocation::Start),
@@ -44,7 +34,7 @@ impl<'a> LogFileLinesIterator<'a> {
     }
 }
 
-impl<'a> Iterator for LogFileLinesIterator<'a> {
+impl<'a> Iterator for LineIndexerIterator<'a> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -68,11 +58,11 @@ impl<'a> Iterator for LogFileLinesIterator<'a> {
     }
 }
 
-// Tests for LogFileIterator
+// Tests for LineIndexerIterator
 #[cfg(test)]
 mod logfile_iterator_tests {
     use super::LogFile;
-    use super::LogFileLines;
+    use super::LineIndexer;
 
     #[test]
     fn test_iterator() {
@@ -80,7 +70,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut it = file.iter();
         let (prev, _) = it.next().unwrap();
         let mut prev = prev;
@@ -99,7 +89,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter() {
             count += 1;
@@ -113,7 +103,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter() {
             count += 1;
@@ -140,7 +130,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter().take(lines/2) {
             count += 1;
@@ -164,11 +154,11 @@ mod logfile_iterator_tests {
 }
 
 
-// Tests for LogFileIterator
+// Tests for LineIndexerDataIterator
 #[cfg(test)]
 mod logfile_data_iterator_tests {
     use super::LogFile;
-    use super::LogFileLines;
+    use super::LineIndexer;
 
     #[test]
     fn test_iterator() {
@@ -177,7 +167,7 @@ mod logfile_data_iterator_tests {
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut it = file.iter_lines();
         let (line, prev, _) = it.next().unwrap();
         let mut prev = prev;
@@ -198,7 +188,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter_lines() {
             count += 1;
@@ -213,7 +203,7 @@ mod logfile_data_iterator_tests {
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter_lines() {
             count += 1;
@@ -242,7 +232,7 @@ mod logfile_data_iterator_tests {
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LogFileLines::new(file);
+        let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter_lines().take(lines/2) {
             count += 1;
@@ -266,13 +256,13 @@ mod logfile_data_iterator_tests {
     }
 }
 
-struct LogFileDataIterator<'a> {
-    file: &'a mut LogFileLines,
+struct LineIndexerDataIterator<'a> {
+    file: &'a mut LineIndexer,
     pos: Location,
 }
 
-impl<'a> LogFileDataIterator<'a> {
-    fn new(file: &'a mut LogFileLines) -> Self {
+impl<'a> LineIndexerDataIterator<'a> {
+    fn new(file: &'a mut LineIndexer) -> Self {
         Self {
             file,
             pos: Location::Virtual(VirtualLocation::Start),
@@ -281,7 +271,7 @@ impl<'a> LogFileDataIterator<'a> {
 }
 
 // Iterate over lines as position, string
-impl<'a> Iterator for LogFileDataIterator<'a> {
+impl<'a> Iterator for LineIndexerDataIterator<'a> {
     type Item = (String, usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -310,9 +300,9 @@ impl<'a> Iterator for LogFileDataIterator<'a> {
 
 }
 
-impl LogFileLines {
+impl LineIndexer {
 
-    pub fn new(file: LogFile) -> LogFileLines {
+    pub fn new(file: LogFile) -> LineIndexer {
         Self {
             file,
             index: EventualIndex::new(),
@@ -370,7 +360,7 @@ impl LogFileLines {
     }
 
     pub fn iter(&mut self) -> impl Iterator<Item = (usize, usize)> + '_ {
-        LogFileLinesIterator::new(self)
+        LineIndexerIterator::new(self)
     }
 
     pub fn iter_offsets(&mut self) -> impl Iterator<Item = (usize, usize)> + '_ {
@@ -378,7 +368,7 @@ impl LogFileLines {
     }
 
     pub fn iter_lines(&mut self) -> impl Iterator<Item = (String, usize, usize)> + '_ {
-        LogFileDataIterator::new(self)
+        LineIndexerDataIterator::new(self)
     }
 
 }
