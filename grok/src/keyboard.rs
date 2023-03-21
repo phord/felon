@@ -200,6 +200,7 @@ impl Reader {
                             None => Ok(UserCommand::None),
                         };
                     }
+                    Event::FocusGained | Event::FocusLost | Event::Paste(_) => {},
                     Event::Mouse(event) => {
                         let lookup = MouseEvent {
                             column:0, row:0,
