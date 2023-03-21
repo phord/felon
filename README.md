@@ -1,3 +1,6 @@
+### igrok is a work in progress.  It's my development project.  It is not functional yet. 
+### Do not clone this expecting anything useful to happen.
+
 igrok - the Log Grokker tool
 
 igrok reads a text file (possibly compressed) and indexes every word in the file.  Users can then browse
