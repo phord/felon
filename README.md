@@ -1,23 +1,17 @@
 ### igrok is a work in progress.  It's my development project.  It is not functional yet. 
 ### Do not clone this expecting anything useful to happen.
 
-igrok - the Log Grokker tool
+grok - the Log Grokker tool
 
-igrok reads a text file (possibly compressed) and indexes every word in the file.  Users can then browse
-the interesting lines of the file by searching for keywords identified in it.
+grok is an interactive replacement for `zegrep | less`.  It intends to be a replacement for [lnav](https://lnav.org/) which heavily inspired some of the features.
 
-Needs some special expression parsing.  Something like
+----
 
-    Expr               Find lines that contain:
-    ================   ==================================
-    "+foo +bar -baz"   both foo and bar, but not baz
-    "(foo bar) -baz"   foo or bar but not baz
-    "foo (bar -baz)"   foo or (bar but not baz)
-    "foo -(bar -baz)"  foo but not bar unless also baz
-    "'foo bar'"        the exact text "foo bar"
-    "foo_bar"          the exact text "foo_bar"
+Following are some design notes and ideas useful only to me, perhaps.  
 
-
+Originally grok was intended to be a faster word-based file indexer, capable of know everywhere a word existed in a file all at once. 
+The expectation was that this could be faster than regular expression searching after the fact. The expectation was incorrect, at least in my implementation.
+It's not a new idea; it dates back to the 1940's, and an [intern at Google used it](https://swtch.com/~rsc/regexp/regexp4.html) in some modern tools there for a while.
 
 Design:
 
@@ -31,15 +25,12 @@ TextBuffer - buffer to hold lines of text
 
 TextList - ordered set of lines referenced in a TextBuffer
 
-SearchPhrase - a word or glob that can match text literally
-    "foo", "foo*", "foo_bar"
-    Should I punt and let this be a proper regex?
+SearchPhrase - a way to match text; e.g. regex, substring, time range, etc.
 
 SearchExpr - a search expression made of one or more SearchPhrases and conjunctions
     Can be combined with other SearchExpr to make up more complex expressions
 
 Features/Ideas:
-    - Use TUI or Termion or something else for managing the display
     - Recognize/parse timestamps to support time-based filters, goto, timedelta, etc.
     - Able to show context lines (eg. -A5 -C3)
     - Highlight matches in colors (with different colors for different expressions)
@@ -88,7 +79,7 @@ Need to be able to disable / enable filters individually and collectively.
 
 Every line knows its timestamp for `goto`, `delta`, and merging, but don't parse the time until it's needed.
 
-Blast!  `less` already supports filtering built-in!
+`less` already supports filtering built-in, btw.
     https://unix.stackexchange.com/questions/179238/grep-inside-less
 
 Syntax highlighter:  https://github.com/trishume/syntect
