@@ -35,32 +35,14 @@ SearchPhrase - a word or glob that can match text literally
 SearchExpr - a search expression made of one or more SearchPhrases and conjunctions
     Can be combined with other SearchExpr to make up more complex expressions
 
-WordHash - a case-insensitive hash of a "word" in some text
-    Supports fast hashing of a whole string from a memory buffer
-    Hashes only letters
-        Special-case parsing for
-            identifiers:  foo_bar  foo::bar
-            numbers: ???
-            user-supplied literals
-
-TextMap - a map of WordHash to TextBuffer indexes
-    filled by parsing all lines of the log
-
-SearchCache - a special TextMap that maps SearchExpr strings to indexes
-    Recursively combined to create larger search expressions
-
-TextSearch - applies a SearchExpr to a TextMap to find all lines matched
-
 Features/Ideas:
     - Use TUI or Termion or something else for managing the display
     - Recognize/parse timestamps to support time-based filters, goto, timedelta, etc.
     - Able to show context lines (eg. -A5 -C3)
-    - Support regexes that bypass the index with accompanying sucky performance
     - Highlight matches in colors (with different colors for different expressions)
     - Spool data from stdin
     - Automatically recognize log-line patterns; allows to quickly say "show all of these lines"
         - Needs to be smart enough to ignore prefix (timestamp, pid, etc.)
-    - Word index should ignore prefix or words that appear on every line (invert the TextMap set if word is on majority of lines?)
     - Auto-expand grouped lines (with C markers)
 
 
@@ -105,3 +87,5 @@ Every line knows its timestamp for `goto`, `delta`, and merging, but don't parse
 
 Blast!  `less` already supports filtering built-in!
     https://unix.stackexchange.com/questions/179238/grep-inside-less
+
+Syntax highlighter:  https://github.com/trishume/syntect

@@ -5,11 +5,6 @@ use std::path::PathBuf;
 use crate::files::MockLogFile;
 use crate::files::TextLogFile;
 
-enum DataSource {
-    NullFile,
-    TextFile(TextLogFile),
-    MockFile(MockLogFile),
-}
 
 pub struct LogFile {
     file: Box<dyn LogFileTrait>,
