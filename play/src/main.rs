@@ -165,9 +165,9 @@ impl AsyncStdin {
     }
 
     fn spawn_stdin_channel() -> Receiver<Vec<u8>> {
-        let (tx, rx) = mpsc::channel::<Vec<u8>>();
+        // Use a bounded channel to prevent stdin from running away from us
+        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(100);
         let mut buffer = String::new();
-        // TODO: Use a bounded channel to prevent stdin running away with all our RAM
         thread::spawn(move || loop {
             buffer.clear();
             // TODO: Read into a Vec<u8> and avoid utf8-validation of the data
@@ -182,6 +182,7 @@ impl AsyncStdin {
     }
 }
 
+//  (for x in {1..100} ; do echo $x ; sleep 0.1 ; done) | cargo run --bin play
 fn try_async_stdin() {
     let mut stdin = AsyncStdin::new();
     let mut prev = millis();
@@ -204,10 +205,36 @@ fn try_async_stdin() {
     }
 }
 
+//  (for x in {1..100} ; do echo $x ; sleep 0.1 ; done) | cargo run --bin play
+fn try_async_stdin_terminate_early() {
+    let mut stdin = AsyncStdin::new();
+    let mut prev = millis();
+    let mut prev_len = 0;
+    let mut counter = 0;
+    while counter < 10 && !stdin.is_eof() {
+        stdin.fill_buffer();
+
+        let now = millis();
+        let elapsed = now - prev;
+
+        let len = stdin.len();
+        if prev_len != len {
+            let s = String::from_utf8(stdin.buffer[prev_len..].to_vec()).unwrap();
+            prev_len = len;
+            prev = now;
+            counter += 1;
+            print!("{elapsed}ms: {s}");
+        }
+        sleep( std::time::Duration::from_millis(1));
+    }
+}
+
+
 fn main() {
     // stdin_read_one_line();
     // stdin_read_all_lines();
     // stdin_read_bytes();
     // stdin_seek_front_to_back().expect("failed");
-    try_async_stdin();
+    // try_async_stdin();
+    try_async_stdin_terminate_early();
 }
