@@ -177,22 +177,24 @@ fn try_async_stdin_terminate_early() {
 
 // Seek works in AsyncStdin
 fn async_stdin_seek_front_to_back() -> std::io::Result<()>{
-    use std::io::{self, BufRead, BufReader, Seek, SeekFrom};
+    use std::io::{BufRead, Seek, SeekFrom};
     let mut file = AsyncStdin::new();
 
     assert!(is_seekable(&mut file));
 
     let mut buffer = String::new();
-    let mut handle = BufReader::new(file);
+    let mut handle = file;
+    // let mut handle = std::io::BufReader::new(handle);
 
     for _ in 0..4 {
-        sleep(std::time::Duration::from_millis(200));
+        sleep(std::time::Duration::from_millis(2000));
 
         handle.seek(SeekFrom::Start(0)).expect("file is seekable");
         let l1 = { buffer.clear(); handle.read_line(&mut buffer).expect("read_line doesn't fail"); buffer.clone() };
         let l2 = { buffer.clear(); handle.read_line(&mut buffer).expect("read_line doesn't fail"); buffer.clone() };
-        handle.seek(SeekFrom::End(-10)).expect("file is seekable");
+        handle.seek(SeekFrom::End(-50)).expect("file is seekable");
         let _dummy = { buffer.clear(); handle.read_line(&mut buffer).expect("read_line doesn't fail"); buffer.clone() };
+        let _l100 = { buffer.clear(); handle.read_line(&mut buffer).expect("read_line doesn't fail"); buffer.clone() };
         let l100 = { buffer.clear(); handle.read_line(&mut buffer).expect("read_line doesn't fail"); buffer.clone() };
         println!("l1:{l1}l2:{l2}l100:{l100}");
     }

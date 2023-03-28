@@ -79,27 +79,24 @@ impl Read for AsyncStdin {
 use std::io::{Seek, SeekFrom};
 impl Seek for AsyncStdin {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        eprint!("AsyncStdin::seek {:?}  ", pos);
-
         let (start, offset) = match pos {
-            SeekFrom::Start(n) => {
-                (0_i64, n as i64)
-            }
-            SeekFrom::Current(n) => {
-                (self.pos as i64, n)
-            }
-            SeekFrom::End(n) => {
-                (self.len() as i64, n)
-            }
+            SeekFrom::Start(n) => (0_i64, n as i64),
+            SeekFrom::Current(n) => (self.pos as i64, n),
+            SeekFrom::End(n) => (self.len() as i64, n),
         };
         self.pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
-        eprintln!("  >> len={} pos={}", self.len(), self.pos);
         Ok(self.pos)
     }
 }
 
-// use std::io::BufRead;
-// // BufReader<AsyncStdin> is pointless As BufReader takes ownership away from us
-// impl BufRead for AsyncStdin {
+// BufReader<AsyncStdin> is unnecessary and results in extra copies. Avoid using it, and just use our impl instead.
+impl std::io::BufRead for AsyncStdin {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.fill_buffer();
+        Ok(&self.buffer[self.pos as usize..])
+    }
 
-// }
+    fn consume(&mut self, amt: usize) {
+        self.pos += amt as u64;
+    }
+}
