@@ -1,7 +1,29 @@
+/**
+ * AsyncStdin is a non-blocking reader for Stdin that implements Read and Seek. It supports tty, redirects and
+ * pipes.
+ *
+ * Random seeks are supported by keeping a copy of all the data ever received from stdin in memory. This is possibly
+ * wasteful on some systems that already cache the stdin data somewhere, but it can't be helped in any portable way.
+ *
+ * It is non-blocking because when we try to read past the end of the data, we can read from our buffer instead
+ * of from the stdin file handle.
+ *
+ * Data is spooled into our buffer from a listener thread and results are posted to a mpsc::sync_channel. Data
+ * is read using read_line for portability. We could read bytes, but while leaving stdin in blocking mode, we
+ * can't reliably read partial lines except by reading a byte at a time.
+ *
+ * To prevent runaway source pipes from filling all of RAM needlessly, we use a limit in a bounded channel of
+ * lookahead_count lines to read ahead. If the caller doesn't read data, we won't spool more data into the
+ * buffer. Well-behaved apps will respond to this backpressure to avoid sending more data as well, thus throttling
+ * the whole pipeline if needed.
+ */
+
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
+
+const lookahead_count:usize = 100;
 
 pub struct AsyncStdin {
     buffer: Vec<u8>,
@@ -45,7 +67,7 @@ impl AsyncStdin {
 
     fn spawn_stdin_channel() -> Receiver<Vec<u8>> {
         // Use a bounded channel to prevent stdin from running away from us
-        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(100);
+        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(lookahead_count);
         let mut buffer = String::new();
         thread::spawn(move || loop {
             buffer.clear();
