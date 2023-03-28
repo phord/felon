@@ -1,6 +1,6 @@
 /**
- * AsyncStdin is a non-blocking reader for Stdin that implements Read and Seek. It supports tty, redirects and
- * pipes.
+ * AsyncStdin is a non-blocking reader for Stdin or pipes that implements Read, BufRead and Seek. It supports Stdin
+ * from a termainal or a redirect, and pipes.
  *
  * Random seeks are supported by keeping a copy of all the data ever received from stdin in memory. This is possibly
  * wasteful on some systems that already cache the stdin data somewhere, but it can't be helped in any portable way.
@@ -13,9 +13,9 @@
  * can't reliably read partial lines except by reading a byte at a time.
  *
  * To prevent runaway source pipes from filling all of RAM needlessly, we use a limit in a bounded channel of
- * lookahead_count lines to read ahead. If the caller doesn't read data, we won't spool more data into the
- * buffer. Well-behaved apps will respond to this backpressure to avoid sending more data as well, thus throttling
- * the whole pipeline if needed.
+ * lookahead_count lines to read ahead and we only pull from the queue if the caller wants to read near the end
+ * of our currently loaded buffered data. Well-behaved apps will respond to this backpressure to avoid sending
+ * more data as well, thus throttling the whole pipeline if needed.
  */
 
 use std::sync::mpsc;
@@ -23,7 +23,8 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 
-const lookahead_count:usize = 100;
+const QUEUE_SIZE:usize = 100;
+const READ_THRESHOLD:usize = 10240;
 
 pub struct AsyncStdin {
     buffer: Vec<u8>,
@@ -67,7 +68,7 @@ impl AsyncStdin {
 
     fn spawn_stdin_channel() -> Receiver<Vec<u8>> {
         // Use a bounded channel to prevent stdin from running away from us
-        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(lookahead_count);
+        let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);
         let mut buffer = String::new();
         thread::spawn(move || loop {
             buffer.clear();
@@ -86,8 +87,11 @@ impl AsyncStdin {
 use std::io::Read;
 impl Read for AsyncStdin {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.fill_buffer();
+        // FIXME: Call fill_buffer() only if pos is "close" to the end of the buffer
         let start = self.pos as usize;
+        if start + buf.len() + READ_THRESHOLD > self.len() {
+            self.fill_buffer();
+        }
         let len = buf.len().min(self.len().saturating_sub(start));
         if len > 0 {
             let end = start + len;
