@@ -310,6 +310,7 @@ impl LineIndexer {
     }
 
     fn index_chunk(&mut self, gap: GapRange) -> Location {
+        self.file.quench();
         let (offset, start, end) = match gap {
             GapRange { target, gap: Bounded(start, end) } => (target, start, end.min(self.file.len())),
             GapRange { target, gap: Unbounded(start) } => (target, start, self.file.len()),

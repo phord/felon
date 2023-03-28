@@ -20,7 +20,6 @@ impl LogFile {
         if let Some(input_file) = input_file {
                 // Is it a file?
             let metadata = input_file.metadata()?;
-            println!("{:?}", &metadata);
             if metadata.is_file() {
                 let file = TextLogFile::new(Some(input_file))?;
                 Ok(LogFile {
@@ -36,8 +35,11 @@ impl LogFile {
                 })
             }
         } else {
-            todo!("Implement read from stdin");
-        }
+            let file = TextLogStream::new(None)?;
+            Ok(LogFile {
+                file: Box::new(file),
+            })
+    }
     }
 
     pub fn new_mock_file(fill: &str, size: usize, chunk_size: usize) -> LogFile {
@@ -52,6 +54,7 @@ impl LogFileTrait for LogFile {
     fn len(&self) -> usize { self.file.len() }
     fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> { self.file.read(offset, len) }
     fn chunk(&self, target: usize) -> (usize, usize) { self.file.chunk(target) }
+    fn quench(&mut self) { self.file.quench() }
 }
 
 // generic representation of text we can show in our pager
@@ -61,4 +64,6 @@ pub trait LogFileTrait {
     fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>>;
     // Determine the preferred chunk to read to include the target offset
     fn chunk(&self, target: usize) -> (usize, usize);
+    // Check for more data in file and update state
+    fn quench(&mut self) -> ();
 }

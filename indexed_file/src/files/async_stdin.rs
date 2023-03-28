@@ -55,20 +55,34 @@ impl AsyncStdin {
         self.buffer.len()
     }
 
-    pub fn fill_buffer(&mut self) {
-        if let Some(rx) = &self.rx {
-            loop {
-                match rx.try_recv() {
-                    Ok(mut data) => self.buffer.append(&mut data),
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => {
-                        self.rx = None;
-                        break;
-                        // panic!("Channel disconnected"),
-                    },
+    pub fn fill_buffer(&mut self, pos: usize) {
+        if pos + READ_THRESHOLD > self.len() {
+            if let Some(rx) = &self.rx {
+                loop {
+                    match rx.try_recv() {
+                        Ok(mut data) => self.buffer.append(&mut data),
+                        Err(TryRecvError::Empty) => break,
+                        Err(TryRecvError::Disconnected) => {
+                            self.rx = None;
+                            break;
+                            // panic!("Channel disconnected"),
+                        },
+                    }
                 }
             }
         }
+    }
+
+    // Wait on any data at all; Returns true if file is still open
+    pub fn wait(&mut self) -> bool {
+        if let Some(rx) = &self.rx {
+            match rx.recv() {
+                Ok(mut data) => self.buffer.append(&mut data),
+                Err(_) => self.rx = None,
+            }
+        }
+
+        !self.rx.is_none()
     }
 
     fn reader(pipe: Option<std::path::PathBuf>) -> Receiver<Vec<u8>>
@@ -104,9 +118,7 @@ impl Read for AsyncStdin {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // FIXME: Call fill_buffer() only if pos is "close" to the end of the buffer
         let start = self.pos as usize;
-        if start + buf.len() + READ_THRESHOLD > self.len() {
-            self.fill_buffer();
-        }
+        self.fill_buffer(start + buf.len());
         let len = buf.len().min(self.len().saturating_sub(start));
         if len > 0 {
             let end = start + len;
@@ -133,7 +145,7 @@ impl Seek for AsyncStdin {
 // BufReader<AsyncStdin> is unnecessary and results in extra copies. Avoid using it, and just use our impl instead.
 impl std::io::BufRead for AsyncStdin {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        self.fill_buffer();
+        self.fill_buffer(self.pos as usize);
         Ok(&self.buffer[self.pos as usize..])
     }
 

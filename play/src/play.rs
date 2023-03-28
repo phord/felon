@@ -126,7 +126,7 @@ fn try_async_stdin() {
     let mut prev = millis();
     let mut prev_len = 0;
     while !stdin.is_eof() {
-        stdin.fill_buffer();
+        stdin.fill_buffer(stdin.len());
 
         let now = millis();
         let elapsed = now - prev;
@@ -154,7 +154,7 @@ fn try_async_stdin_terminate_early() {
     let mut prev_len = 0;
     let mut counter = 0;
     while counter < 10 && !stdin.is_eof() {
-        stdin.fill_buffer();
+        stdin.fill_buffer(stdin.len());
 
         let now = millis();
         let elapsed = now - prev;

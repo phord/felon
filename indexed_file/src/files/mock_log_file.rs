@@ -24,6 +24,8 @@ impl LogFileTrait for MockLogFile {
         self.size
     }
 
+    fn quench(&mut self) {}
+
     fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
         if offset > self.len() {
             None

@@ -24,8 +24,9 @@ impl fmt::Debug for TextLogFile {
 impl LogFileTrait for TextLogFile {
     fn len(&self) -> usize {
         self.file.metadata().unwrap().len() as usize
-
     }
+
+    fn quench(&mut self) {}
 
     fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
         if offset > self.len() {
