@@ -1,6 +1,11 @@
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::path::PathBuf;
 /**
- * AsyncStdin is a non-blocking reader for Stdin or pipes that implements Read, BufRead and Seek. It supports Stdin
- * from a termainal or a redirect, and pipes.
+ * AsyncStdin is a poorly named non-blocking reader for Stdin or pipes that implements Read, BufRead and Seek. It
+ * supports Stdin from a terminal or a redirect, and pipes. A better name might be UnboundedReadBuffer because that
+ * is how it functions internally to provide Seek and non-blocking Read.
  *
  * Random seeks are supported by keeping a copy of all the data ever received from stdin in memory. This is possibly
  * wasteful on some systems that already cache the stdin data somewhere, but it can't be helped in any portable way.
@@ -26,6 +31,7 @@ use std::thread;
 const QUEUE_SIZE:usize = 100;
 const READ_THRESHOLD:usize = 10240;
 
+
 pub struct AsyncStdin {
     buffer: Vec<u8>,
     rx: Option<Receiver<Vec<u8>>>,
@@ -33,10 +39,9 @@ pub struct AsyncStdin {
 }
 
 impl AsyncStdin {
-    pub fn new() -> Self {
-        let rx = Some(Self::spawn_stdin_channel());
+    pub fn new(pipe: Option<PathBuf>) -> Self {
         Self {
-            rx,
+            rx: Some(Self::reader(pipe)),
             buffer: Vec::default(),
             pos: 0,
         }
@@ -66,15 +71,25 @@ impl AsyncStdin {
         }
     }
 
-    fn spawn_stdin_channel() -> Receiver<Vec<u8>> {
+    fn reader(pipe: Option<std::path::PathBuf>) -> Receiver<Vec<u8>>
+    {
         // Use a bounded channel to prevent stdin from running away from us
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);
         let mut buffer = String::new();
-        thread::spawn(move || loop {
+        let mut file = Option::None;
+        if let Some(pipe) = pipe {
+            file = Some(BufReader::new(File::open(pipe).expect("File exists")));
+        }
+    thread::spawn(move ||
+        loop {
             buffer.clear();
             // TODO: Read into a Vec<u8> and avoid utf8-validation of the data
             // TODO: Handle data with no line-feeds
-            match std::io::stdin().read_line(&mut buffer) {
+            let line = match &mut file {
+                Some(file) => file.read_line(&mut buffer),
+                None => std::io::stdin().read_line(&mut buffer),
+            };
+            match line {
                 Ok(0) => break,  // EOF
                 Ok(_) => tx.send(buffer.as_bytes().iter().copied().collect()).unwrap(),
                 Err(err) => { eprint!("{:?}", err); break; },
