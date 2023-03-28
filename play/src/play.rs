@@ -1,6 +1,6 @@
 
 use std::{time::{SystemTime, UNIX_EPOCH}, io::Read};
-use crate::async_stdin::AsyncStdin;
+use indexed_file::files::AsyncStdin;
 use std::thread::sleep;
 
 
