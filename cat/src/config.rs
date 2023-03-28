@@ -43,7 +43,7 @@ impl Config {
     }
 
     // TODO: Need some way to handle "toggle" values; eg., -S at runtime toggles slice
-    fn parse_args(&mut self, mut pargs: Arguments) {
+    fn parse_args(&mut self, pargs: Arguments) {
         // if pargs.contains(["-S", "--chop-long-lines"]) { self.chop = true; }
         // if pargs.contains(["-X", "--no-alternate-screen"]) { self.altscreen = false; }
 

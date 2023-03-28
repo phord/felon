@@ -2,10 +2,10 @@ use crate::config::Config;
 use crate::display::Display;
 use crate::status_line::StatusLine;
 use crate::keyboard::{Input, UserCommand};
-use crate::document::{Document, FilterType, SearchType};
+use crate::document::Document;
 
 pub struct Viewer {
-    config: Config,
+    _config: Config,
     display: Display,
     status: StatusLine,
     input: Input,
@@ -16,7 +16,7 @@ impl Viewer {
     pub fn new(config: Config) -> Self {
         let doc = Document::new(config.clone());
         Self {
-            config: config.clone(),
+            _config: config.clone(),
             display: Display::new(config.clone()),
             status: StatusLine::new(config),
             input: Input::new(),
