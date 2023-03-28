@@ -289,7 +289,7 @@ impl<'a> Iterator for LineIndexerDataIterator<'a> {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
                 if let Some(line) = self.file.readline_fixed(bol, eol + 1) {
                     self.pos = self.file.index.next_line_index(self.pos);
-                    return Some((line.to_string(), bol, eol + 1));
+                    return Some((line, bol, eol + 1));
                 } else {
                     panic!("Unhandled file read error?");
                 }
@@ -331,7 +331,7 @@ impl LineIndexer {
             // Send the buffer to the parsers
             let buffer = self.file.read(start, end-start).unwrap();
             let mut index = Index::new();
-            index.parse(buffer, start);
+            index.parse(&buffer, start);
             self.index.merge(index);
 
             self.index.finalize();
@@ -347,13 +347,13 @@ impl LineIndexer {
         self.index.lines()
     }
 
-    pub fn readline_fixed<'a>(&'a self, start: usize, end: usize) -> Option<&'a str> {
+    pub fn readline_fixed(&mut self, start: usize, end: usize) -> Option<String> {
         if end <= self.file.len() {
             assert!(end > start);
             // FIXME: Handle unwrap error
             // FIXME: Handle CR+LF endings
             // FIXME: Can't read last byte of file (for the case where it's not EOL)
-            Some(std::str::from_utf8(self.file.read(start, end - start - 1).unwrap()).unwrap())
+            Some(String::from_utf8(self.file.read(start, end - start - 1).unwrap()).unwrap())
         } else {
             None
         }

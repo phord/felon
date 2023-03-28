@@ -183,36 +183,38 @@ pub struct Document {
 
 impl Document {
 
-    pub fn get_lines_from_rev(&self, start: usize, len: usize) -> Vec<(usize, &str)> {
-        let iter = self.iter_filtered_rev(start);
-        iter.take(len).collect()
+    pub fn get_lines_from_rev(&self, start: usize, len: usize) -> Vec<(usize, String)> {
+        todo!("Replace iterators");
+        // let iter = self.iter_filtered_rev(start);
+        // iter.take(len).collect()
     }
 
-    pub fn get_lines_from(&self, start: usize, len: usize) -> Vec<(usize, &str)> {
-        let iter = self.iter_filtered(start);
-        iter.take(len).collect()
+    pub fn get_lines_from(&self, start: usize, len: usize) -> Vec<(usize, String)> {
+        todo!("Replace iterators");
+        // let iter = self.iter_filtered(start);
+        // iter.take(len).collect()
     }
 
-    pub fn iter_start(&self, start: usize) -> impl Iterator<Item = (usize, &str)>  {
-        self.iter_filtered(start)
-    //     DocumentIterator::<'a> {
-    //         doc: self,
-    //         index: start,
-    //         inner: Some(Box::new(self.filters.iter_includes()
-    //             .map(|(start, end)| self.filters.file.readline_fixed(start, end).unwrap())))
-    //     }
-    }
+    // pub fn iter_start(&self, start: usize) -> impl Iterator<Item = (usize, String)>  {
+    //     self.iter_filtered(start)
+    // //     DocumentIterator::<'a> {
+    // //         doc: self,
+    // //         index: start,
+    // //         inner: Some(Box::new(self.filters.iter_includes()
+    // //             .map(|(start, end)| self.filters.file.readline_fixed(start, end).unwrap())))
+    // //     }
+    // }
 
 
-    pub fn iter_filtered_rev(&self, pos: usize) -> impl Iterator<Item = (usize, &str)> {
-        let i = self.filters.iter_includes_rev(pos);
-        i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~")))
-    }
+    // pub fn iter_filtered_rev(&mut self, pos: usize) -> impl Iterator<Item = (usize, String)> + '_ {
+    //     let i = self.filters.iter_includes_rev(pos);
+    //     i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~".to_owned())))
+    // }
 
-    pub fn iter_filtered(&self, pos: usize) -> impl Iterator<Item = (usize, &str)> {
-        let i = self.filters.iter_includes(pos);
-        i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~")))
-    }
+    // pub fn iter_filtered(&mut self, pos: usize) -> impl Iterator<Item = (usize, String)> + '_ {
+    //     let i = self.filters.iter_includes(pos);
+    //     i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~".to_owned())))
+    // }
 }
 
 impl Document {

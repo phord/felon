@@ -24,14 +24,14 @@ impl LogFileTrait for MockLogFile {
         self.size
     }
 
-    fn read(&self, offset: usize, len: usize) -> Option<&[u8]> {
+    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
         if offset > self.len() {
             None
         } else {
             let offset = offset % self.filler.len();
             let end = (offset + len).min(self.len());
             assert!(end < self.buffer.len());
-            Some(self.buffer[offset..end].as_bytes())
+            Some(self.buffer[offset..end].as_bytes().iter().copied().collect())
         }
     }
 
@@ -83,37 +83,37 @@ mod tests {
     fn test_mock_log_file_read_basic() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size, 100);
-        assert_eq!(file.read(0, 10), Some(fill[..10].as_bytes()));
+        let mut file = LogFile::new_mock_file(fill, size, 100);
+        assert_eq!(file.read(0, 10), Some(fill[..10].as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_read_offset() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size, 100);
+        let mut file = LogFile::new_mock_file(fill, size, 100);
         let offset = fill.len() * 10;
-        assert_eq!(file.read(offset, 10), Some(fill[..10].as_bytes()));
+        assert_eq!(file.read(offset, 10), Some(fill[..10].as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_read_multiline() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size, 100);
+        let mut file = LogFile::new_mock_file(fill, size, 100);
         let mut ret = fill.to_string();
         ret.push_str(&fill[..]);
         let offset = fill.len() * 10;
         let len = ret.len();
 
-        assert_eq!(file.read(offset, len), Some(ret.as_bytes()));
+        assert_eq!(file.read(offset, len), Some(ret.as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_read_multiline_middle() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size, 100);
+        let mut file = LogFile::new_mock_file(fill, size, 100);
 
         let ofs = fill.len()/2;
         let end = fill.len() - 1;
@@ -122,7 +122,7 @@ mod tests {
         let offset = fill.len() * 10 + ofs;
         let len = ret.len();
 
-        assert_eq!(file.read(offset, len), Some(ret.as_bytes()));
+        assert_eq!(file.read(offset, len), Some(ret.as_bytes().to_vec()));
     }
 
     #[test]

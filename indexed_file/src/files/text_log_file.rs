@@ -3,14 +3,14 @@
 use std::path::PathBuf;
 
 use std::fs::File;
+use std::io::{Read, Seek, SeekFrom};
 use std::fmt;
-use mapr::{MmapOptions, Mmap};
 
 use crate::files::LogFileTrait;
 
 pub struct TextLogFile {
     // pub file_path: PathBuf,
-    mmap: Mmap,
+    file: File,
 }
 
 impl fmt::Debug for TextLogFile {
@@ -23,15 +23,29 @@ impl fmt::Debug for TextLogFile {
 
 impl LogFileTrait for TextLogFile {
     fn len(&self) -> usize {
-        self.mmap.len()
+        self.file.metadata().unwrap().len() as usize
+
     }
 
-    fn read(&self, offset: usize, len: usize) -> Option<&[u8]> {
+    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
         if offset > self.len() {
             None
         } else {
             let end = (offset + len).min(self.len());
-            Some(&self.mmap[offset..end])
+            let mut buf = vec![0u8; end-offset];
+            match self.file.seek(SeekFrom::Start(offset as u64)) {
+                Err(_) => None,
+                Ok(_pos) => {
+                    match self.file.read(&mut buf) {
+                        Err(_) => None,  // TODO: Log an error somewhere?
+                        Ok(actual) => {
+                            assert!(actual <= len);
+                            buf.truncate(actual);
+                            Some(buf)
+                        },
+                    }
+                }
+            }
         }
     }
 
@@ -58,12 +72,9 @@ impl TextLogFile {
             return Err(Error::new(ErrorKind::Other, "Expected a filename"));
         };
 
-        let mmap = unsafe { MmapOptions::new().map(&file.unwrap()) };
-        let mmap = mmap.expect("Could not mmap file.");
-
         let file = TextLogFile {
             // file_path: input_file.unwrap(),
-            mmap,
+            file: file.unwrap(),
         };
 
         Ok(file)

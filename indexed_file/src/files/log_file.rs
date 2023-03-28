@@ -50,7 +50,7 @@ impl LogFile {
 
 impl LogFileTrait for LogFile {
     fn len(&self) -> usize { self.file.len() }
-    fn read(&self, offset: usize, len: usize) -> Option<&[u8]> { self.file.read(offset, len) }
+    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> { self.file.read(offset, len) }
     fn chunk(&self, target: usize) -> (usize, usize) { self.file.chunk(target) }
 }
 
@@ -58,7 +58,7 @@ impl LogFileTrait for LogFile {
 pub trait LogFileTrait {
     fn len(&self) -> usize;
     // TODO: return a String from everywhere, and require that strings are valid utf8
-    fn read(&self, offset: usize, len: usize) -> Option<&[u8]>;
+    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>>;
     // Determine the preferred chunk to read to include the target offset
     fn chunk(&self, target: usize) -> (usize, usize);
 }

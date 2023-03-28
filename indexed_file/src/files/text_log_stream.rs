@@ -39,9 +39,9 @@ impl LogFileTrait for TextLogStream {
         self.stream.borrow().len()
     }
 
-    fn read(&self, offset: usize, len: usize) -> Option<&[u8]> {
-        todo!("Let read return a string");
-        self.stream.borrow_mut().read(offset, len)
+    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
+        let buf = self.stream.borrow_mut().read(offset, len).unwrap().to_vec();
+        Some(buf)
     }
 
     fn chunk(&self, target: usize) -> (usize, usize) {
