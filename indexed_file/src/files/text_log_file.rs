@@ -59,25 +59,11 @@ impl LogFileTrait for TextLogFile {
     }
 }
 
-use std::io::{Error, ErrorKind};
 impl TextLogFile {
-
-    pub fn new(input_file: Option<PathBuf>) -> std::io::Result<TextLogFile> {
-        let file = if let Some(file_path) = input_file {
-            // Must have a filename as input.
-            let file = File::open(file_path)?;
-            Some(file)
-        } else {
-            // Print error.
-            eprintln!("Expected '<input>' or input over stdin.");
-            return Err(Error::new(ErrorKind::Other, "Expected a filename"));
-        };
-
-        let file = TextLogFile {
+    pub fn new(filename: PathBuf) -> std::io::Result<TextLogFile> {
+        Ok(TextLogFile {
             // file_path: input_file.unwrap(),
-            file: file.unwrap(),
-        };
-
-        Ok(file)
+            file: File::open(filename)?,
+        })
     }
 }

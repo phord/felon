@@ -21,7 +21,7 @@ impl LogFile {
                 // Is it a file?
             let metadata = input_file.metadata()?;
             if metadata.is_file() {
-                let file = TextLogFile::new(Some(input_file))?;
+                let file = TextLogFile::new(input_file)?;
                 Ok(LogFile {
                     file: Box::new(file),
                 })
