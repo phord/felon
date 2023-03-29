@@ -27,7 +27,6 @@ impl LogFileTrait for TextLogStream {
     }
 
     fn quench(&mut self) {
-        println!("quench");
         self.stream.wait();
     }
 
@@ -37,7 +36,6 @@ impl LogFileTrait for TextLogStream {
         } else {
             let end = (offset + len).min(self.len());
             let mut buf = vec![0u8; end-offset];
-            let _actual = self.stream.read(&mut buf).unwrap();
             match self.stream.seek(SeekFrom::Start(offset as u64)) {
                 Err(_) => None,
                 Ok(_pos) => {
@@ -70,5 +68,4 @@ impl TextLogStream {
             stream: bfr,
         })
     }
-
 }
