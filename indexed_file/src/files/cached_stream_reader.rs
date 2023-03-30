@@ -31,6 +31,11 @@ use std::thread;
 const QUEUE_SIZE:usize = 100;
 const READ_THRESHOLD:usize = 10240;
 
+pub trait Stream {
+    fn len(&self) -> usize;
+    // Wait on any data at all; Returns true if file is still open
+    fn wait(&mut self) -> bool;
+}
 
 pub struct CachedStreamReader {
     buffer: Vec<u8>,
@@ -63,11 +68,8 @@ impl CachedStreamReader {
         !self.rx.is_some()
     }
 
-    pub fn len(&self) -> usize {
-        self.buffer.len()
-    }
-
     pub fn fill_buffer(&mut self, pos: usize) {
+        // TODO: Merge this and wait(); always wait for anything at pos
         if pos + READ_THRESHOLD > self.len() {
             if let Some(rx) = &self.rx {
                 loop {
@@ -82,18 +84,6 @@ impl CachedStreamReader {
                 }
             }
         }
-    }
-
-    // Wait on any data at all; Returns true if file is still open
-    pub fn wait(&mut self) -> bool {
-        if let Some(rx) = &self.rx {
-            match rx.recv() {
-                Ok(mut data) => self.buffer.append(&mut data),
-                Err(_) => self.rx = None,
-            }
-        }
-
-        !self.rx.is_none()
     }
 
     fn reader(mut pipe: Option<BufReader<File>>) -> Receiver<Vec<u8>>
@@ -116,6 +106,24 @@ impl CachedStreamReader {
             }
         });
         rx
+    }
+}
+
+impl Stream for CachedStreamReader {
+    fn len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    // Wait on any data at all; Returns true if file is still open
+    fn wait(&mut self) -> bool {
+        if let Some(rx) = &self.rx {
+            match rx.recv() {
+                Ok(mut data) => self.buffer.append(&mut data),
+                Err(_) => self.rx = None,
+            }
+        }
+
+        !self.rx.is_none()
     }
 }
 

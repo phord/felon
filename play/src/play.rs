@@ -2,6 +2,7 @@
 use std::{time::{SystemTime, UNIX_EPOCH}, io::Read};
 use indexed_file::files::CachedStreamReader;
 use std::thread::sleep;
+use indexed_file::files::Stream;
 
 
 fn millis() -> u64 {

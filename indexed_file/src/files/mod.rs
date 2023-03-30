@@ -10,3 +10,4 @@ pub use mock_log_file::MockLogFile;
 pub use text_log_file::TextLogFile;
 pub use text_log_stream::TextLogStream;
 pub use cached_stream_reader::CachedStreamReader;
+pub use cached_stream_reader::Stream;
