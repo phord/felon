@@ -6,11 +6,11 @@ use std::fmt;
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::files::LogFileTrait;
-use crate::files::AsyncStdin;
+use crate::files::CachedStreamReader;
 
 pub struct TextLogStream {
     // pub file_path: PathBuf,
-    stream: AsyncStdin,
+    stream: CachedStreamReader,
 }
 
 impl fmt::Debug for TextLogStream {
@@ -63,7 +63,7 @@ impl LogFileTrait for TextLogStream {
 
 impl TextLogStream {
     pub fn new(input_file: Option<PathBuf>) -> std::io::Result<TextLogStream> {
-        let bfr = AsyncStdin::new(input_file);
+        let bfr = CachedStreamReader::new(input_file);
         Ok(TextLogStream {
             stream: bfr,
         })

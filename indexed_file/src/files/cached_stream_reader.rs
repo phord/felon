@@ -3,7 +3,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::path::PathBuf;
 /**
- * AsyncStdin is a poorly named non-blocking reader for Stdin or pipes that implements Read, BufRead and Seek. It
+ * CachedStreamReader is a non-blocking stream reader that implements Read, BufRead and Seek. It
  * supports Stdin from a terminal or a redirect, and pipes. A better name might be UnboundedReadBuffer because that
  * is how it functions internally to provide Seek and non-blocking Read.
  *
@@ -32,18 +32,30 @@ const QUEUE_SIZE:usize = 100;
 const READ_THRESHOLD:usize = 10240;
 
 
-pub struct AsyncStdin {
+pub struct CachedStreamReader {
     buffer: Vec<u8>,
     rx: Option<Receiver<Vec<u8>>>,
     pos:u64,
 }
 
-impl AsyncStdin {
+impl CachedStreamReader {
     pub fn new(pipe: Option<PathBuf>) -> Self {
-        Self {
-            rx: Some(Self::reader(pipe)),
+        let base = Self {
+            rx: None,
             buffer: Vec::default(),
             pos: 0,
+        };
+
+        if let Some(pipe) = pipe {
+            Self {
+                rx: Some(Self::reader(Some(BufReader::new(File::open(pipe).expect("File exists"))))),
+                ..base
+            }
+        } else {
+            Self {
+                rx: Some(Self::reader(None)),
+                ..base
+            }
         }
     }
 
@@ -65,7 +77,6 @@ impl AsyncStdin {
                         Err(TryRecvError::Disconnected) => {
                             self.rx = None;
                             break;
-                            // panic!("Channel disconnected"),
                         },
                     }
                 }
@@ -85,21 +96,16 @@ impl AsyncStdin {
         !self.rx.is_none()
     }
 
-    fn reader(pipe: Option<std::path::PathBuf>) -> Receiver<Vec<u8>>
+    fn reader(mut pipe: Option<BufReader<File>>) -> Receiver<Vec<u8>>
     {
         // Use a bounded channel to prevent stdin from running away from us
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);
         let mut buffer = String::new();
-        let mut file = Option::None;
-        if let Some(pipe) = pipe {
-            file = Some(BufReader::new(File::open(pipe).expect("File exists")));
-        }
-    thread::spawn(move ||
-        loop {
+        thread::spawn(move || loop {
             buffer.clear();
             // TODO: Read into a Vec<u8> and avoid utf8-validation of the data
             // TODO: Handle data with no line-feeds
-            let line = match &mut file {
+            let line = match &mut pipe {
                 Some(file) => file.read_line(&mut buffer),
                 None => std::io::stdin().read_line(&mut buffer),
             };
@@ -114,7 +120,7 @@ impl AsyncStdin {
 }
 
 use std::io::Read;
-impl Read for AsyncStdin {
+impl  Read for CachedStreamReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // FIXME: Call fill_buffer() only if pos is "close" to the end of the buffer
         let start = self.pos as usize;
@@ -130,7 +136,7 @@ impl Read for AsyncStdin {
 }
 
 use std::io::{Seek, SeekFrom};
-impl Seek for AsyncStdin {
+impl  Seek for CachedStreamReader {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let (start, offset) = match pos {
             SeekFrom::Start(n) => (0_i64, n as i64),
@@ -142,8 +148,8 @@ impl Seek for AsyncStdin {
     }
 }
 
-// BufReader<AsyncStdin> is unnecessary and results in extra copies. Avoid using it, and just use our impl instead.
-impl std::io::BufRead for AsyncStdin {
+// BufReader<CachedStreamReader> is unnecessary and results in extra copies. Avoid using it, and just use our impl instead.
+impl  std::io::BufRead for CachedStreamReader {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.fill_buffer(self.pos as usize);
         Ok(&self.buffer[self.pos as usize..])
