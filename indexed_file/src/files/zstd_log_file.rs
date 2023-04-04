@@ -25,12 +25,17 @@ pub struct ZstdLogFile {
 }
 
 impl ZstdLogFile {
-    pub fn new(filename: PathBuf) -> std::io::Result<ZstdLogFile> {
-        let zf = CompressedFile::new(File::open(filename)?)?;
-        Ok(ZstdLogFile {
-            // file_path: input_file.unwrap(),
-            file: TextLog::new(zf),
-        })
+    pub fn new(filename: &PathBuf) -> std::io::Result<ZstdLogFile> {
+        let file = File::open(filename)?;
+        if !CompressedFile::is_recognized(&file) {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Unrecognized file type")))
+        } else {
+            let zf = CompressedFile::new(file)?;
+            Ok(ZstdLogFile {
+                // file_path: input_file.unwrap(),
+                file: TextLog::new(zf),
+            })
+        }
     }
 }
 

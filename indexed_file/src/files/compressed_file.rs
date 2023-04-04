@@ -55,6 +55,19 @@ impl<R: Read + Seek> CompressedFile<R> {
         Ok(cf)
     }
 
+    pub fn is_recognized(mut file: R) -> bool {
+        if file.seek(SeekFrom::Start(0)).is_err() {
+            false
+        } else {
+            match read_frame_header(&mut file) {
+                Ok((frame, _bytes_read)) => {
+                    frame.check_valid().is_ok()
+                },
+                _ => false,
+            }
+        }
+    }
+
     // Scan all the zstd frame headers in the file and record their positions and sizes
     fn scan_frames(&mut self) -> Result<(), ReadFrameHeaderError> {
         let mut pos = 0;
