@@ -185,7 +185,9 @@ impl<R: Read + Seek> CompressedFile<R> {
             let fpos = self.file.stream_position().unwrap() as u64;
             assert!(fpos > frame.physical);
 
-            self.frames.push(FrameInfo { physical: fpos, logical: logical_pos, len: 0 } );
+            if fpos < self.source_bytes {
+                self.frames.push(FrameInfo { physical: fpos, logical: logical_pos, len: 0 } );
+            }
         }
     }
 
@@ -226,13 +228,14 @@ impl<R: Read + Seek> CompressedFile<R> {
 
             // FIXME: Avoid binary-search lookup if last_frame is still current_frame or current_frame-1
             // Find the frame that holds our target pos
-            let index = match self.frames.binary_search_by_key(&self.pos, |f| f.logical) {
+            let index = match self.frames.binary_search_by_key(&pos, |f| f.logical) {
                 Err(n) => n - 1,
                 Ok(n) => n,
             };
 
             let frame = &self.frames[index];
             let frame_range = frame.logical..frame.logical+frame.len;
+            assert!(frame_range.contains(&pos) || frame.len == 0);
             if pos < self.pos || !frame_range.contains(&self.pos) {
                 // Open a new frame
                 self.goto_frame(index);
@@ -280,6 +283,7 @@ impl<R: Read + Seek> CompressedFile<R> {
     }
 
     fn skip_bytes(&mut self, mut count:u64) -> Result<(), std::io::Error> {
+        self.pos += count;
         while count > 0 {
             if count >= self.decoder.can_collect() as u64 {
                 count -= self.decoder.can_collect() as u64;

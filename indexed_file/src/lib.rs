@@ -166,9 +166,93 @@ mod tests {
         for (line, _start, _end) in file.iter_lines() {
             println!("{_start},{_end}  {line}");
         }
-
-        todo!("Borked - offsets are good, but file data is wrong.");
-        todo!("Borked - iterator never ends? Is it because last chunk is too big since we don't know actual file size?");
     }
 
+
+/*
+    use std::process::{Command, Stdio, Child, ChildStdin};
+
+    // Create connected in/out pipes to stand in for an external process feeding data to stdin
+    struct TestPipe<'a> {
+        process: Child,
+        stdin: &'a ChildStdin,
+    }
+    impl<'a> TestPipe<'a> {
+        fn new() -> Self {
+            let process = match Command::new("cat")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn() {
+                    Err(why) => panic!("couldn't spawn cat: {}", why),
+                    Ok(process) => process,
+            };
+            let stdin = &process.stdin.unwrap();
+            Self { process, stdin}
+        }
+
+        fn send(&mut self, data: &str) {
+            self.stdin.write_all(data.as_bytes());
+        }
+    }
+
+    #[test]
+    fn file_parse_growing_file() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let chunk_size = 100;
+        let file = LogFile::new_mock_file(patt, patt_len * lines, chunk_size);
+        let mut file = LineIndexer::new(file);
+        let it = file.iter();
+        let count = it.take(lines/2).count();
+        assert_eq!(count, lines/2);
+
+        // Thoughts: let mock_file grow  on its own as we read?
+        todo!("file.grow(lines);");
+
+        let count = it.take(lines).count();
+        assert_eq!(count, lines);
+
+        // File is exhausted
+        assert_eq!(it.next(), None);
+
+        todo!("file.grow(lines);");
+
+        // Ensure we can continue reading even after exhausting iterator (TODO: Need to clone the iterator first?)
+        let count = it.take(lines).count();
+        assert_eq!(count, lines);
+    }
+
+    #[test]
+    fn file_parse_growing_stream() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let chunk_size = 100;
+        let pipe = TestPipe::new();
+
+        todo!("Attach pipe's stdout to a LogFile");
+        let file = LogFile::new_mock_file(patt, patt_len * lines, chunk_size);
+        let mut file = LineIndexer::new(file);
+
+        let it = file.iter();
+        let count = it.take(lines/2).count();
+        assert_eq!(count, lines/2);
+
+        // Thoughts: let mock_file grow  on its own as we read?
+        todo!("file.grow(lines);");
+
+        let count = it.take(lines).count();
+        assert_eq!(count, lines);
+
+        // File is exhausted
+        assert_eq!(it.next(), None);
+
+        todo!("file.grow(lines);");
+
+        // Ensure we can continue reading even after exhausting iterator (TODO: Need to clone the iterator first?)
+        let count = it.take(lines).count();
+        assert_eq!(count, lines);
+    }
+*/
 }
