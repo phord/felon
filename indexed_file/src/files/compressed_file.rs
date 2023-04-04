@@ -25,6 +25,9 @@ pub struct CompressedFile<R> {
     // Sorted logical->physical file offsets
     frames: Vec<FrameInfo>,
 
+    // The last frame we seeked to
+    cur_frame: usize,
+
     // Logical position in file
     pos: u64,
 
@@ -50,6 +53,31 @@ impl<R> CompressedFile<R> {
         };
         (frame.logical as usize , end as usize)
     }
+
+    fn lookup_frame_index(&self, pos: u64) -> usize {
+        // Avoid binary-search lookup if target frame is at current_frame[-1..+2]
+        // Why +2?  Why not always +1?
+        let start = self.cur_frame.max(1) - 1;
+        let end = (start + 4).min(self.frames.len());
+        let mut index = end;
+        for ind in start..end {
+            let frame = &self.frames[ind];
+            let frame_range = frame.logical..frame.logical+frame.len;
+            if frame_range.contains(&pos) {
+                index = ind;
+                break;
+            }
+        }
+        if index == end {
+            // Search the slow way
+
+            index = match self.frames.binary_search_by_key(&pos, |f| f.logical) {
+                Err(n) => n - 1,
+                Ok(n) => n,
+            };
+        }
+        index
+    }
 }
 
 impl<R: Read + Seek> CompressedFile<R> {
@@ -67,6 +95,7 @@ impl<R: Read + Seek> CompressedFile<R> {
             pos: 0,
             seek_pos: None,
             frames: Vec::new(),
+            cur_frame: 0,
         };
 
         // Read all physical frame sizes into self.frames.
@@ -172,6 +201,7 @@ impl<R: Read + Seek> CompressedFile<R> {
         }
         self.pos = frame.logical;
         self.begin_frame();
+        self.cur_frame = index;
     }
 
     // Update last frame if we just decoded the last byte
@@ -226,12 +256,7 @@ impl<R: Read + Seek> CompressedFile<R> {
             // Forget this for next time
             self.seek_pos = None;
 
-            // FIXME: Avoid binary-search lookup if last_frame is still current_frame or current_frame-1
-            // Find the frame that holds our target pos
-            let index = match self.frames.binary_search_by_key(&pos, |f| f.logical) {
-                Err(n) => n - 1,
-                Ok(n) => n,
-            };
+            let index = self.lookup_frame_index(pos);
 
             let frame = &self.frames[index];
             let frame_range = frame.logical..frame.logical+frame.len;
