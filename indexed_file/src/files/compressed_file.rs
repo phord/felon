@@ -350,10 +350,17 @@ impl<R: Read + Seek> Seek for CompressedFile<R> {
 
 impl<R: Read + Seek> Read for CompressedFile<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.update_stream()?;
+        let mut bytes = 0;
+        while bytes < buf.len() {
+            self.update_stream()?;
 
-        let bytes = self.decoder.read(buf)?;
-        self.pos += bytes as u64;
+            let actual = self.decoder.read(&mut buf[bytes..])?;
+            self.pos += actual as u64;
+            bytes += actual;
+            if actual == 0 {  // EOF
+                break;
+            }
+        }
         Ok(bytes)
     }
 }
