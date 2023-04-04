@@ -6,19 +6,8 @@ use crate::files::CompressedFile;
 use std::fs::File;
 
 use crate::files::LogFileTrait;
-use crate::files::Stream;
 
 use super::text_log_file::TextLog;
-
-impl<R> Stream for CompressedFile<R> {
-    fn len(&self) -> usize {
-        self.len() as usize
-    }
-    // Wait on any data at all; Returns true if file is still open
-    fn wait(&mut self) -> bool {
-        true
-    }
-}
 
 pub struct ZstdLogFile {
     file: TextLog<CompressedFile<File>>,
@@ -53,6 +42,6 @@ impl LogFileTrait for ZstdLogFile {
     }
 
     fn chunk(&self, target: usize) -> (usize, usize) {
-        self.file.chunk(target)
+        self.file.into_inner().get_chunk(target)
     }
 }

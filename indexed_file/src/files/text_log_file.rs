@@ -68,6 +68,10 @@ impl<T> TextLog<T> {
             file
         }
     }
+
+    pub fn into_inner(&self) -> &T {
+        &self.file
+    }
 }
 
 
@@ -76,7 +80,7 @@ pub struct TextLogFile {
 }
 
 impl TextLogFile {
-    pub fn new(filename: PathBuf) -> std::io::Result<TextLogFile> {
+    pub fn new(filename: &PathBuf) -> std::io::Result<TextLogFile> {
         Ok(TextLogFile {
             // file_path: input_file.unwrap(),
             file: TextLog::new(File::open(filename)?),

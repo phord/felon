@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use crate::files::MockLogFile;
 use crate::files::TextLogFile;
 use crate::files::TextLogStream;
+use crate::files::ZstdLogFile;
 
 
 pub struct LogFile {
@@ -21,10 +22,18 @@ impl LogFile {
                 // Is it a file?
             let metadata = input_file.metadata()?;
             if metadata.is_file() {
-                let file = TextLogFile::new(input_file)?;
-                Ok(LogFile {
-                    file: Box::new(file),
-                })
+                if let Ok(file) = ZstdLogFile::new(&input_file) {
+                    // FIXME: If the first magic number succeeded but some later error occurred during scan, treat the
+                    //        file as a compressed file anyway.
+                    Ok(LogFile {
+                        file: Box::new(file),
+                    })
+                } else {
+                    let file = TextLogFile::new(&input_file)?;
+                    Ok(LogFile {
+                        file: Box::new(file),
+                    })
+                }
             } else {
                 // Must be a stream.  We can't seek in streams.
                 let mut file = File::open(&input_file)?;
@@ -50,6 +59,7 @@ impl LogFile {
     }
 }
 
+// TODO: Make LogFileTrait wrappers implement Read and Seek instead
 impl LogFileTrait for LogFile {
     fn len(&self) -> usize { self.file.len() }
     fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> { self.file.read(offset, len) }

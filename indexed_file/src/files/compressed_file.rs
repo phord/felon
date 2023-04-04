@@ -9,6 +9,8 @@ use ruzstd::frame_decoder::{BlockDecodingStrategy, FrameDecoderError};
 use ruzstd::decoding::block_decoder;
 use ruzstd::frame::read_frame_header;
 
+use crate::files::Stream;
+
 struct FrameInfo{
     physical: u64,
     logical: u64,
@@ -28,6 +30,26 @@ pub struct CompressedFile<R> {
 
     // Logical position in decode stream
     seek_pos: Option<u64>,
+}
+
+impl<R> CompressedFile<R> {
+    // Find a convenient chunk of the file to read around target offset
+    pub fn get_chunk(&self, target: usize) -> (usize, usize) {
+        let index = match self.frames.binary_search_by_key(&(target as u64), |f| f.logical) {
+            Err(n) => n - 1,
+            Ok(n) => n,
+        };
+
+        let frame = &self.frames[index];
+        let end = if frame.len == 0 {
+            let size = (self.len() - target) as u64;
+            // let size = 128 * 1024;   <-- Also tried this
+            frame.logical.max(target as u64) + size
+        } else {
+            frame.logical + frame.len
+        };
+        (frame.logical as usize , end as usize)
+    }
 }
 
 impl<R: Read + Seek> CompressedFile<R> {
@@ -140,19 +162,6 @@ impl<R: Read + Seek> CompressedFile<R> {
             },
         }
     }
-
-    // Get logical file length, as close as we know
-    fn len(&self) -> u64 {
-        let last = &self.frames.last().unwrap();
-        let len = last.logical + last.len +
-            if last.len > 0 { 0 } else {
-                // estimate some extra bytes based on remaining compressed data
-                assert!(self.source_bytes > last.physical);
-                self.source_bytes - last.physical
-            };
-        len
-    }
-
 
     fn goto_frame(&mut self, index: usize) {
         let frame = &self.frames[index];
@@ -317,6 +326,23 @@ impl<R: Read + Seek> Read for CompressedFile<R> {
         let bytes = self.decoder.read(buf)?;
         self.pos += bytes as u64;
         Ok(bytes)
+    }
+}
+
+impl<R> Stream for CompressedFile<R> {
+    fn len(&self) -> usize {
+        let last = &self.frames.last().unwrap();
+        let len = last.logical + last.len +
+            if last.len > 0 { 0 } else {
+                // estimate some extra bytes based on remaining compressed data
+                assert!(self.source_bytes >= last.physical);
+                self.source_bytes - last.physical
+            };
+        len as usize
+    }
+    // Wait on any data at all; Returns true if file is still open
+    fn wait(&mut self) -> bool {
+        true
     }
 }
 

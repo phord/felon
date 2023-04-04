@@ -146,4 +146,29 @@ mod tests {
         let (_, count_bytes) = file.iter_offsets().last().unwrap();
         assert_eq!(count_bytes, bytes);
     }
+
+    #[test]
+    fn file_found_zstd() {
+        let path = PathBuf::from("/home/phord/git/mine/igrok/test.zst");
+        println!("{:?}", path);
+        let file = LogFile::new_text_file(Some(path));
+        assert!(file.is_ok());
+    }
+
+    #[test]
+    fn file_iter_zstd() {
+        let path = PathBuf::from("/home/phord/git/mine/igrok/test.zst");
+        // let path = PathBuf::from("/home/phord/git/mine/igrok/README.md");
+        println!("{:?}", path);
+        let file = LogFile::new_text_file(Some(path));
+        assert!(file.is_ok());
+        let mut file = LineIndexer::new( file.unwrap() );
+        for (line, _start, _end) in file.iter_lines() {
+            println!("{_start},{_end}  {line}");
+        }
+
+        todo!("Borked - offsets are good, but file data is wrong.");
+        todo!("Borked - iterator never ends? Is it because last chunk is too big since we don't know actual file size?");
+    }
+
 }
