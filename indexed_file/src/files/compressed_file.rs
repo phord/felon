@@ -1,6 +1,5 @@
 // Currently just zstd compression
 use ruzstd;
-use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -16,8 +15,8 @@ struct FrameInfo{
     len: u64,
 }
 
-pub struct CompressedFile {
-    file: File,
+pub struct CompressedFile<R> {
+    file: R,
     source_bytes: u64,
     decoder: ruzstd::FrameDecoder,
 
@@ -31,11 +30,12 @@ pub struct CompressedFile {
     seek_pos: Option<u64>,
 }
 
-impl CompressedFile {
-    pub fn new(path: &str) -> std::io::Result<Self> {
+impl<R: Read + Seek> CompressedFile<R> {
+    pub fn new(mut file: R) -> std::io::Result<Self> {
         // TODO: Return error if no file or not known type
-        let file = File::open(path)?;
-        let source_bytes = file.metadata()?.len();
+        // let file = File::open(path)?;
+        let source_bytes = file.seek(SeekFrom::End(0))?;
+        file.seek(SeekFrom::Start(0))?;
         let decoder = ruzstd::FrameDecoder::new();
 
         let mut cf = Self {
@@ -47,10 +47,10 @@ impl CompressedFile {
             frames: Vec::new(),
         };
 
-        // Read all physical frame sizes into frames.
+        // Read all physical frame sizes into self.frames.
         cf.scan_frames().expect("File is valid zstd file");
 
-        cf.file.seek(SeekFrom::Start(0)).unwrap();
+        cf.file.seek(SeekFrom::Start(0))?;
 
         Ok(cf)
     }
@@ -280,8 +280,11 @@ impl CompressedFile {
     }
 }
 
-impl Seek for CompressedFile {
+impl<R: Read + Seek> Seek for CompressedFile<R> {
     fn seek(&mut self, target: SeekFrom) -> Result<u64, std::io::Error> {
+        // Ideally we could SeekFrom::End(-1000) and only decode the last frame even if we don't know
+        // all the frames' decompressed sizes yet. But we wouldn't be able to return the current offset
+        // from Start in that case.
         let (start, offset) = match target {
             SeekFrom::Start(n) => (0_i64, n as i64),
             SeekFrom::Current(n) => (self.pos as i64, n),
@@ -289,12 +292,12 @@ impl Seek for CompressedFile {
         };
         let pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
         self.seek_pos = Some(pos);
-        // TODO: Actually seek to position and validate in range
+        // TODO: Actually seek to position and validate it's in range
         Ok(pos)
     }
 }
 
-impl Read for CompressedFile {
+impl<R: Read + Seek> Read for CompressedFile<R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.update_stream()?;
 
@@ -306,8 +309,11 @@ impl Read for CompressedFile {
 
 #[test]
 fn test_compressed_file() {
+    use std::fs::File;
     // HACKY FILENAME
-    let file = "/home/phord/git/mine/igrok/test.zst".to_owned();
+    let path = "/home/phord/git/mine/igrok/test.zst".to_owned();
+    let file = File::open(path).expect("File exists");
+
     let mut comp = CompressedFile::new(&file).unwrap();
     match std::io::copy(&mut comp, &mut std::io::stdout().lock()) {
         Err(e) => eprintln!("Error: {:?}", e),
@@ -319,8 +325,11 @@ fn test_compressed_file() {
 #[test]
 fn test_compressed_file_seek() {
     use std::io::{BufRead, BufReader};
+    use std::fs::File;
     // HACKY FILENAME
-    let file = "/home/phord/git/mine/igrok/test.zst".to_owned();
+    let path = "/home/phord/git/mine/igrok/test.zst".to_owned();
+    let file = File::open(path).expect("File exists");
+
     let comp = CompressedFile::new(&file).unwrap();
     let mut reader = BufReader::new(comp);
     let mut line6 = String::default();
@@ -341,4 +350,9 @@ fn test_compressed_file_seek() {
 
     assert_eq!(line6, line6b);
 
+}
+
+#[test]
+fn test_compressed_file_seek_gen() {
+    use std::io::{BufRead, BufReader};
 }
