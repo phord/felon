@@ -75,7 +75,14 @@ impl LogFileUtil for LogFile {
 pub trait LogFileUtil {
     fn len(&self) -> usize;
     // Determine the preferred chunk to read to include the target offset
-    fn chunk(&self, target: usize) -> (usize, usize);
+    fn chunk(&self, target: usize) -> (usize, usize) {
+        let chunk_size = 1024 * 1024;
+        let start = target.saturating_sub(chunk_size / 2);
+        let end = (start + chunk_size).min(self.len());
+        let start = end.saturating_sub(chunk_size);
+        (start, end)
+    }
+
     // Check for more data in file and update state
     fn quench(&mut self) -> ();
 }

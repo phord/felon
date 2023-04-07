@@ -34,14 +34,6 @@ impl<T: Read + Stream + Seek> LogFileUtil for TextLog<T> {
     fn quench(&mut self) {
         self.file.wait();
     }
-
-    fn chunk(&self, target: usize) -> (usize, usize) {
-        let chunk_size = 1024 * 1024;
-        let start = target.saturating_sub(chunk_size / 2);
-        let end = (start + chunk_size).min(self.len());
-        let start = end.saturating_sub(chunk_size);
-        (start, end)
-    }
 }
 
 impl<T: Read> Read for TextLog<T> {
