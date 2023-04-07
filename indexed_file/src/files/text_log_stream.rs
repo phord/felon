@@ -28,26 +28,31 @@ impl TextLogStream {
 impl LogFileTrait for TextLogStream {}
 
 impl LogFileUtil for TextLogStream {
+    #[inline(always)]
     fn len(&self) -> usize {
         self.stream.len()
     }
 
+    #[inline(always)]
     fn quench(&mut self) {
         self.stream.quench();
     }
 
+    #[inline(always)]
     fn chunk(&self, target: usize) -> (usize, usize) {
         self.stream.chunk(target)
     }
 }
 
 impl Read for TextLogStream {
+    #[inline(always)]
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.stream.into_inner_mut().read(buf)
     }
 }
 
 impl  Seek for TextLogStream {
+    #[inline(always)]
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         self.stream.into_inner_mut().seek(pos)
     }

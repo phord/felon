@@ -53,7 +53,7 @@ impl LogFile {
             Ok(LogFile {
                 file: Box::new(file),
             })
-    }
+        }
     }
 
     pub fn new_mock_file(fill: &str, size: usize, chunk_size: usize) -> LogFile {
@@ -66,9 +66,9 @@ impl LogFile {
 
 // TODO: Make LogFileTrait wrappers implement ReadBuf instead of Read
 impl LogFileUtil for LogFile {
-    fn len(&self) -> usize { self.file.len() }
-    fn chunk(&self, target: usize) -> (usize, usize) { self.file.chunk(target) }
-    fn quench(&mut self) { self.file.quench() }
+    #[inline(always)] fn len(&self) -> usize { self.file.len() }
+    #[inline(always)] fn chunk(&self, target: usize) -> (usize, usize) { self.file.chunk(target) }
+    #[inline(always)] fn quench(&mut self) { self.file.quench() }
 }
 
 // generic representation of text we can show in our pager
@@ -88,13 +88,13 @@ pub trait LogFileUtil {
 }
 
 impl Read for LogFile {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+    #[inline(always)] fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.file.read(buf)
     }
 }
 
 impl Seek for LogFile {
-    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+    #[inline(always)] fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         self.file.seek(pos)
     }
 }
