@@ -339,7 +339,10 @@ impl<R: Read + Seek> Seek for CompressedFile<R> {
         let (start, offset) = match target {
             SeekFrom::Start(n) => (0_i64, n as i64),
             SeekFrom::Current(n) => (self.pos as i64, n),
-            SeekFrom::End(n) => (self.source_bytes as i64, n),
+            SeekFrom::End(_n) => {
+                    todo!("We don't know if we know the end-of-file pos yet");
+                    (self.source_bytes as i64, _n)
+                },
         };
         let pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
         self.seek_pos = Some(pos);
