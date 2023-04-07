@@ -1,18 +1,18 @@
 // Generic log file source to discover and iterate individual log lines from a LogFile
 
 use std::fmt;
-use std::io::{Read, Seek, SeekFrom};
-use crate::files::{LogFile, LogFileUtil};
+use std::io::SeekFrom;
+use crate::files::LogFileTrait;
 use crate::index::Index;
 use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, Missing::{Bounded, Unbounded}};
 
-pub struct LineIndexer {
+pub struct LineIndexer<LOG> {
     // pub file_path: PathBuf,
-    file: LogFile,
+    file: LOG,
     index: EventualIndex,
 }
 
-impl fmt::Debug for LineIndexer {
+impl<LOG: LogFileTrait> fmt::Debug for LineIndexer<LOG> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LineIndexer")
          .field("bytes", &self.count_bytes())
@@ -21,13 +21,13 @@ impl fmt::Debug for LineIndexer {
     }
 }
 
-struct LineIndexerIterator<'a> {
-    file: &'a mut LineIndexer,
+struct LineIndexerIterator<'a, LOG> {
+    file: &'a mut LineIndexer<LOG>,
     pos: Location,
 }
 
-impl<'a> LineIndexerIterator<'a> {
-    fn new(file: &'a mut LineIndexer) -> Self {
+impl<'a, LOG> LineIndexerIterator<'a, LOG> {
+    fn new(file: &'a mut LineIndexer<LOG>) -> Self {
         Self {
             file,
             pos: Location::Virtual(VirtualLocation::Start),
@@ -35,7 +35,7 @@ impl<'a> LineIndexerIterator<'a> {
     }
 }
 
-impl<'a> Iterator for LineIndexerIterator<'a> {
+impl<'a, LOG: LogFileTrait> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -62,7 +62,7 @@ impl<'a> Iterator for LineIndexerIterator<'a> {
 // Tests for LineIndexerIterator
 #[cfg(test)]
 mod logfile_iterator_tests {
-    use super::LogFile;
+    use crate::files::LogFile;
     use super::LineIndexer;
 
     #[test]
@@ -158,7 +158,7 @@ mod logfile_iterator_tests {
 // Tests for LineIndexerDataIterator
 #[cfg(test)]
 mod logfile_data_iterator_tests {
-    use super::LogFile;
+    use crate::files::LogFile;
     use super::LineIndexer;
 
     #[test]
@@ -257,13 +257,13 @@ mod logfile_data_iterator_tests {
     }
 }
 
-struct LineIndexerDataIterator<'a> {
-    file: &'a mut LineIndexer,
+struct LineIndexerDataIterator<'a, LOG> {
+    file: &'a mut LineIndexer<LOG>,
     pos: Location,
 }
 
-impl<'a> LineIndexerDataIterator<'a> {
-    fn new(file: &'a mut LineIndexer) -> Self {
+impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
+    fn new(file: &'a mut LineIndexer<LOG>) -> Self {
         Self {
             file,
             pos: Location::Virtual(VirtualLocation::Start),
@@ -272,7 +272,7 @@ impl<'a> LineIndexerDataIterator<'a> {
 }
 
 // Iterate over lines as position, string
-impl<'a> Iterator for LineIndexerDataIterator<'a> {
+impl<'a, LOG: LogFileTrait> Iterator for LineIndexerDataIterator<'a, LOG> {
     type Item = (String, usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -304,9 +304,9 @@ impl<'a> Iterator for LineIndexerDataIterator<'a> {
 
 }
 
-impl LineIndexer {
+impl<LOG: LogFileTrait> LineIndexer<LOG> {
 
-    pub fn new(file: LogFile) -> LineIndexer {
+    pub fn new(file: LOG) -> LineIndexer<LOG> {
         Self {
             file,
             index: EventualIndex::new(),

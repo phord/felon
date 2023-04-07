@@ -46,7 +46,7 @@ impl DocFilter {
     }
 
     // Resolve a filter against a LogFileLines and store the matches
-    fn bind(&mut self, log: &mut LineIndexer) {
+    fn bind(&mut self, log: &mut LineIndexer<LogFile>) {
         let matches =
             match self.search_type {
                 SearchType::SearchRegex(ref regex) => {
@@ -94,11 +94,11 @@ struct Filters {
     /// Filtered line numbers
     filtered_lines: Vec<(usize, usize)>,
 
-    file: LineIndexer,
+    file: LineIndexer<LogFile>,
 }
 
 impl Filters {
-    fn new(file: LineIndexer) -> Self {
+    fn new(file: LineIndexer<LogFile>) -> Self {
 
         let mut s = Self {
             filter_in: vec![],

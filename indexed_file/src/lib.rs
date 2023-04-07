@@ -7,7 +7,7 @@ pub mod line_indexer;
 #[cfg(test)]
 mod tests {
     use crate::line_indexer::LineIndexer;
-    use crate::files::LogFile;
+    use crate::files::{LogFile, TextLogFile};
     use std::path::PathBuf;
 
     fn open_log_file(filename: &str) -> std::io::Result<LogFile> {
@@ -15,8 +15,8 @@ mod tests {
         LogFile::new_text_file(Some(path))
     }
 
-    fn open_log_file_lines(path: PathBuf) -> LineIndexer {
-        let file = LogFile::new_text_file(Some(path)).expect("Failed to open file");
+    fn open_log_file_lines(path: PathBuf) -> LineIndexer<TextLogFile> {
+        let file = TextLogFile::new(&path).expect("File exists");
         LineIndexer::new(file)
     }
 
