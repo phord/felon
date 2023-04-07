@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::files::LogFileUtil;
 use crate::files::CachedStreamReader;
-use crate::files::text_log_file::TextLog;
+use crate::files::text_log::TextLog;
 
 use super::LogFileTrait;
 

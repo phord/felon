@@ -9,7 +9,7 @@ use std::fs::File;
 use crate::files::LogFileUtil;
 use crate::files::LogFileTrait;
 
-use super::text_log_file::TextLog;
+use super::text_log::TextLog;
 
 pub struct ZstdLogFile {
     file: TextLog<CompressedFile<File>>,

@@ -3,75 +3,12 @@
 use std::path::PathBuf;
 
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek};
 
 use crate::files::LogFileUtil;
-use crate::files::Stream;
-
+use crate::files::text_log::TextLog;
 use super::LogFileTrait;
-
-impl Stream for File {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.metadata().unwrap().len() as usize
-    }
-    // Wait on any data at all; Returns true if file is still open
-    #[inline(always)]
-    fn wait(&mut self) -> bool {
-        true
-    }
-}
-
-pub struct TextLog<T> {
-    file: T,
-}
-
-impl<T: Read + Seek + Stream> LogFileTrait for TextLog<T> {}
-
-impl<T: Read + Stream + Seek> LogFileUtil for TextLog<T> {
-    #[inline(always)]
-    fn len(&self) -> usize {
-        self.file.len()
-    }
-
-    #[inline(always)]
-    fn quench(&mut self) {
-        self.file.wait();
-    }
-}
-
-impl<T: Read> Read for TextLog<T> {
-    #[inline(always)]
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.file.read(buf)
-    }
-}
-
-impl<T: Seek> Seek for TextLog<T> {
-    #[inline(always)]
-    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        self.file.seek(pos)
-    }
-}
-
-impl<T> TextLog<T> {
-    pub fn new(file: T) -> Self {
-        Self {
-            file
-        }
-    }
-
-    #[inline(always)]
-    pub fn into_inner(&self) -> &T {
-        &self.file
-    }
-
-    #[inline(always)]
-    pub fn into_inner_mut(&mut self) -> &mut T {
-        &mut self.file
-    }
-}
-
+use crate::files::Stream;
 
 pub struct TextLogFile {
     file: TextLog<File>,
@@ -83,6 +20,18 @@ impl TextLogFile {
             // file_path: input_file.unwrap(),
             file: TextLog::new(File::open(filename)?),
         })
+    }
+}
+
+impl Stream for File {
+    #[inline(always)]
+    fn len(&self) -> usize {
+        self.metadata().unwrap().len() as usize
+    }
+    // Wait on any data at all; Returns true if file is still open
+    #[inline(always)]
+    fn wait(&mut self) -> bool {
+        true
     }
 }
 
