@@ -5,8 +5,10 @@ use std::path::PathBuf;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
-use crate::files::LogFileTrait;
+use crate::files::LogFileUtil;
 use crate::files::Stream;
+
+use super::LogFileTrait;
 
 impl Stream for File {
     fn len(&self) -> usize {
@@ -22,7 +24,9 @@ pub struct TextLog<T> {
     file: T,
 }
 
-impl<T: Read + Stream + Seek> LogFileTrait for TextLog<T> {
+impl<T: Read + Seek + Stream> LogFileTrait for TextLog<T> {}
+
+impl<T: Read + Stream + Seek> LogFileUtil for TextLog<T> {
     fn len(&self) -> usize {
         self.file.len()
     }
@@ -31,34 +35,24 @@ impl<T: Read + Stream + Seek> LogFileTrait for TextLog<T> {
         self.file.wait();
     }
 
-    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
-        if offset > self.len() {
-            None
-        } else {
-            let end = (offset + len).min(self.len());
-            let mut buf = vec![0u8; end-offset];
-            match self.file.seek(SeekFrom::Start(offset as u64)) {
-                Err(_) => None,
-                Ok(_pos) => {
-                    match self.file.read(&mut buf) {
-                        Err(_) => None,  // TODO: Log an error somewhere?
-                        Ok(actual) => {
-                            assert!(actual <= len);
-                            buf.truncate(actual);
-                            Some(buf)
-                        },
-                    }
-                }
-            }
-        }
-    }
-
     fn chunk(&self, target: usize) -> (usize, usize) {
         let chunk_size = 1024 * 1024;
         let start = target.saturating_sub(chunk_size / 2);
         let end = (start + chunk_size).min(self.len());
         let start = end.saturating_sub(chunk_size);
         (start, end)
+    }
+}
+
+impl<T: Read> Read for TextLog<T> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
+impl<T: Seek> Seek for TextLog<T> {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)
     }
 }
 
@@ -71,6 +65,10 @@ impl<T> TextLog<T> {
 
     pub fn into_inner(&self) -> &T {
         &self.file
+    }
+
+    pub fn into_inner_mut(&mut self) -> &mut T {
+        &mut self.file
     }
 }
 
@@ -88,7 +86,9 @@ impl TextLogFile {
     }
 }
 
-impl LogFileTrait for TextLogFile {
+impl LogFileTrait for TextLogFile {}
+
+impl LogFileUtil for TextLogFile {
     fn len(&self) -> usize {
         self.file.len()
     }
@@ -97,11 +97,20 @@ impl LogFileTrait for TextLogFile {
         self.file.quench();
     }
 
-    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
-        self.file.read(offset, len)
-    }
-
     fn chunk(&self, target: usize) -> (usize, usize) {
         self.file.chunk(target)
+    }
+}
+
+
+impl Read for TextLogFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.into_inner().read(buf)
+    }
+}
+
+impl Seek for TextLogFile {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.file.into_inner().seek(pos)
     }
 }

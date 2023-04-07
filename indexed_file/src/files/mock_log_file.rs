@@ -1,11 +1,13 @@
 // Mock log file helper
 
-use std::fmt;
+use std::{fmt, io::Read};
+use crate::files::LogFileUtil;
 use crate::files::LogFileTrait;
 
 pub struct MockLogFile {
     filler: String,
     size: usize,
+    pos: u64,
     buffer: String,
     pub chunk_size: usize,
 }
@@ -19,23 +21,14 @@ impl fmt::Debug for MockLogFile {
     }
 }
 
-impl LogFileTrait for MockLogFile {
+impl LogFileTrait for MockLogFile {}
+
+impl LogFileUtil for MockLogFile {
     fn len(&self) -> usize {
         self.size
     }
 
     fn quench(&mut self) {}
-
-    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
-        if offset > self.len() {
-            None
-        } else {
-            let offset = offset % self.filler.len();
-            let end = (offset + len).min(self.len());
-            assert!(end < self.buffer.len());
-            Some(self.buffer[offset..end].as_bytes().iter().copied().collect())
-        }
-    }
 
     fn chunk(&self, target: usize) -> (usize, usize) {
         let start = target.saturating_sub(self.chunk_size / 2);
@@ -46,6 +39,34 @@ impl LogFileTrait for MockLogFile {
 
 }
 
+impl Read for MockLogFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        // FIXME
+        let len = buf.len();
+        if self.pos as usize > self.len() {
+            Ok(0)
+        } else {
+            let offset = self.pos as usize % self.filler.len();
+            let end = (offset + len).min(self.len());
+            assert!(end < self.buffer.len());
+            buf.copy_from_slice(self.buffer[offset..end].as_bytes());
+            Ok(end-offset)
+        }
+    }
+}
+
+use std::io::{Seek, SeekFrom};
+impl Seek for MockLogFile {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        let (start, offset) = match pos {
+            SeekFrom::Start(n) => (0_i64, n as i64),
+            SeekFrom::Current(n) => (self.pos as i64, n),
+            SeekFrom::End(n) => (self.len() as i64, n),
+        };
+        self.pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
+        Ok(self.pos)
+    }
+}
 impl MockLogFile {
 
     pub fn new(fill: String, size: usize, chunk_size: usize) -> MockLogFile {
@@ -59,6 +80,7 @@ impl MockLogFile {
         MockLogFile {
             filler: fill,
             size,
+            pos: 0,
             chunk_size,
             buffer,
         }
@@ -71,9 +93,22 @@ impl MockLogFile {
 // Tests for MockLogFile
 #[cfg(test)]
 mod tests {
-    use crate::files::LogFile;
-    use crate::files::LogFileTrait;
+    use std::io::Read;
+    use std::io::{Seek, SeekFrom};
 
+    use crate::files::LogFile;
+    use crate::files::LogFileUtil;
+
+    impl LogFile {
+        fn old_read(&mut self, offset: usize, len: usize ) -> Option<Vec<u8>> {
+            self.seek(SeekFrom::Start(offset as u64));
+            let mut buf = vec![0u8; len];
+            match self.read(&mut buf) {
+                Ok(bytes) => Some(buf),
+                _ => None,
+            }
+        }
+    }
     #[test]
     fn test_mock_log_file_basic() {
         let size = 16 * 1024;
@@ -86,7 +121,7 @@ mod tests {
         let size = 16 * 1024;
         let fill = "this is a test\n";
         let mut file = LogFile::new_mock_file(fill, size, 100);
-        assert_eq!(file.read(0, 10), Some(fill[..10].as_bytes().to_vec()));
+        assert_eq!(file.old_read(0, 10), Some(fill[..10].as_bytes().to_vec()));
     }
 
     #[test]
@@ -95,7 +130,7 @@ mod tests {
         let fill = "this is a test\n";
         let mut file = LogFile::new_mock_file(fill, size, 100);
         let offset = fill.len() * 10;
-        assert_eq!(file.read(offset, 10), Some(fill[..10].as_bytes().to_vec()));
+        assert_eq!(file.old_read(offset, 10), Some(fill[..10].as_bytes().to_vec()));
     }
 
     #[test]
@@ -108,7 +143,7 @@ mod tests {
         let offset = fill.len() * 10;
         let len = ret.len();
 
-        assert_eq!(file.read(offset, len), Some(ret.as_bytes().to_vec()));
+        assert_eq!(file.old_read(offset, len), Some(ret.as_bytes().to_vec()));
     }
 
     #[test]
@@ -124,7 +159,7 @@ mod tests {
         let offset = fill.len() * 10 + ofs;
         let len = ret.len();
 
-        assert_eq!(file.read(offset, len), Some(ret.as_bytes().to_vec()));
+        assert_eq!(file.old_read(offset, len), Some(ret.as_bytes().to_vec()));
     }
 
     #[test]

@@ -1,6 +1,7 @@
 // Generic wrapper of different readable file types
 
 use std::fs::File;
+use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::PathBuf;
@@ -14,6 +15,10 @@ use crate::files::ZstdLogFile;
 pub struct LogFile {
     file: Box<dyn LogFileTrait>,
 }
+
+pub trait LogFileTrait: LogFileUtil + Read + Seek {}
+
+impl LogFileTrait for LogFile {}
 
 impl LogFile {
 
@@ -59,21 +64,30 @@ impl LogFile {
     }
 }
 
-// TODO: Make LogFileTrait wrappers implement Read and Seek instead
-impl LogFileTrait for LogFile {
+// TODO: Make LogFileTrait wrappers implement ReadBuf instead of Read
+impl LogFileUtil for LogFile {
     fn len(&self) -> usize { self.file.len() }
-    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> { self.file.read(offset, len) }
     fn chunk(&self, target: usize) -> (usize, usize) { self.file.chunk(target) }
     fn quench(&mut self) { self.file.quench() }
 }
 
 // generic representation of text we can show in our pager
-pub trait LogFileTrait {
+pub trait LogFileUtil {
     fn len(&self) -> usize;
-    // TODO: return a String from everywhere, and require that strings are valid utf8
-    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>>;
     // Determine the preferred chunk to read to include the target offset
     fn chunk(&self, target: usize) -> (usize, usize);
     // Check for more data in file and update state
     fn quench(&mut self) -> ();
+}
+
+impl Read for LogFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
+impl Seek for LogFile {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)
+    }
 }

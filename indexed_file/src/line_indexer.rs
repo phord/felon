@@ -1,7 +1,8 @@
 // Generic log file source to discover and iterate individual log lines from a LogFile
 
 use std::fmt;
-use crate::files::{LogFile, LogFileTrait};
+use std::io::{Read, Seek, SeekFrom};
+use crate::files::{LogFile, LogFileUtil};
 use crate::index::Index;
 use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, Missing::{Bounded, Unbounded}};
 
@@ -287,8 +288,11 @@ impl<'a> Iterator for LineIndexerDataIterator<'a> {
         }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                if let Some(line) = self.file.readline_fixed(bol, eol + 1) {
+                let mut buf = vec![0u8; eol-bol];
+                self.file.file.seek(SeekFrom::Start(bol as u64)).expect("Seek does not fail");
+                if let Ok(_bytes) = self.file.file.read(&mut buf) {
                     self.pos = self.file.index.next_line_index(self.pos);
+                    let line = String::from_utf8(buf).expect("No errors in utf8 file data");
                     return Some((line, bol, eol + 1));
                 } else {
                     panic!("Unhandled file read error?");
@@ -330,7 +334,9 @@ impl LineIndexer {
             assert!(offset < end);
 
             // Send the buffer to the parsers
-            let buffer = self.file.read(start, end-start).unwrap();
+            let mut buffer = vec![0u8; end-start];
+            self.file.seek(SeekFrom::Start(start as u64));
+            self.file.read(&mut buffer).expect("Indexed reads always succeed");
             let mut index = Index::new();
             index.parse(&buffer, start);
             self.index.merge(index);
@@ -346,18 +352,6 @@ impl LineIndexer {
 
     pub fn count_lines(&self) -> usize {
         self.index.lines()
-    }
-
-    pub fn readline_fixed(&mut self, start: usize, end: usize) -> Option<String> {
-        if end <= self.file.len() {
-            assert!(end > start);
-            // FIXME: Handle unwrap error
-            // FIXME: Handle CR+LF endings
-            // FIXME: Can't read last byte of file (for the case where it's not EOL)
-            Some(String::from_utf8(self.file.read(start, end - start - 1).unwrap()).unwrap())
-        } else {
-            None
-        }
     }
 
     pub fn iter(&mut self) -> impl Iterator<Item = (usize, usize)> + '_ {

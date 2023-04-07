@@ -1,11 +1,15 @@
 // Reader of unseekable text streams
 // For a stream we have to store old lines in RAM to be able to seek around.
 
+use std::io::Read;
+use std::io::Seek;
 use std::path::PathBuf;
 
-use crate::files::LogFileTrait;
+use crate::files::LogFileUtil;
 use crate::files::CachedStreamReader;
 use crate::files::text_log_file::TextLog;
+
+use super::LogFileTrait;
 
 pub struct TextLogStream {
     stream: TextLog<CachedStreamReader>,
@@ -21,7 +25,9 @@ impl TextLogStream {
 
 }
 
-impl LogFileTrait for TextLogStream {
+impl LogFileTrait for TextLogStream {}
+
+impl LogFileUtil for TextLogStream {
     fn len(&self) -> usize {
         self.stream.len()
     }
@@ -30,11 +36,19 @@ impl LogFileTrait for TextLogStream {
         self.stream.quench();
     }
 
-    fn read(&mut self, offset: usize, len: usize) -> Option<Vec<u8>> {
-        self.stream.read(offset, len)
-    }
-
     fn chunk(&self, target: usize) -> (usize, usize) {
         self.stream.chunk(target)
+    }
+}
+
+impl Read for TextLogStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.stream.into_inner_mut().read(buf)
+    }
+}
+
+impl  Seek for TextLogStream {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.stream.into_inner_mut().seek(pos)
     }
 }
