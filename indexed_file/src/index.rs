@@ -49,22 +49,13 @@ impl Index {
     pub fn parse(&mut self, data: &[u8], offset: usize) {
         self.start = offset;
         self.end = offset + data.len();
-        /* Alternative that works with str and unicode
-            data
-                .chars()
-                .enumerate()
-                .filter(|(_, c)| *c == '\n')
-                .map(|(i, _)| i + offset)
-                .collect::<Vec<_>>();
-            */
-        let mut pos = 0;
-        for c in data {
-            if *c == b'\n' {
-                self.line_offsets.push(offset + pos);
-            }
-            pos += 1;
-        }
-    }
+        let newlines = data
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| **c == b'\n')
+            .map(|(i, _)| i + offset);
+        self.line_offsets.extend(newlines);
+}
 
     pub fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
         self.line_offsets.iter()
