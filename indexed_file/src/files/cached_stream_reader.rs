@@ -28,11 +28,14 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 
+use crate::files::LogFileUtil;
+use crate::files::LogFileTrait;
+
 const QUEUE_SIZE:usize = 100;
 const READ_THRESHOLD:usize = 10240;
 
 pub trait Stream {
-    fn len(&self) -> usize;
+    fn get_length(&self) -> usize;
     // Wait on any data at all; Returns true if file is still open
     fn wait(&mut self) -> bool;
 }
@@ -43,17 +46,19 @@ pub struct CachedStreamReader {
     pos:u64,
 }
 
+impl LogFileTrait for CachedStreamReader {}
+
 impl CachedStreamReader {
-    pub fn new(pipe: Option<PathBuf>) -> Self {
+    pub fn new(pipe: Option<PathBuf>) -> std::io::Result<Self> {
         let base = Self {
             rx: None,
             buffer: Vec::default(),
             pos: 0,
         };
 
-        if let Some(pipe) = pipe {
+        let stream = if let Some(pipe) = pipe {
             Self {
-                rx: Some(Self::reader(Some(BufReader::new(File::open(pipe).expect("File exists"))))),
+                rx: Some(Self::reader(Some(BufReader::new(File::open(pipe)?)))),
                 ..base
             }
         } else {
@@ -61,7 +66,8 @@ impl CachedStreamReader {
                 rx: Some(Self::reader(None)),
                 ..base
             }
-        }
+        };
+        Ok(stream)
     }
 
     pub fn is_eof(&self) -> bool {
@@ -70,7 +76,7 @@ impl CachedStreamReader {
 
     pub fn fill_buffer(&mut self, pos: usize) {
         // TODO: Merge this and wait(); always wait for anything at pos
-        if pos + READ_THRESHOLD > self.len() {
+        if pos + READ_THRESHOLD > self.get_length() {
             if let Some(rx) = &self.rx {
                 loop {
                     match rx.try_recv() {
@@ -110,7 +116,7 @@ impl CachedStreamReader {
 }
 
 impl Stream for CachedStreamReader {
-    fn len(&self) -> usize {
+    fn get_length(&self) -> usize {
         self.buffer.len()
     }
 
@@ -133,7 +139,7 @@ impl  Read for CachedStreamReader {
         // FIXME: Call fill_buffer() only if pos is "close" to the end of the buffer
         let start = self.pos as usize;
         self.fill_buffer(start + buf.len());
-        let len = buf.len().min(self.len().saturating_sub(start));
+        let len = buf.len().min(self.get_length().saturating_sub(start));
         if len > 0 {
             let end = start + len;
             buf[..len].copy_from_slice(&self.buffer[start..end]);
@@ -149,9 +155,9 @@ impl  Seek for CachedStreamReader {
         let (start, offset) = match pos {
             SeekFrom::Start(n) => (0_i64, n as i64),
             SeekFrom::Current(n) => (self.pos as i64, n),
-            SeekFrom::End(n) => (self.len() as i64, n),
+            SeekFrom::End(n) => (self.get_length() as i64, n),
         };
-        self.pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
+        self.pos = (((start as i64).saturating_add(offset)) as u64).min(self.get_length() as u64);
         Ok(self.pos)
     }
 }
@@ -166,4 +172,10 @@ impl  std::io::BufRead for CachedStreamReader {
     fn consume(&mut self, amt: usize) {
         self.pos += amt as u64;
     }
+}
+
+// TODO: Make LogFileTrait wrappers implement ReadBuf instead of Read
+impl LogFileUtil for CachedStreamReader {
+    #[inline(always)] fn len(&self) -> usize { self.get_length() }
+    #[inline(always)] fn quench(&mut self) { self.wait(); }
 }

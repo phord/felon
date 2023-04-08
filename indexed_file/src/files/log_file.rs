@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use std::io::Read;
+use std::io::BufRead;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::PathBuf;
@@ -16,9 +17,37 @@ pub struct LogFile {
     file: Box<dyn LogFileTrait>,
 }
 
-pub trait LogFileTrait: LogFileUtil + Read + Seek {}
+pub trait LogFileTrait: LogFileUtil + BufRead + Seek {}
 
 impl LogFileTrait for LogFile {}
+
+impl BufRead for TextLogFile {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        todo!()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        todo!()
+    }
+}
+impl BufRead for MockLogFile {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        todo!()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        todo!()
+    }
+}
+impl BufRead for ZstdLogFile {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        todo!()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        todo!()
+    }
+}
 
 impl LogFile {
 
@@ -96,5 +125,17 @@ impl Read for LogFile {
 impl Seek for LogFile {
     #[inline(always)] fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         self.file.seek(pos)
+    }
+}
+
+impl BufRead for LogFile {
+    #[inline(always)]
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.file.fill_buf()
+    }
+
+    #[inline(always)]
+    fn consume(&mut self, amt: usize) {
+        self.file.consume(amt)
     }
 }

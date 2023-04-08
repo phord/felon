@@ -1,4 +1,4 @@
-// Reader of text files
+// Reader of regular text files
 
 use std::path::PathBuf;
 
@@ -25,7 +25,7 @@ impl TextLogFile {
 
 impl Stream for File {
     #[inline(always)]
-    fn len(&self) -> usize {
+    fn get_length(&self) -> usize {
         self.metadata().unwrap().len() as usize
     }
     // Wait on any data at all; Returns true if file is still open

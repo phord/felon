@@ -1,6 +1,6 @@
 // Wrapper for text things
 
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, BufRead};
 
 use crate::files::LogFileUtil;
 use crate::files::Stream;
@@ -11,12 +11,12 @@ pub struct TextLog<T> {
     file: T,
 }
 
-impl<T: Read + Seek + Stream> LogFileTrait for TextLog<T> {}
+impl<T: BufRead + Seek + Stream> LogFileTrait for TextLog<T> {}
 
 impl<T: Read + Stream + Seek> LogFileUtil for TextLog<T> {
     #[inline(always)]
     fn len(&self) -> usize {
-        self.file.len()
+        self.file.get_length()
     }
 
     #[inline(always)]
@@ -54,5 +54,17 @@ impl<T> TextLog<T> {
     #[inline(always)]
     pub fn into_inner_mut(&mut self) -> &mut T {
         &mut self.file
+    }
+}
+
+impl<T: BufRead> BufRead for TextLog<T> {
+    #[inline(always)]
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.file.fill_buf()
+    }
+
+    #[inline(always)]
+    fn consume(&mut self, amt: usize) {
+        self.file.consume(amt)
     }
 }

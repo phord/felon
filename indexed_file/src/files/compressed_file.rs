@@ -45,7 +45,7 @@ impl<R> CompressedFile<R> {
 
         let frame = &self.frames[index];
         let end = if frame.len == 0 {
-            let size = (self.len() - target) as u64;
+            let size = (self.get_length() - target) as u64;
             // let size = 128 * 1024;   <-- Also tried this
             frame.logical.max(target as u64) + size
         } else {
@@ -344,7 +344,7 @@ impl<R: Read + Seek> Seek for CompressedFile<R> {
                     (self.source_bytes as i64, _n)
                 },
         };
-        let pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
+        let pos = (((start as i64).saturating_add(offset)) as u64).min(self.get_length() as u64);
         self.seek_pos = Some(pos);
         // TODO: Actually seek to position and validate it's in range
         Ok(pos)
@@ -369,7 +369,7 @@ impl<R: Read + Seek> Read for CompressedFile<R> {
 }
 
 impl<R> Stream for CompressedFile<R> {
-    fn len(&self) -> usize {
+    fn get_length(&self) -> usize {
         let last = &self.frames.last().unwrap();
         let len = last.logical + last.len +
             if last.len > 0 { 0 } else {
