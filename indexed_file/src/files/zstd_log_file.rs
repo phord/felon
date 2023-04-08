@@ -2,7 +2,7 @@
 
 use std::{path::PathBuf, io::Read};
 
-use std::io::{Seek, SeekFrom};
+use std::io::{Seek, SeekFrom, BufReader};
 use crate::files::CompressedFile;
 use std::fs::File;
 
@@ -12,7 +12,7 @@ use crate::files::LogFileTrait;
 use super::text_log::TextLog;
 
 pub struct ZstdLogFile {
-    file: TextLog<CompressedFile<File>>,
+    file: TextLog<CompressedFile<BufReader<File>>>,
 }
 
 impl ZstdLogFile {
@@ -21,10 +21,11 @@ impl ZstdLogFile {
         if !CompressedFile::is_recognized(&file) {
             Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Unrecognized file type")))
         } else {
+            let file = BufReader::new(file);
             let zf = CompressedFile::new(file)?;
             Ok(ZstdLogFile {
                 // file_path: input_file.unwrap(),
-                file: TextLog::new(zf),
+                file: TextLog::new(zf)?,
             })
         }
     }

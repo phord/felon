@@ -1,6 +1,7 @@
 // Generic wrapper of different readable file types
 
 use std::fs::File;
+use std::io::BufReader;
 use std::io::Read;
 use std::io::BufRead;
 use std::io::Seek;
@@ -21,15 +22,6 @@ pub trait LogFileTrait: LogFileUtil + BufRead + Seek {}
 
 impl LogFileTrait for LogFile {}
 
-impl BufRead for TextLogFile {
-    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        todo!()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        todo!()
-    }
-}
 impl BufRead for MockLogFile {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         todo!()
@@ -63,7 +55,9 @@ impl LogFile {
                         file: Box::new(file),
                     })
                 } else {
-                    let file = TextLogFile::new(&input_file)?;
+                    let file = File::open(&input_file).unwrap();
+                    let file = BufReader::new(file);
+                    let file = TextLogFile::new(file)?;
                     Ok(LogFile {
                         file: Box::new(file),
                     })

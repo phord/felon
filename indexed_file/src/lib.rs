@@ -16,7 +16,9 @@ mod tests {
     }
 
     fn open_log_file_lines(path: PathBuf) -> LineIndexer<TextLogFile> {
-        let file = TextLogFile::new(&path).expect("File exists");
+        let file = File::open(&path).unwrap();
+        let file = BufReader::new(file);
+        let file = TextLogFile::new(file).expect("File exists");
         LineIndexer::new(file)
     }
 
@@ -34,7 +36,7 @@ mod tests {
         assert!(file.is_ok());
     }
 
-    use std::io::Write;
+    use std::io::{Write, BufReader};
     use rand::prelude::*;
     use std::fs::File;
     use std::io::{self, BufRead};

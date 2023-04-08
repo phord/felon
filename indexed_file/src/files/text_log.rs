@@ -11,8 +11,6 @@ pub struct TextLog<T> {
     file: T,
 }
 
-impl<T: BufRead + Seek + Stream> LogFileTrait for TextLog<T> {}
-
 impl<T: Read + Stream + Seek> LogFileUtil for TextLog<T> {
     #[inline(always)]
     fn len(&self) -> usize {
@@ -40,10 +38,10 @@ impl<T: Seek> Seek for TextLog<T> {
 }
 
 impl<T> TextLog<T> {
-    pub fn new(file: T) -> Self {
-        Self {
+    pub fn new(file: T) -> std::io::Result<Self> {
+        Ok(Self {
             file
-        }
+        })
     }
 
     #[inline(always)]
