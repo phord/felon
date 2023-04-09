@@ -107,7 +107,10 @@ impl CachedStreamReader {
             };
             match line {
                 Ok(0) => break,  // EOF
-                Ok(_) => tx.send(buffer.as_bytes().iter().copied().collect()).unwrap(),
+                Ok(_) => match tx.send(buffer.as_bytes().iter().copied().collect()) {
+                        Err(_) => break, // Broken pipe?
+                        _ => (),
+                    },
                 Err(err) => { eprint!("{:?}", err); break; },
             }
         });
@@ -163,7 +166,7 @@ impl  Seek for CachedStreamReader {
 }
 
 // BufReader<CachedStreamReader> is unnecessary and results in extra copies. Avoid using it, and just use our impl instead.
-impl  std::io::BufRead for CachedStreamReader {
+impl std::io::BufRead for CachedStreamReader {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.fill_buffer(self.pos as usize);
         Ok(&self.buffer[self.pos as usize..])
