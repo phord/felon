@@ -1,5 +1,6 @@
 // Mock log file helper
 
+use std::io::BufRead;
 use std::{fmt, io::Read};
 use crate::files::LogFileUtil;
 use crate::files::LogFileTrait;
@@ -52,6 +53,22 @@ impl Read for MockLogFile {
             buf.copy_from_slice(self.buffer[offset..end].as_bytes());
             Ok(end-offset)
         }
+    }
+}
+
+impl BufRead for MockLogFile {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.pos as usize > self.len() {
+            Ok(&self.filler.as_bytes()[..0])
+        } else {
+            let offset = self.pos as usize % self.filler.len();
+            let len = (self.filler.len() - offset).min(self.len() - self.pos as usize);
+            Ok(&self.filler.as_bytes()[offset..offset+len])
+        }
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.pos += amt as u64
     }
 }
 

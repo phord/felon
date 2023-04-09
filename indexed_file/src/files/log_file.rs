@@ -22,15 +22,6 @@ pub trait LogFileTrait: LogFileUtil + BufRead + Seek {}
 
 impl LogFileTrait for LogFile {}
 
-impl BufRead for MockLogFile {
-    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        todo!()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        todo!()
-    }
-}
 impl LogFile {
 
     pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
