@@ -246,15 +246,15 @@ impl<R: Read + Seek> CompressedFile<R> {
 
     fn apply_seek(&mut self) -> Result<(), std::io::Error> {
         if let Some(pos) = self.seek_pos {
+            // Forget this for next time
+            self.seek_pos = None;
+
             if pos == self.pos {
                 // no-op
                 return Ok(())
             }
 
             // Move to a new position
-
-            // Forget this for next time
-            self.seek_pos = None;
 
             let index = self.lookup_frame_index(pos);
 
