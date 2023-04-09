@@ -269,20 +269,22 @@ impl<R: Read + Seek> CompressedFile<R> {
             if pos > self.pos {
                 // We're in the right frame, but we're behind
                 self.skip_bytes(pos - self.pos)?;
+                assert_eq!(pos, self.pos, "seek pos is outside of file range");
             }
         }
         Ok(())
     }
 
-    fn decode_more_bytes(&mut self) -> Result<(), std::io::Error> {
+    // Ok(true) at eof
+    fn decode_more_bytes(&mut self) -> Result<bool, std::io::Error> {
         loop {
             if self.decoder.can_collect() > 0 {
                 // You've already got bytes.  Go away.
-                return Ok(())
+                return Ok(false)
             } else if self.decoder.is_finished() {
                 if self.file.stream_position().unwrap() >= self.source_bytes {
                     // EOF
-                    return Ok(())
+                    return Ok(true)
                 }
                 // Start a new frame
                 self.begin_frame();
@@ -313,7 +315,11 @@ impl<R: Read + Seek> CompressedFile<R> {
             if count >= self.decoder.can_collect() as u64 {
                 count -= self.decoder.can_collect() as u64;
                 self.decoder.collect();
-                self.decode_more_bytes()?;
+                let eof = self.decode_more_bytes()?;
+                if eof {
+                    self.pos -= count;
+                    break
+                }
             } else {
                 // TODO: Avoid allocating and copying to buffer only to skip bytes
                 let mut buffer = vec![0u8; count as usize];
