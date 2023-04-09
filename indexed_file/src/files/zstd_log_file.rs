@@ -2,7 +2,7 @@
 
 use std::{path::PathBuf, io::Read};
 
-use std::io::{Seek, SeekFrom, BufReader};
+use std::io::{Seek, SeekFrom, BufReader, BufRead};
 use crate::files::CompressedFile;
 use std::fs::File;
 
@@ -50,6 +50,16 @@ impl LogFileUtil for ZstdLogFile {
 impl Read for ZstdLogFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.file.into_inner_mut().read(buf)
+    }
+}
+
+impl BufRead for ZstdLogFile {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.file.into_inner_mut().fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.file.into_inner_mut().consume(amt)
     }
 }
 

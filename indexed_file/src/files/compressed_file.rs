@@ -1,5 +1,6 @@
 // Currently just zstd compression
 use ruzstd;
+use std::io::BufRead;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -15,6 +16,63 @@ struct FrameInfo{
     physical: u64,
     logical: u64,
     len: u64,
+}
+
+struct ReadBuffer {
+    // Buffer for BufRead
+    buffer: Vec<u8>,
+    start_offset: u64,
+    consumed: u64,
+}
+
+impl ReadBuffer {
+    fn new() -> Self {
+        ReadBuffer {
+            buffer: Vec::default(),
+            start_offset: 0,
+            consumed: 0,
+        }
+    }
+
+    fn remaining(&self) -> u64 {
+        assert!(self.buffer.len() as u64 >= self.consumed);
+        self.buffer.len() as u64 - self.consumed
+    }
+
+    fn start(&self) -> u64 {
+        self.start_offset
+    }
+
+    fn end(&self) -> u64 {
+        self.start_offset + self.buffer.len() as u64
+    }
+
+    fn pos(&self) -> u64 {
+        assert!(self.buffer.len() as u64 >= self.consumed);
+        self.start_offset + self.consumed
+    }
+
+    fn len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    fn get_buffer(&self) -> &[u8] {
+        &self.buffer[self.consumed as usize..]
+    }
+
+    fn consume(&mut self, amt: u64) {
+        self.consumed += amt
+    }
+
+    fn seek_to(&mut self, pos: u64) -> bool {
+        if (self.start()..self.end()).contains(&pos) {
+            self.consumed = pos - self.start();
+            assert_eq!(pos, self.pos());
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub struct CompressedFile<R> {
@@ -33,6 +91,9 @@ pub struct CompressedFile<R> {
 
     // Logical position in decode stream
     seek_pos: Option<u64>,
+
+    // Buffer for BufRead
+    read_buffer: ReadBuffer,
 }
 
 impl<R> CompressedFile<R> {
@@ -96,6 +157,7 @@ impl<R: Read + Seek> CompressedFile<R> {
             seek_pos: None,
             frames: Vec::new(),
             cur_frame: 0,
+            read_buffer: ReadBuffer::new(),
         };
 
         // Read all physical frame sizes into self.frames.
@@ -199,6 +261,8 @@ impl<R: Read + Seek> CompressedFile<R> {
         if self.file.stream_position().unwrap() != frame.physical {
             self.file.seek(SeekFrom::Start(frame.physical)).expect("Seek does not fail");
         }
+        // reset read_buffer
+        self.read_buffer = ReadBuffer::new();
         self.pos = frame.logical;
         self.begin_frame();
         self.cur_frame = index;
@@ -255,21 +319,25 @@ impl<R: Read + Seek> CompressedFile<R> {
             }
 
             // Move to a new position
+            if self.read_buffer.seek_to(pos) {
+                // Found pos in read_buffer.  All done.
+                // TODO: Adjust cur_frame to match?
+            } else {
+                let index = self.lookup_frame_index(pos);
 
-            let index = self.lookup_frame_index(pos);
+                let frame = &self.frames[index];
+                let frame_range = frame.logical..frame.logical+frame.len;
+                assert!(frame_range.contains(&pos) || frame.len == 0);
+                if pos < self.pos || !frame_range.contains(&self.pos) {
+                    // Open a new frame
+                    self.goto_frame(index);
+                }
 
-            let frame = &self.frames[index];
-            let frame_range = frame.logical..frame.logical+frame.len;
-            assert!(frame_range.contains(&pos) || frame.len == 0);
-            if pos < self.pos || !frame_range.contains(&self.pos) {
-                // Open a new frame
-                self.goto_frame(index);
-            }
-
-            if pos > self.pos {
-                // We're in the right frame, but we're behind
-                self.skip_bytes(pos - self.pos)?;
-                assert_eq!(pos, self.pos, "seek pos is outside of file range");
+                if pos > self.pos {
+                    // We're in the right frame, but we're behind
+                    self.skip_bytes(pos - self.pos)?;
+                    assert_eq!(pos, self.pos, "seek pos is outside of file range");
+                }
             }
         }
         Ok(())
@@ -332,8 +400,33 @@ impl<R: Read + Seek> CompressedFile<R> {
 
     // Move the stream position to read more bytes at current logical pos
     fn update_stream(&mut self) -> Result<(), std::io::Error> {
+        const BUFFER_THRESHOLD_EDGE:u64 = 40 * 1024;
+        const BUFFER_THRESHOLD_CAPACITY:u64 = 10 * 1024 * 1024;
         self.apply_seek()?;
-        self.decode_more_bytes()
+        if self.read_buffer.remaining() < BUFFER_THRESHOLD_EDGE {
+            self.decode_more_bytes()?;
+            if let Some(buffer) = self.decoder.collect() {
+                // Add more bytes to our internal buffer
+                if self.read_buffer.buffer.is_empty() {
+                    self.read_buffer = ReadBuffer {
+                        buffer,
+                        start_offset: self.pos,
+                        consumed: 0,
+                    };
+                } else {
+                    self.read_buffer.buffer.extend(buffer.into_iter());
+                    // Discard start of buffer if we're well past it now
+                    let cap = BUFFER_THRESHOLD_CAPACITY;
+                    if self.read_buffer.len() > cap as usize * 3
+                            && self.read_buffer.consumed >= cap * 2 {
+                        self.read_buffer.buffer = self.read_buffer.buffer[cap as usize..].to_vec();
+                        self.read_buffer.start_offset += cap;
+                        self.read_buffer.consumed -= cap;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -363,14 +456,32 @@ impl<R: Read + Seek> Read for CompressedFile<R> {
         while bytes < buf.len() {
             self.update_stream()?;
 
-            let actual = self.decoder.read(&mut buf[bytes..])?;
+            let actual = (self.read_buffer.remaining() as usize).min(buf.len() - bytes);
+            buf[bytes..bytes+actual].copy_from_slice(self.read_buffer.get_buffer());
+
             self.pos += actual as u64;
+            self.read_buffer.consume(actual as u64);
             bytes += actual;
             if actual == 0 {  // EOF
                 break;
             }
         }
         Ok(bytes)
+    }
+}
+
+impl<R: Read + Seek> BufRead for CompressedFile<R> {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        // FIXME: We have to copy bytes twice here: Once from the Decoder buffer to ours, and once again
+        // to our reader.  We could skip the first copy if we had access to Decoder::buffer::as_slices(), but
+        // Decoder::buffer is private.  Shucks.  For now, we must copy.
+        self.update_stream()?;
+        Ok(self.read_buffer.get_buffer())
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.pos += amt as u64;
+        self.read_buffer.consume(amt as u64);
     }
 }
 
@@ -434,9 +545,4 @@ fn test_compressed_file_seek() {
 
     assert_eq!(line6, line6b);
 
-}
-
-#[test]
-fn test_compressed_file_seek_gen() {
-    use std::io::{BufRead, BufReader};
 }

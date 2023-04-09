@@ -31,16 +31,6 @@ impl BufRead for MockLogFile {
         todo!()
     }
 }
-impl BufRead for ZstdLogFile {
-    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        todo!()
-    }
-
-    fn consume(&mut self, amt: usize) {
-        todo!()
-    }
-}
-
 impl LogFile {
 
     pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
