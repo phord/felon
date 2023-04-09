@@ -64,6 +64,25 @@ impl ReadBuffer {
         self.consumed += amt
     }
 
+    fn extend(&mut self, data: Vec<u8>, pos: u64) {
+        if self.buffer.is_empty() {
+            self.buffer = data;
+            self.start_offset = pos;
+            self.consumed = 0;
+        } else {
+            assert!((self.start()..=self.end()).contains(&pos));
+            self.buffer.extend(data.into_iter());
+        }
+    }
+
+    fn discard_front(&mut self, amt: u64) {
+        assert!(amt as usize <= self.buffer.len());
+        assert!(amt <= self.consumed);
+        self.buffer = self.buffer[amt as usize..].to_vec();
+        self.start_offset += amt;
+        self.consumed = self.consumed.saturating_sub(amt);
+    }
+
     fn seek_to(&mut self, pos: u64) -> bool {
         if (self.start()..self.end()).contains(&pos) {
             self.consumed = pos - self.start();
@@ -405,23 +424,17 @@ impl<R: Read + Seek> CompressedFile<R> {
         self.apply_seek()?;
         if self.read_buffer.remaining() < BUFFER_THRESHOLD_EDGE {
             self.decode_more_bytes()?;
-            if let Some(buffer) = self.decoder.collect() {
-                // Add more bytes to our internal buffer
-                if self.read_buffer.buffer.is_empty() {
-                    self.read_buffer = ReadBuffer {
-                        buffer,
-                        start_offset: self.pos,
-                        consumed: 0,
-                    };
-                } else {
-                    self.read_buffer.buffer.extend(buffer.into_iter());
+            if self.decoder.can_collect() > 0 {
+                if let Some(buffer) = self.decoder.collect() {
+                    // Add more bytes to our internal buffer
+                    self.read_buffer.extend(buffer, self.pos);
+
+                    // TODO: Add a test to ensure this bounding works as expected
                     // Discard start of buffer if we're well past it now
                     let cap = BUFFER_THRESHOLD_CAPACITY;
                     if self.read_buffer.len() > cap as usize * 3
                             && self.read_buffer.consumed >= cap * 2 {
-                        self.read_buffer.buffer = self.read_buffer.buffer[cap as usize..].to_vec();
-                        self.read_buffer.start_offset += cap;
-                        self.read_buffer.consumed -= cap;
+                        self.read_buffer.discard_front(cap);
                     }
                 }
             }
