@@ -5,13 +5,11 @@ use std::io::{Read, Seek, SeekFrom, BufRead};
 use crate::files::LogFileUtil;
 use crate::files::Stream;
 
-use super::LogFileTrait;
-
 pub struct TextLog<T> {
     file: T,
 }
 
-impl<T: Read + Stream + Seek> LogFileUtil for TextLog<T> {
+impl<T: Stream> LogFileUtil for TextLog<T> {
     #[inline(always)]
     fn len(&self) -> usize {
         self.file.get_length()

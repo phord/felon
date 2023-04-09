@@ -2,6 +2,8 @@
 // Each index knows the offset for its chunk into the original data.  So looking up a
 // a line number will return the offset into the original data, not just the chunk.
 
+use std::io::BufRead;
+
 
 pub struct Index {
     // Offset of buffer we indexed
@@ -55,7 +57,41 @@ impl Index {
             .filter(|(_, c)| **c == b'\n')
             .map(|(i, _)| i + offset);
         self.line_offsets.extend(newlines);
-}
+    }
+
+    // Parse lines from a BufRead
+    pub fn parse_bufread<R: BufRead>(&mut self, source: &mut R, offset: usize, len: usize) -> std::io::Result<usize> {
+        /* Alternative:
+            let mut pos = offset;
+            let newlines = source.lines()
+                .map(|x| { pos += x.len() + 1; pos });
+            self.line_offsets.extend(newlines);
+         */
+        let mut pos = offset;
+        while pos <= offset + len {
+            let bytes =
+                match source.fill_buf() {
+                    Ok(buf) => {
+                        if buf.len() == 0 {
+                            break
+                        }
+                        self.parse(buf, pos);
+                        buf.len()
+                    },
+                    Err(e) => {
+                        // FIXME: DRY
+                        self.start = offset;
+                        return std::io::Result::Err(e)
+                    },
+                };
+            pos += bytes;
+            source.consume(bytes);
+        }
+        // Undo side-effect that always moves start to last read head
+        self.start = offset;
+        // self.end = pos;
+        Ok(pos - offset)
+    }
 
     pub fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
         self.line_offsets.iter()

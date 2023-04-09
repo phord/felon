@@ -288,14 +288,23 @@ impl<'a, LOG: LogFileTrait> Iterator for LineIndexerDataIterator<'a, LOG> {
         }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                let mut buf = vec![0u8; eol-bol];
                 self.file.file.seek(SeekFrom::Start(bol as u64)).expect("Seek does not fail");
-                if let Ok(_bytes) = self.file.file.read(&mut buf) {
-                    self.pos = self.file.index.next_line_index(self.pos);
-                    let line = String::from_utf8(buf).expect("No errors in utf8 file data");
-                    return Some((line, bol, eol + 1));
-                } else {
-                    panic!("Unhandled file read error?");
+                let mut line = String::default();
+                self.pos = self.file.index.next_line_index(self.pos);
+                let mut length = eol - bol;
+                line.reserve(length);
+                loop {
+                    if let Ok(buf) = self.file.file.fill_buf() {
+                        let bytes = length.min(buf.len());
+                        line += &String::from_utf8(buf[..bytes].to_vec()).expect("No errors in utf8 file data");
+                        self.file.file.consume(bytes);
+                        if bytes == length {
+                            return Some((line, bol, eol + 1));
+                        }
+                        length -= bytes;
+                    } else {
+                        panic!("Unhandled file read error?");
+                    }
                 }
             }
         }
@@ -334,11 +343,9 @@ impl<LOG: LogFileTrait> LineIndexer<LOG> {
             assert!(offset < end);
 
             // Send the buffer to the parsers
-            let mut buffer = vec![0u8; end-start];
-            self.file.seek(SeekFrom::Start(start as u64));
-            self.file.read(&mut buffer).expect("Indexed reads always succeed");
+            self.file.seek(SeekFrom::Start(start as u64)).expect("Seek does not fail");
             let mut index = Index::new();
-            index.parse(&buffer, start);
+            index.parse_bufread(&mut self.file, start, end).expect("Ignore read errors");
             self.index.merge(index);
 
             self.index.finalize();
