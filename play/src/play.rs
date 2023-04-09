@@ -1,6 +1,6 @@
 
 use std::{time::{SystemTime, UNIX_EPOCH}, io::Read};
-use indexed_file::files::CachedStreamReader;
+use indexed_file::files::{CachedStreamReader, LogFileUtil};
 use std::thread::sleep;
 use indexed_file::files::Stream;
 
@@ -122,8 +122,8 @@ fn stdin_seek_front_to_back() -> std::io::Result<()>{
 
 
 //  (for x in {1..100} ; do echo $x ; sleep 0.1 ; done) | cargo run --bin play
-fn try_async_stdin() {
-    let mut stdin = CachedStreamReader::new(None);
+fn try_async_stdin() -> std::io::Result<()> {
+    let mut stdin = CachedStreamReader::new(None)?;
     let mut prev = millis();
     let mut prev_len = 0;
     while !stdin.is_eof() {
@@ -146,11 +146,12 @@ fn try_async_stdin() {
         sleep( std::time::Duration::from_millis(1));
         // print!("{}", String::from_utf8(buf.to_vec()).unwrap());
     }
+    Ok(())
 }
 
 //  (for x in {1..100} ; do echo $x ; sleep 0.1 ; done) | cargo run --bin play
-fn try_async_stdin_terminate_early() {
-    let mut stdin = CachedStreamReader::new(None);
+fn try_async_stdin_terminate_early() -> std::io::Result<()> {
+    let mut stdin = CachedStreamReader::new(None)?;
     let mut prev = millis();
     let mut prev_len = 0;
     let mut counter = 0;
@@ -174,12 +175,13 @@ fn try_async_stdin_terminate_early() {
         }
         sleep( std::time::Duration::from_millis(1));
     }
+    Ok(())
 }
 
 // Seek works in AsyncStdin
 fn async_stdin_seek_front_to_back() -> std::io::Result<()>{
     use std::io::{BufRead, Seek, SeekFrom};
-    let mut file = CachedStreamReader::new(None);
+    let mut file = CachedStreamReader::new(None)?;
 
     assert!(is_seekable(&mut file));
 
