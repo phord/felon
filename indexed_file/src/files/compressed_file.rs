@@ -12,9 +12,41 @@ use ruzstd::frame::read_frame_header;
 
 use crate::files::Stream;
 
+/**
+ * FrameInfo holds information about individual frames in a compressed file.
+ *
+ * Frames are useful because they can be decoded independently from each other. This means we can position
+ * the input file to the start of any frame and decompress from there. Thus we can treat a compressed file
+ * made of multiple frames as one logical decompressed file supporting random-access reads if we know the
+ * compressed and decompressed sizes of all the frames.  This structure holds that information for a single
+ * frame.
+ *
+ * In practice this is only useful if we have a file compressed with multiple frames. Ideally each frame
+ * also stores its decompressed size in the block headers.  However, this (decomp size) is optional. If it
+ * is not available, the only way to find it is to decompress the frames to calculate it, which is slow.
+ *
+ * By convention here, if the len == 0 it means we have not determined the length of this frame yet. Therefore
+ * we won't know the logical position of any frames after this one. Since we currently need to know the logical
+ * position of each chunk we process elsewhere, we don't bother recording any frames after an "unknown" frame
+ * until the unknown one can be replaced with a known (len) value.
+ *
+ * scan_frames() will attempt to index the whole file by recording the FrameInfo for every frame in the
+ * file. If a frame's uncompressed size is unknown, we stop scanning and leave the rest of the index
+ * "unknown". As we decode frames through normal reads, we will learn the length of each frame and we can
+ * fill in the missing information (len). We will then push a new unknown frame size into the index
+ * representing the new unknown frontier of the logical space in frames.
+ *
+ * In the future we may represent this unknown space differently to allow for alternate forms of traversal
+ * of the file data.
+ */
 struct FrameInfo{
+    // The offset of the start of the frame in the compressed file
     physical: u64,
+
+    // The offset of the decoded data in the decompressed file for this frame
     logical: u64,
+
+    // The length of the decompressed data in this frame
     len: u64,
 }
 
@@ -127,7 +159,7 @@ impl<R: Read + Seek> CompressedFile<R> {
         }
     }
 
-    // Scan all the zstd frame headers in the file and record their positions and sizes
+    // Scan all the zstd frame headers in the file and record their positions and sizes, if known
     fn scan_frames(&mut self) -> Result<(), ReadFrameHeaderError> {
         let mut pos = 0;
 
@@ -200,6 +232,7 @@ impl<R: Read + Seek> CompressedFile<R> {
         }
     }
 
+    // Position to the start of a different frame because of an explicit seek()
     fn goto_frame(&mut self, index: usize) {
         let frame = &self.frames[index];
 
@@ -219,21 +252,26 @@ impl<R: Read + Seek> CompressedFile<R> {
 
     // Update last frame if we just decoded the last byte
     fn end_frame(&mut self) {
+        // We may not be on the last frame in the index, but we only update the last frame.  We assume that we are not
+        // decoding some earlier frame because we cannot know the logical offset of any frame after the unknown frontier one.
         let mut frame = self.frames.last_mut().unwrap();
-        let logical_pos = self.pos + self.decoder.can_collect() as u64;
-        if frame.len == 0 && logical_pos > frame.logical {
-            frame.len = logical_pos - frame.logical;
+        if frame.len == 0 {
+            let logical_pos = self.pos + self.decoder.can_collect() as u64;
+            if logical_pos > frame.logical {
+                frame.len = logical_pos - frame.logical;
 
-            // Push a new last-known-frame
-            let fpos = self.file.stream_position().unwrap() as u64;
-            assert!(fpos > frame.physical);
+                // Push a new last-unknown-frame if we're not at EOF yet
+                let fpos = self.file.stream_position().unwrap() as u64;
+                assert!(fpos > frame.physical);
 
-            if fpos < self.source_bytes {
-                self.frames.push(FrameInfo { physical: fpos, logical: logical_pos, len: 0 } );
+                if fpos < self.source_bytes {
+                    self.frames.push(FrameInfo { physical: fpos, logical: logical_pos, len: 0 } );
+                }
             }
         }
     }
 
+    // Parse a frame header and automatically skip over Skippable Frames
     fn begin_frame(&mut self) {
         while self.file.stream_position().unwrap() < self.source_bytes {
             match self.decoder.reset(&mut self.file) {
