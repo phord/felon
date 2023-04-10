@@ -115,21 +115,21 @@ mod tests {
 
     use crate::files::LogFile;
     use crate::files::LogFileUtil;
+    use crate::files::new_mock_file;
 
-    impl LogFile {
-        fn old_read(&mut self, offset: usize, len: usize ) -> Option<Vec<u8>> {
-            self.seek(SeekFrom::Start(offset as u64));
-            let mut buf = vec![0u8; len];
-            match self.read(&mut buf) {
-                Ok(bytes) => Some(buf),
-                _ => None,
-            }
+    fn old_read(file: &mut LogFile, offset: usize, len: usize ) -> Option<Vec<u8>> {
+        file.seek(SeekFrom::Start(offset as u64)).expect("Seek never fails");
+        let mut buf = vec![0u8; len];
+        match file.read(&mut buf) {
+            Ok(_bytes) => Some(buf),
+            _ => None,
         }
     }
+
     #[test]
     fn test_mock_log_file_basic() {
         let size = 16 * 1024;
-        let file = LogFile::new_mock_file("fill", size, 100);
+        let file = new_mock_file("fill", size, 100);
         assert_eq!(file.len(), size);
     }
 
@@ -137,37 +137,37 @@ mod tests {
     fn test_mock_log_file_read_basic() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let mut file = LogFile::new_mock_file(fill, size, 100);
-        assert_eq!(file.old_read(0, 10), Some(fill[..10].as_bytes().to_vec()));
+        let mut file = new_mock_file(fill, size, 100);
+        assert_eq!(old_read(&mut file, 0, 10), Some(fill[..10].as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_read_offset() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let mut file = LogFile::new_mock_file(fill, size, 100);
+        let mut file = new_mock_file(fill, size, 100);
         let offset = fill.len() * 10;
-        assert_eq!(file.old_read(offset, 10), Some(fill[..10].as_bytes().to_vec()));
+        assert_eq!(old_read(&mut file, offset, 10), Some(fill[..10].as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_read_multiline() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let mut file = LogFile::new_mock_file(fill, size, 100);
+        let mut file = new_mock_file(fill, size, 100);
         let mut ret = fill.to_string();
         ret.push_str(&fill[..]);
         let offset = fill.len() * 10;
         let len = ret.len();
 
-        assert_eq!(file.old_read(offset, len), Some(ret.as_bytes().to_vec()));
+        assert_eq!(old_read(&mut file, offset, len), Some(ret.as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_read_multiline_middle() {
         let size = 16 * 1024;
         let fill = "this is a test\n";
-        let mut file = LogFile::new_mock_file(fill, size, 100);
+        let mut file = new_mock_file(fill, size, 100);
 
         let ofs = fill.len()/2;
         let end = fill.len() - 1;
@@ -176,14 +176,14 @@ mod tests {
         let offset = fill.len() * 10 + ofs;
         let len = ret.len();
 
-        assert_eq!(file.old_read(offset, len), Some(ret.as_bytes().to_vec()));
+        assert_eq!(old_read(&mut file, offset, len), Some(ret.as_bytes().to_vec()));
     }
 
     #[test]
     fn test_mock_log_file_chunk_sizes() {
         let size = 3 * 1024;
         let fill = "this is a test\n";
-        let file = LogFile::new_mock_file(fill, size, 100);
+        let file = new_mock_file(fill, size, 100);
 
         for i in 0..file.len() {
             let (start, end) = file.chunk(i);

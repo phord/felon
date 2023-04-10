@@ -1,5 +1,5 @@
 use crate::config::Config;
-use indexed_file::{line_indexer::LineIndexer, files::LogFile};
+use indexed_file::{line_indexer::LineIndexer, files};
 
 pub fn cat_cmd() {
     let cfg = Config::from_env();
@@ -14,7 +14,7 @@ pub fn cat_cmd() {
             // println!("{:?}", file);
 
             // TODO: Teach LineIndexer to open the file by names and construct the correct type
-            let mut file = LineIndexer::new( LogFile::new_text_file(file).unwrap());
+            let mut file = LineIndexer::new( files::new_text_file(file).unwrap());
             // TODO: Open all files at once and iterate them sorted if timestamped
             // TODO: Print lines with colors
             for (line, _start, _end) in file.iter_lines() {

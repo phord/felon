@@ -62,7 +62,7 @@ impl<'a, LOG: LogFileTrait> Iterator for LineIndexerIterator<'a, LOG> {
 // Tests for LineIndexerIterator
 #[cfg(test)]
 mod logfile_iterator_tests {
-    use crate::files::LogFile;
+    use crate::files::new_mock_file;
     use super::LineIndexer;
 
     #[test]
@@ -70,7 +70,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut it = file.iter();
         let (prev, _) = it.next().unwrap();
@@ -89,7 +89,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter() {
@@ -103,7 +103,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter() {
@@ -130,7 +130,7 @@ mod logfile_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter().take(lines/2) {
@@ -158,7 +158,7 @@ mod logfile_iterator_tests {
 // Tests for LineIndexerDataIterator
 #[cfg(test)]
 mod logfile_data_iterator_tests {
-    use crate::files::LogFile;
+    use crate::files::new_mock_file;
     use super::LineIndexer;
 
     #[test]
@@ -167,7 +167,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut it = file.iter_lines();
         let (line, prev, _) = it.next().unwrap();
@@ -188,7 +188,7 @@ mod logfile_data_iterator_tests {
         let patt = "filler\n";
         let patt_len = patt.len();
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter_lines() {
@@ -203,7 +203,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter_lines() {
@@ -232,7 +232,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, 100);
+        let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut count = 0;
         for _ in file.iter_lines().take(lines/2) {

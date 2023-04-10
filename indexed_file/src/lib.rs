@@ -7,12 +7,12 @@ pub mod line_indexer;
 #[cfg(test)]
 mod tests {
     use crate::line_indexer::LineIndexer;
-    use crate::files::{LogFile, TextLogFile};
+    use crate::files::{LogFile, TextLogFile, new_text_file};
     use std::path::PathBuf;
 
     fn open_log_file(filename: &str) -> std::io::Result<LogFile> {
         let path = PathBuf::from(filename);
-        LogFile::new_text_file(Some(path))
+        new_text_file(Some(path))
     }
 
     fn open_log_file_lines(path: PathBuf) -> LineIndexer<TextLogFile> {
@@ -32,7 +32,7 @@ mod tests {
     fn file_found() {
         let (path, _) = make_test_file("file_found", 10 , 10);
         println!("{:?}", path);
-        let file = LogFile::new_text_file(Some(path));
+        let file = new_text_file(Some(path));
         assert!(file.is_ok());
     }
 
@@ -153,7 +153,7 @@ mod tests {
     fn file_found_zstd() {
         let path = PathBuf::from("/home/phord/git/mine/igrok/test.zst");
         println!("{:?}", path);
-        let file = LogFile::new_text_file(Some(path));
+        let file = new_text_file(Some(path));
         assert!(file.is_ok());
     }
 
@@ -162,7 +162,7 @@ mod tests {
         let path = PathBuf::from("/home/phord/git/mine/igrok/test.zst");
         // let path = PathBuf::from("/home/phord/git/mine/igrok/README.md");
         println!("{:?}", path);
-        let file = LogFile::new_text_file(Some(path));
+        let file = new_text_file(Some(path));
         assert!(file.is_ok());
         let mut file = LineIndexer::new( file.unwrap() );
         for (line, _start, _end) in file.iter_lines() {
@@ -203,7 +203,7 @@ mod tests {
         let patt_len = patt.len();
         let lines = 100;
         let chunk_size = 100;
-        let file = LogFile::new_mock_file(patt, patt_len * lines, chunk_size);
+        let file = new_mock_file(patt, patt_len * lines, chunk_size);
         let mut file = LineIndexer::new(file);
         let it = file.iter();
         let count = it.take(lines/2).count();
@@ -234,7 +234,7 @@ mod tests {
         let pipe = TestPipe::new();
 
         todo!("Attach pipe's stdout to a LogFile");
-        let file = LogFile::new_mock_file(patt, patt_len * lines, chunk_size);
+        let file = new_mock_file(patt, patt_len * lines, chunk_size);
         let mut file = LineIndexer::new(file);
 
         let it = file.iter();
