@@ -18,7 +18,6 @@ mod tests {
     fn open_log_file_lines(path: PathBuf) -> LineIndexer<TextLogFile> {
         let file = File::open(&path).unwrap();
         let file = BufReader::new(file);
-        let file = TextLogFile::new(file).expect("File exists");
         LineIndexer::new(file)
     }
 

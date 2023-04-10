@@ -1,6 +1,5 @@
 mod mock_log_file;
 mod text_log_file;
-mod text_log;
 mod text_log_stream;
 mod zstd_log_file;
 mod log_file;
@@ -13,7 +12,6 @@ pub use log_file::new_mock_file;
 pub use log_file::LogFileUtil;
 pub use log_file::LogFileTrait;
 pub use mock_log_file::MockLogFile;
-pub use text_log::TextLog;
 pub use text_log_file::TextLogFile;
 pub use text_log_stream::TextLogStream;
 pub use cached_stream_reader::CachedStreamReader;

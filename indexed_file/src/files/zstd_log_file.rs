@@ -9,10 +9,10 @@ use std::fs::File;
 use crate::files::LogFileUtil;
 use crate::files::LogFileTrait;
 
-use super::text_log::TextLog;
+use super::Stream;
 
 pub struct ZstdLogFile {
-    file: TextLog<CompressedFile<BufReader<File>>>,
+    file: CompressedFile<BufReader<File>>,
 }
 
 impl ZstdLogFile {
@@ -25,7 +25,7 @@ impl ZstdLogFile {
             let zf = CompressedFile::new(file)?;
             Ok(ZstdLogFile {
                 // file_path: input_file.unwrap(),
-                file: TextLog::new(zf)?,
+                file: zf,
             })
         }
     }
@@ -35,36 +35,36 @@ impl LogFileTrait for ZstdLogFile {}
 
 impl LogFileUtil for ZstdLogFile {
     fn len(&self) -> usize {
-        self.file.len()
+        self.file.get_length()
     }
 
     fn quench(&mut self) {
-        self.file.quench();
+        self.file.wait();
     }
 
     fn chunk(&self, target: usize) -> (usize, usize) {
-        self.file.into_inner().get_chunk(target)
+        self.file.get_chunk(target)
     }
 }
 
 impl Read for ZstdLogFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.file.into_inner_mut().read(buf)
+        self.file.read(buf)
     }
 }
 
 impl BufRead for ZstdLogFile {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
-        self.file.into_inner_mut().fill_buf()
+        self.file.fill_buf()
     }
 
     fn consume(&mut self, amt: usize) {
-        self.file.into_inner_mut().consume(amt)
+        self.file.consume(amt)
     }
 }
 
 impl  Seek for ZstdLogFile {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        self.file.into_inner_mut().seek(pos)
+        self.file.seek(pos)
     }
 }

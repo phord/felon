@@ -2,14 +2,12 @@
 
 use std::fs::File;
 use std::io::BufReader;
-use std::io::Read;
 use std::io::BufRead;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::PathBuf;
 
 use crate::files::MockLogFile;
-use crate::files::TextLogFile;
 use crate::files::TextLogStream;
 use crate::files::ZstdLogFile;
 
@@ -33,7 +31,6 @@ pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
             } else {
                 let file = File::open(&input_file).unwrap();
                 let file = BufReader::new(file);
-                let file = TextLogFile::new(file)?;
                 Ok(Box::new(file))
             }
         } else {
@@ -61,7 +58,6 @@ impl LogFileUtil for LogFile {
     #[inline(always)] fn quench(&mut self) { self.as_mut().quench() }
 }
 
-// generic representation of text we can show in our pager
 pub trait LogFileUtil {
     fn len(&self) -> usize;
     // Determine the preferred chunk to read to include the target offset

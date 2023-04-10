@@ -177,8 +177,8 @@ impl std::io::BufRead for CachedStreamReader {
     }
 }
 
-// TODO: Make LogFileTrait wrappers implement ReadBuf instead of Read
-impl LogFileUtil for CachedStreamReader {
+// FIXME: Is Stream any different than LogFileUtil?
+impl<T: Stream> LogFileUtil for T {
     #[inline(always)] fn len(&self) -> usize { self.get_length() }
     #[inline(always)] fn quench(&mut self) { self.wait(); }
 }
