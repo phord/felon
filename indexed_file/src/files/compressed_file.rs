@@ -18,81 +18,8 @@ struct FrameInfo{
     len: u64,
 }
 
-struct ReadBuffer {
-    // Buffer for BufRead
-    buffer: Vec<u8>,
-    start_offset: u64,
-    consumed: u64,
-}
-
-impl ReadBuffer {
-    fn new() -> Self {
-        ReadBuffer {
-            buffer: Vec::default(),
-            start_offset: 0,
-            consumed: 0,
-        }
-    }
-
-    fn remaining(&self) -> u64 {
-        assert!(self.buffer.len() as u64 >= self.consumed);
-        self.buffer.len() as u64 - self.consumed
-    }
-
-    fn start(&self) -> u64 {
-        self.start_offset
-    }
-
-    fn end(&self) -> u64 {
-        self.start_offset + self.buffer.len() as u64
-    }
-
-    fn pos(&self) -> u64 {
-        assert!(self.buffer.len() as u64 >= self.consumed);
-        self.start_offset + self.consumed
-    }
-
-    fn len(&self) -> usize {
-        self.buffer.len()
-    }
-
-    fn get_buffer(&self) -> &[u8] {
-        &self.buffer[self.consumed as usize..]
-    }
-
-    fn consume(&mut self, amt: u64) {
-        self.consumed += amt
-    }
-
-    fn extend(&mut self, data: Vec<u8>, pos: u64) {
-        if self.buffer.is_empty() {
-            self.buffer = data;
-            self.start_offset = pos;
-            self.consumed = 0;
-        } else {
-            assert!((self.start()..=self.end()).contains(&pos));
-            self.buffer.extend(data.into_iter());
-        }
-    }
-
-    fn discard_front(&mut self, amt: u64) {
-        assert!(amt as usize <= self.buffer.len());
-        assert!(amt <= self.consumed);
-        self.buffer = self.buffer[amt as usize..].to_vec();
-        self.start_offset += amt;
-        self.consumed = self.consumed.saturating_sub(amt);
-    }
-
-    fn seek_to(&mut self, pos: u64) -> bool {
-        if (self.start()..self.end()).contains(&pos) {
-            self.consumed = pos - self.start();
-            assert_eq!(pos, self.pos());
-            true
-        } else {
-            false
-        }
-    }
-}
+mod read_buffer;
+use read_buffer::ReadBuffer;
 
 pub struct CompressedFile<R> {
     file: R,

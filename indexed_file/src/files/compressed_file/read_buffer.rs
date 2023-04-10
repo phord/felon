@@ -1,0 +1,82 @@
+// A sliding buffer to cache recently visited data
+
+// TODO: Make this more efficient with a double-buffer
+//       Break the 2nd buffer at EOL to support majority use cases in this project
+//       Use BufferedRead::Buffer or https://crates.io/crates/buffer instead for speed?
+//       Alternative using file-backed mem buffer: https://crates.io/crates/mmap_buffer
+
+pub(crate) struct ReadBuffer {
+    // Buffer for BufRead
+    pub(crate) buffer: Vec<u8>,
+    pub(crate) start_offset: u64,
+    pub(crate) consumed: u64,
+}
+
+impl ReadBuffer {
+    pub(crate) fn new() -> Self {
+        ReadBuffer {
+            buffer: Vec::default(),
+            start_offset: 0,
+            consumed: 0,
+        }
+    }
+
+    pub(crate) fn remaining(&self) -> u64 {
+        assert!(self.buffer.len() as u64 >= self.consumed);
+        self.buffer.len() as u64 - self.consumed
+    }
+
+    pub(crate) fn start(&self) -> u64 {
+        self.start_offset
+    }
+
+    pub(crate) fn end(&self) -> u64 {
+        self.start_offset + self.buffer.len() as u64
+    }
+
+    pub(crate) fn pos(&self) -> u64 {
+        assert!(self.buffer.len() as u64 >= self.consumed);
+        self.start_offset + self.consumed
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.buffer.len()
+    }
+
+    pub(crate) fn get_buffer(&self) -> &[u8] {
+        &self.buffer[self.consumed as usize..]
+    }
+
+    pub(crate) fn consume(&mut self, amt: u64) {
+        self.consumed += amt
+    }
+
+    pub(crate) fn extend(&mut self, data: Vec<u8>, pos: u64) {
+        if self.buffer.is_empty() {
+            self.buffer = data;
+            self.start_offset = pos;
+            self.consumed = 0;
+        } else {
+            assert!((self.start()..=self.end()).contains(&pos));
+            self.buffer.extend(data.into_iter());
+        }
+    }
+
+    pub(crate) fn discard_front(&mut self, amt: u64) {
+        assert!(amt as usize <= self.buffer.len());
+        assert!(amt <= self.consumed);
+        self.buffer = self.buffer[amt as usize..].to_vec();
+        self.start_offset += amt;
+        self.consumed = self.consumed.saturating_sub(amt);
+    }
+
+    pub(crate) fn seek_to(&mut self, pos: u64) -> bool {
+        if (self.start()..self.end()).contains(&pos) {
+            self.consumed = pos - self.start();
+            assert_eq!(pos, self.pos());
+            true
+        } else {
+            false
+        }
+    }
+}
