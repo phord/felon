@@ -18,7 +18,6 @@ pub trait LogFileTrait: LogFileUtil + BufRead + Seek {}
 
 impl LogFileTrait for LogFile {}
 
-
 pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
     if let Some(input_file) = input_file {
             // Is it a file?
@@ -51,7 +50,6 @@ pub fn new_mock_file(fill: &str, size: usize, chunk_size: usize) -> LogFile {
     Box::new(file)
 }
 
-// TODO: Make LogFileTrait wrappers implement ReadBuf instead of Read
 impl LogFileUtil for LogFile {
     #[inline(always)] fn len(&self) -> usize { self.as_ref().len() }
     #[inline(always)] fn chunk(&self, target: usize) -> (usize, usize) { self.as_ref().chunk(target) }

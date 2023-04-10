@@ -8,7 +8,7 @@ use crate::files::Stream;
 
 pub type TextLogFile = BufReader<File>;
 
-impl Stream for BufReader<File> {
+impl Stream for TextLogFile {
     #[inline(always)]
     fn get_length(&self) -> usize {
         self.get_ref().metadata().unwrap().len() as usize
