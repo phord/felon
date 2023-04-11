@@ -74,20 +74,53 @@ impl CachedStreamReader {
         !self.rx.is_some()
     }
 
+    // non-blocking read from stream
+    fn try_wait(&mut self) -> Option<Vec<u8>> {
+        if let Some(rx) = &self.rx {
+            match rx.try_recv() {
+                Ok(data) => Some(data),
+                Err(TryRecvError::Empty) => None,
+                Err(TryRecvError::Disconnected) => {
+                    self.rx = None;
+                    None
+                },
+            }
+        } else {
+            None
+        }
+    }
+
+    // Wait on any data at all; returns Some(data) or None
+    fn blocking_wait(&mut self) -> Option<Vec<u8>> {
+        if let Some(rx) = &self.rx {
+            match rx.recv() {
+                Ok(data) => Some(data),
+                Err(_) => {
+                    self.rx = None;
+                    None
+                },
+            }
+        } else {
+            None
+        }
+    }
+
+    fn is_open(&self) -> bool {
+        self.rx.is_some()
+    }
+
     pub fn fill_buffer(&mut self, pos: usize) {
-        // TODO: Merge this and wait(); always wait for anything at pos
-        if pos + READ_THRESHOLD > self.get_length() {
-            if let Some(rx) = &self.rx {
-                loop {
-                    match rx.try_recv() {
-                        Ok(mut data) => self.buffer.append(&mut data),
-                        Err(TryRecvError::Empty) => break,
-                        Err(TryRecvError::Disconnected) => {
-                            self.rx = None;
-                            break;
-                        },
-                    }
-                }
+        while self.is_open() && pos + READ_THRESHOLD > self.get_length() {
+            let data = if pos >= self.get_length() {
+                self.blocking_wait()
+            } else {
+                self.try_wait()
+            };
+            if let Some(mut data) = data {
+                self.buffer.append(&mut data);
+            } else {
+                // Loop until queue is drained or threshold is satisfied
+                break
             }
         }
     }
@@ -125,21 +158,16 @@ impl Stream for CachedStreamReader {
 
     // Wait on any data at all; Returns true if file is still open
     fn wait(&mut self) -> bool {
-        if let Some(rx) = &self.rx {
-            match rx.recv() {
-                Ok(mut data) => self.buffer.append(&mut data),
-                Err(_) => self.rx = None,
-            }
-        }
-
-        !self.rx.is_none()
+        self.fill_buffer(self.pos as usize);
+        self.is_open()
     }
 }
 
 use std::io::Read;
 impl  Read for CachedStreamReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        // FIXME: Call fill_buffer() only if pos is "close" to the end of the buffer
+        // Blocking read
+        self.wait();
         let start = self.pos as usize;
         self.fill_buffer(start + buf.len());
         let len = buf.len().min(self.get_length().saturating_sub(start));
