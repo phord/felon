@@ -42,6 +42,29 @@ fn stdin_read_all_lines() {
     }
 }
 
+fn stdin_read_buffered() {
+    use std::io::{self, BufRead};
+
+    let stdin = io::stdin();
+
+    let mut prev = millis();
+    loop {
+        let mut stdin = stdin.lock();
+        let buf = stdin.fill_buf().unwrap();
+        let bytes = buf.len();
+
+        let now = millis();
+        let elapsed = now - prev;
+        prev = now;
+        println!("{}ms: {} bytes", elapsed, bytes);
+
+        if bytes == 0 {
+            break
+        }
+        stdin.consume(bytes);
+    }
+}
+
 // Demonstrates that linux is not using line-buffered stdin from processes
 // (while true ; do echo -n "test" ; sleep 0.5 ; printf "\n" ; sleep 0.5 ; done) | cargo run --bin play
 fn stdin_read_bytes() {
@@ -210,7 +233,8 @@ pub fn play() {
     // stdin_read_all_lines();
     // stdin_read_bytes();
     // stdin_seek_front_to_back().expect("failed");
-    async_stdin_seek_front_to_back().expect("failed");
+    // async_stdin_seek_front_to_back().expect("failed");
     // try_async_stdin();
     // try_async_stdin_terminate_early();
+    stdin_read_buffered();
 }
