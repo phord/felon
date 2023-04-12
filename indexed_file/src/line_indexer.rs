@@ -280,26 +280,25 @@ impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
  * TODO: Can we make a filtered iterator that tests the line in the file buffer and only copy to String if it matches?
  */
 
-// Iterate over lines as position, string
-impl<'a, LOG: LogFile> LineIndexerDataIterator<'a, LOG> {
 
-    // Read a string at a given start and len from our log source
-    fn read_line(&mut self, start: usize, len: usize) -> Result<String, std::io::Error> {
-        self.file.source.seek(SeekFrom::Start(start as u64))?;
-        let mut line = String::default();
-        let mut length = len as usize;
-        line.reserve(length);
-        while length != 0 {
-            let buf = self.file.source.fill_buf()?;
-            let bytes = length.min(buf.len());
-            line += &String::from_utf8(buf[..bytes].to_vec()).expect("Don't have utf8 errors"); //.map_err(|e| { Err::new(std::io::ErrorKind::Other) })?;
-            self.file.source.consume(bytes);
-            length -= bytes;
-        }
-        Ok(line)
+// Read a string at a given start and len from our log source
+fn read_line<LOG: LogFile>(file: &mut LOG, start: usize, len: usize) -> std::io::Result<String> {
+    file.seek(SeekFrom::Start(start as u64))?;
+    let mut line = String::default();
+    let mut length = len as usize;
+    line.reserve(length);
+    while length != 0 {
+        let buf = file.fill_buf()?;
+        let bytes = length.min(buf.len());
+        line += &String::from_utf8(buf[..bytes].to_vec())
+            .expect("Don't have utf8 errors"); //.map_err(|e| { Err::new(std::io::ErrorKind::Other) })?;
+        file.consume(bytes);
+        length -= bytes;
     }
+    Ok(line)
 }
 
+// Iterate over lines as position, string
 impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
     type Item = (String, usize, usize);
 
@@ -319,8 +318,7 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
         // FIXME: Let Location::Indexed contain the bol value; then get rid of start_of_line/end_of_line calls here
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                self.file.source.seek(SeekFrom::Start(bol as u64)).expect("Seek does not fail");
-                let line = self.read_line(bol, eol - bol).expect("Unhandled file read error");
+                let line = read_line(&mut self.file.source, bol, eol - bol).expect("Unhandled file read error");
                 self.pos = self.file.index.next_line_index(self.pos);
                 return Some((line, bol, eol + 1));
             }
