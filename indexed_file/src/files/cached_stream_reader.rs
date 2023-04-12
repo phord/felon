@@ -129,38 +129,24 @@ impl CachedStreamReader {
     {
         // Use a bounded channel to prevent stdin from running away from us
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);
-        thread::spawn(move || loop {
-            let line = match &mut pipe {
-                Some(file) => {
-                    let buf = file.fill_buf();
-                    if let Ok(buf) = buf {
-                        let bytes = buf.len();
-                        let buf = buf.iter().cloned().collect::<Vec<u8>>();
-                        file.consume(bytes);
-                        buf
-                    } else {
-                        break
-                    }
-                },
-                None => {
-                    let mut stdio = std::io::stdin().lock();
-                    let buf = stdio.fill_buf();
-                    if let Ok(buf) = buf {
-                        let bytes = buf.len();
-                        let buf = buf.iter().cloned().collect::<Vec<u8>>();
-                        stdio.consume(bytes);
-                        buf
-                    } else {
-                        break
-                    }
-                },
+        thread::spawn(move || {
+            let mut rdr: Box<dyn std::io::BufRead> = match pipe {
+                Some(file) => Box::new(file),
+                None => Box::new(std::io::stdin().lock()),
             };
-            if line.is_empty() {
-                break;
-            }
-            match tx.send(line) {
-                Err(_) => break, // Broken pipe?
-                _ => (),
+            loop {
+                if let Ok(buf) = rdr.as_mut().fill_buf() {
+                    let bytes = buf.len();
+                    if bytes == 0 {
+                        break
+                    }
+
+                    let buf = buf.iter().cloned().collect::<Vec<u8>>();
+                    if tx.send(buf).is_err() {
+                        break  // Broken pipe?
+                    }
+                    rdr.consume(bytes);
+                }
             }
         });
         rx
