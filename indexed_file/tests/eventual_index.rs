@@ -46,7 +46,7 @@ fn test_cursor_start() {
     let cursor = index.locate(0);
     dbg!(cursor);
     match cursor {
-        Location::Indexed(IndexRef(0, 0)) => {},
+        Location::Indexed(IndexRef{index: 0, line: 0}) => {},
         _ => {
             dbg!(cursor);
             panic!("Expected StartOfFile; got something else");
@@ -59,7 +59,7 @@ fn test_cursor_mid_start() {
     let index = get_partial_eventual_index(50, 100);
     let cursor = index.locate(50);
     match cursor {
-        Location::Indexed(IndexRef(0, 0)) => {},
+        Location::Indexed(IndexRef{index: 0, line: 0}) => {},
         _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
     }
     let fault = index.locate(10);
