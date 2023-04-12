@@ -191,7 +191,11 @@ impl EventualIndex {
                     }
                 },
                 VirtualLocation::End => {
-                    unimplemented!("Don't know the end byte!");
+                    if let Some(gap) = self.try_gap_at(self.indexes.len(), 0) {
+                        gap
+                    } else {
+                        self.get_location(0, 0)
+                    }
                 },
             },
             _ => find,

@@ -26,6 +26,18 @@ pub fn cat_cmd() {
     }
 }
 
+#[allow(dead_code)]
+pub fn tac_cmd() {
+    for file in get_files_from_cfg() {
+        let mut file = LineIndexer::new(files::new_text_file(file).unwrap());
+        // TODO: Open all files at once and iterate them sorted if timestamped
+        // TODO: Print lines with colors
+        for (line, _start, _end) in file.iter_lines().rev() {
+            println!("{line}");
+        }
+    }
+}
+
 // Copy directly from our file to stdout using io::copy
 #[allow(dead_code)]
 pub fn copycat_cmd() {
