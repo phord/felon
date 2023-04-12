@@ -8,7 +8,7 @@ use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, 
 
 pub struct LineIndexer<LOG> {
     // pub file_path: PathBuf,
-    file: LOG,
+    source: LOG,
     index: EventualIndex,
 }
 
@@ -297,16 +297,16 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
         }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
             if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                self.file.file.seek(SeekFrom::Start(bol as u64)).expect("Seek does not fail");
+                self.file.source.seek(SeekFrom::Start(bol as u64)).expect("Seek does not fail");
                 let mut line = String::default();
                 self.pos = self.file.index.next_line_index(self.pos);
                 let mut length = eol - bol;
                 line.reserve(length);
                 loop {
-                    if let Ok(buf) = self.file.file.fill_buf() {
+                    if let Ok(buf) = self.file.source.fill_buf() {
                         let bytes = length.min(buf.len());
                         line += &String::from_utf8(buf[..bytes].to_vec()).expect("No errors in utf8 file data");
-                        self.file.file.consume(bytes);
+                        self.file.source.consume(bytes);
                         if bytes == length {
                             return Some((line, bol, eol + 1));
                         }
@@ -326,25 +326,25 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
     pub fn new(file: LOG) -> LineIndexer<LOG> {
         Self {
-            file,
+            source: file,
             index: EventualIndex::new(),
         }
     }
 
     fn index_chunk(&mut self, gap: GapRange) -> Location {
-        self.file.quench();
+        self.source.quench();
         let (offset, start, end) = match gap {
-            GapRange { target, gap: Bounded(start, end) } => (target, start, end.min(self.file.len())),
-            GapRange { target, gap: Unbounded(start) } => (target, start, self.file.len()),
+            GapRange { target, gap: Bounded(start, end) } => (target, start, end.min(self.source.len())),
+            GapRange { target, gap: Unbounded(start) } => (target, start, self.source.len()),
         };
 
         assert!(start <= offset);
-        assert!(end <= self.file.len());
+        assert!(end <= self.source.len());
 
         if start >= end {
             Location::Virtual(VirtualLocation::End)
         } else {
-            let (chunk_start, chunk_end) = self.file.chunk(offset);
+            let (chunk_start, chunk_end) = self.source.chunk(offset);
             let start = start.max(chunk_start);
             let end = end.min(chunk_end);
 
@@ -352,9 +352,9 @@ impl<LOG: LogFile> LineIndexer<LOG> {
             assert!(offset < end);
 
             // Send the buffer to the parsers
-            self.file.seek(SeekFrom::Start(start as u64)).expect("Seek does not fail");
+            self.source.seek(SeekFrom::Start(start as u64)).expect("Seek does not fail");
             let mut index = Index::new();
-            index.parse_bufread(&mut self.file, start, end).expect("Ignore read errors");
+            index.parse_bufread(&mut self.source, start, end).expect("Ignore read errors");
             self.index.merge(index);
 
             self.index.finalize();
@@ -363,7 +363,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
     }
 
     fn count_bytes(&self) -> usize {
-        self.file.len()
+        self.source.len()
     }
 
     pub fn count_lines(&self) -> usize {
