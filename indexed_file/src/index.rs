@@ -49,8 +49,21 @@ impl Index {
     // Accumulate the map of line offsets into self.line_offsets
     // Parse buffer passed in using `offset` as index of first byte
     pub fn parse(&mut self, data: &[u8], offset: usize) {
-        self.start = offset;
-        self.end = offset + data.len();
+        let end = offset + data.len();
+        if self.end == 0 {
+            assert_eq!(self.start, 0);
+            self.start = offset;
+            self.end = end;
+        } else if self.end == offset {
+            self.end = end;
+        } else if self.start == end {
+            self.start = offset;
+            panic!("contiguous blocks parsed in reverse order is untested");
+        } else {
+            panic!("multiple parsed blocks must be contiguous: {}..{} and {}..{}", self.start, self.end, offset, end);
+        }
+
+        // FIXME: Store line beginnings {instead of, as well as} line endings
         let newlines = data
             .iter()
             .enumerate()
@@ -79,17 +92,12 @@ impl Index {
                         buf.len()
                     },
                     Err(e) => {
-                        // FIXME: DRY
-                        self.start = offset;
                         return std::io::Result::Err(e)
                     },
                 };
             pos += bytes;
             source.consume(bytes);
         }
-        // Undo side-effect that always moves start to last read head
-        self.start = offset;
-        // self.end = pos;
         Ok(pos - offset)
     }
 
@@ -169,7 +177,7 @@ mod tests {
         index.parse(DATA[..STRIDE-1].as_bytes(), 0);
         assert!(index.is_empty());
 
-        index.parse(DATA[..STRIDE].as_bytes(), 0);
+        index.parse(DATA[STRIDE-1..STRIDE].as_bytes(), STRIDE-1);
         assert!(!index.is_empty());
         check_partial(&index, 0, STRIDE);
     }
