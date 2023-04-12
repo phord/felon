@@ -129,22 +129,38 @@ impl CachedStreamReader {
     {
         // Use a bounded channel to prevent stdin from running away from us
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);
-        let mut buffer = String::new();
         thread::spawn(move || loop {
-            buffer.clear();
-            // TODO: Read into a Vec<u8> and avoid utf8-validation of the data
-            // TODO: Handle data with no line-feeds
             let line = match &mut pipe {
-                Some(file) => file.read_line(&mut buffer),
-                None => std::io::stdin().read_line(&mut buffer),
+                Some(file) => {
+                    let buf = file.fill_buf();
+                    if let Ok(buf) = buf {
+                        let bytes = buf.len();
+                        let buf = buf.iter().cloned().collect::<Vec<u8>>();
+                        file.consume(bytes);
+                        buf
+                    } else {
+                        break
+                    }
+                },
+                None => {
+                    let mut stdio = std::io::stdin().lock();
+                    let buf = stdio.fill_buf();
+                    if let Ok(buf) = buf {
+                        let bytes = buf.len();
+                        let buf = buf.iter().cloned().collect::<Vec<u8>>();
+                        stdio.consume(bytes);
+                        buf
+                    } else {
+                        break
+                    }
+                },
             };
-            match line {
-                Ok(0) => break,  // EOF
-                Ok(_) => match tx.send(buffer.as_bytes().iter().copied().collect()) {
-                        Err(_) => break, // Broken pipe?
-                        _ => (),
-                    },
-                Err(err) => { eprint!("{:?}", err); break; },
+            if line.is_empty() {
+                break;
+            }
+            match tx.send(line) {
+                Err(_) => break, // Broken pipe?
+                _ => (),
             }
         });
         rx
