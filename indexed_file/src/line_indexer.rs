@@ -2,7 +2,7 @@
 
 use std::fmt;
 use std::io::SeekFrom;
-use crate::files::LogFileTrait;
+use crate::files::LogFile;
 use crate::index::Index;
 use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, Missing::{Bounded, Unbounded}};
 
@@ -12,7 +12,7 @@ pub struct LineIndexer<LOG> {
     index: EventualIndex,
 }
 
-impl<LOG: LogFileTrait> fmt::Debug for LineIndexer<LOG> {
+impl<LOG: LogFile> fmt::Debug for LineIndexer<LOG> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LineIndexer")
          .field("bytes", &self.count_bytes())
@@ -35,7 +35,7 @@ impl<'a, LOG> LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: LogFileTrait> Iterator for LineIndexerIterator<'a, LOG> {
+impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -271,8 +271,17 @@ impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
     }
 }
 
+/**
+ * TODO: Implement Double-ended iterators that produce Strings for each line of input.
+ *
+ * TODO: an iterator that iterates lines and builds up the EventualIndex as it goes.
+ * TODO: an iterator that iterates from a given line offset forward or reverse.
+ *
+ * TODO: Can we make a filtered iterator that tests the line in the file buffer and only copy to String if it matches?
+ */
+
 // Iterate over lines as position, string
-impl<'a, LOG: LogFileTrait> Iterator for LineIndexerDataIterator<'a, LOG> {
+impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
     type Item = (String, usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -313,7 +322,7 @@ impl<'a, LOG: LogFileTrait> Iterator for LineIndexerDataIterator<'a, LOG> {
 
 }
 
-impl<LOG: LogFileTrait> LineIndexer<LOG> {
+impl<LOG: LogFile> LineIndexer<LOG> {
 
     pub fn new(file: LOG) -> LineIndexer<LOG> {
         Self {

@@ -6,11 +6,11 @@ mod log_file;
 mod cached_stream_reader;
 mod compressed_file;
 
-pub use log_file::LogFile;
+pub use log_file::LogSource;
 pub use log_file::new_text_file;
 pub use log_file::new_mock_file;
 pub use log_file::LogFileUtil;
-pub use log_file::LogFileTrait;
+pub use log_file::LogFile;
 pub use mock_log_file::MockLogFile;
 pub use text_log_file::TextLogFile;
 pub use text_log_stream::TextLogStream;

@@ -392,6 +392,7 @@ impl<R: Read + Seek> CompressedFile<R> {
                     // TODO: Add a test to ensure this bounding works as expected
                     // Discard start of buffer if we're well past it now
                     let cap = BUFFER_THRESHOLD_CAPACITY;
+                    // TODO: Push this down into ReadBuffer::extend()
                     if self.read_buffer.len() > cap as usize * 3
                             && self.read_buffer.consumed >= cap * 2 {
                         self.read_buffer.discard_front(cap);
@@ -436,7 +437,7 @@ impl<R: Read + Seek> Read for CompressedFile<R> {
             self.update_stream()?;
 
             let actual = (self.read_buffer.remaining() as usize).min(buf.len() - bytes);
-            buf[bytes..bytes+actual].copy_from_slice(self.read_buffer.get_buffer());
+            buf[bytes..bytes+actual].copy_from_slice(&self.read_buffer.get_buffer()[..actual]);
 
             self.pos += actual as u64;
             self.read_buffer.consume(actual as u64);

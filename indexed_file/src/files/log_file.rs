@@ -12,13 +12,13 @@ use crate::files::TextLogStream;
 use crate::files::ZstdLogFile;
 
 
-pub type LogFile = Box<dyn LogFileTrait>;
+pub type LogSource = Box<dyn LogFile>;
 
-pub trait LogFileTrait: LogFileUtil + BufRead + Seek {}
+pub trait LogFile: LogFileUtil + BufRead + Seek {}
 
-impl LogFileTrait for LogFile {}
+impl LogFile for LogSource {}
 
-pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
+pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogSource> {
     if let Some(input_file) = input_file {
             // Is it a file?
         let metadata = input_file.metadata()?;
@@ -45,12 +45,12 @@ pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogFile> {
     }
 }
 
-pub fn new_mock_file(fill: &str, size: usize, chunk_size: usize) -> LogFile {
+pub fn new_mock_file(fill: &str, size: usize, chunk_size: usize) -> LogSource {
     let file = MockLogFile::new(fill.to_string(), size, chunk_size);
     Box::new(file)
 }
 
-impl LogFileUtil for LogFile {
+impl LogFileUtil for LogSource {
     #[inline(always)] fn len(&self) -> usize { self.as_ref().len() }
     #[inline(always)] fn chunk(&self, target: usize) -> (usize, usize) { self.as_ref().chunk(target) }
     #[inline(always)] fn quench(&mut self) { self.as_mut().quench() }

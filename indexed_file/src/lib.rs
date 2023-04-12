@@ -7,10 +7,10 @@ pub mod line_indexer;
 #[cfg(test)]
 mod tests {
     use crate::line_indexer::LineIndexer;
-    use crate::files::{LogFile, TextLogFile, new_text_file};
+    use crate::files::{LogSource, TextLogFile, new_text_file};
     use std::path::PathBuf;
 
-    fn open_log_file(filename: &str) -> std::io::Result<LogFile> {
+    fn open_log_file(filename: &str) -> std::io::Result<LogSource> {
         let path = PathBuf::from(filename);
         new_text_file(Some(path))
     }

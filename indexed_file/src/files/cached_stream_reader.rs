@@ -29,7 +29,7 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 
 use crate::files::LogFileUtil;
-use crate::files::LogFileTrait;
+use crate::files::LogFile;
 
 const QUEUE_SIZE:usize = 100;
 const READ_THRESHOLD:usize = 10240;
@@ -46,7 +46,7 @@ pub struct CachedStreamReader {
     pos:u64,
 }
 
-impl LogFileTrait for CachedStreamReader {}
+impl LogFile for CachedStreamReader {}
 
 impl CachedStreamReader {
     pub fn new(pipe: Option<PathBuf>) -> std::io::Result<Self> {

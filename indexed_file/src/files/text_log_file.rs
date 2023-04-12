@@ -3,7 +3,7 @@
 use std::fs::File;
 use std::io::BufReader;
 
-use super::LogFileTrait;
+use super::LogFile;
 use crate::files::Stream;
 
 pub type TextLogFile = BufReader<File>;
@@ -20,4 +20,4 @@ impl Stream for TextLogFile {
     }
 }
 
-impl LogFileTrait for TextLogFile {}
+impl LogFile for TextLogFile {}

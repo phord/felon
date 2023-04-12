@@ -3,7 +3,7 @@
 use std::io::BufRead;
 use std::{fmt, io::Read};
 use crate::files::LogFileUtil;
-use crate::files::LogFileTrait;
+use crate::files::LogFile;
 
 pub struct MockLogFile {
     filler: String,
@@ -22,7 +22,7 @@ impl fmt::Debug for MockLogFile {
     }
 }
 
-impl LogFileTrait for MockLogFile {}
+impl LogFile for MockLogFile {}
 
 impl LogFileUtil for MockLogFile {
     fn len(&self) -> usize {
@@ -113,11 +113,11 @@ mod tests {
     use std::io::Read;
     use std::io::{Seek, SeekFrom};
 
-    use crate::files::LogFile;
+    use crate::files::LogSource;
     use crate::files::LogFileUtil;
     use crate::files::new_mock_file;
 
-    fn old_read(file: &mut LogFile, offset: usize, len: usize ) -> Option<Vec<u8>> {
+    fn old_read(file: &mut LogSource, offset: usize, len: usize ) -> Option<Vec<u8>> {
         file.seek(SeekFrom::Start(offset as u64)).expect("Seek never fails");
         let mut buf = vec![0u8; len];
         match file.read(&mut buf) {
