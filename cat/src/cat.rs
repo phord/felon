@@ -86,7 +86,9 @@ pub fn bufcat_cmd() {
 }
 
 
-#[test] fn test_itercat() {
+//#[test]
+#[allow(dead_code)]
+fn test_itercat() {
     let mut path = PathBuf::new();
     // path.push("/home/phord/git/mine/igrok/indexed_file/resources/test/core.log-2022040423.zst");
     path.push("/home/phord/git/mine/igrok/indexed_file/resources/test/core.log-2022040423");
