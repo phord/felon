@@ -1,13 +1,13 @@
 // Generic wrapper of different readable file types
 
 use std::fs::File;
-use std::io::BufReader;
 use std::io::BufRead;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::PathBuf;
 
 use crate::files::MockLogFile;
+use crate::files::TextLogFile;
 use crate::files::TextLogStream;
 use crate::files::ZstdLogFile;
 
@@ -29,7 +29,7 @@ pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogSource> 
                 Ok(Box::new(file))
             } else {
                 let file = File::open(&input_file).unwrap();
-                let file = BufReader::new(file);
+                let file = TextLogFile::new(file);
                 Ok(Box::new(file))
             }
         } else {
