@@ -8,7 +8,9 @@ use std::io::BufRead;
 pub struct Index {
     // Offset of buffer we indexed
     pub start: usize,
-    // Offset of byte after buffer we indexed
+    // End is inclusive or exclusive depending on context:
+    //   Offset of byte after buffer we indexed (exclusive)
+    //   Last line offset included in our range (inclusive)
     pub end: usize,
     // Byte offset of the end of each line
     line_offsets: Vec<usize>,
@@ -22,16 +24,6 @@ impl Index {
             end: 0,
             line_offsets: Vec::new(),
         }
-    }
-
-    pub fn push(&mut self, pos: usize) {
-        // Helper to create indexes manually
-        if self.end < pos {
-            self.end = pos;
-        }
-        assert!(self.end >= pos);
-        assert!(self.start <= pos);
-        self.line_offsets.push(pos);
     }
 
     pub fn bytes(&self) -> usize {
@@ -61,19 +53,28 @@ impl Index {
     pub fn parse(&mut self, data: &[u8], offset: usize) {
         let end = offset + data.len();
         if self.end == 0 {
+            // New index; accept anything
             assert_eq!(self.start, 0);
+            assert!(self.is_empty());
             self.start = offset;
             self.end = end;
         } else if self.end == offset {
+            // Contiguous data added to end
             self.end = end;
         } else if self.start == end {
+            // Contiguous data added to front
             self.start = offset;
             panic!("contiguous blocks parsed in reverse order is untested");
         } else {
             panic!("multiple parsed blocks must be contiguous: {}..{} and {}..{}", self.start, self.end, offset, end);
         }
 
-        // Store line beginnings except for the first line
+        // Special case for start of file: include first line
+        if offset == 0 {
+            self.line_offsets.extend(std::iter::once(0));
+        }
+
+        // Store line beginnings
         let newlines = data
             .iter()
             .enumerate()
@@ -122,8 +123,7 @@ impl Index {
     }
 
     pub fn find(self: &Self, offset: usize) -> Option<usize> {
-        // FIXME: Special case for index at virtual size 0 goes away with inclusive `end`
-        if offset < self.start || offset > self.end || (offset == self.end && offset > 0) {
+        if offset < self.start || offset > self.end {
             None
         } else {
             match self.binary_search(offset) {
@@ -135,13 +135,8 @@ impl Index {
 
     // TODO: Is there a standard trait for this?
     pub fn contains_offset(&self, offset: &usize) -> std::cmp::Ordering {
-        if offset >= &self.end {
-            if offset == &0 && &self.end == &0 {
-                // FIXME: Special case for first index with zero bytes indexed
-                std::cmp::Ordering::Equal
-            } else {
-                std::cmp::Ordering::Less
-            }
+        if offset > &self.end {
+            std::cmp::Ordering::Less
         } else if offset < &self.start {
             std::cmp::Ordering::Greater
         } else {
@@ -159,7 +154,7 @@ mod tests {
     static STRIDE: usize = 11;
     static DATA: &str = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n";
     static END: usize = DATA.len();
-    static OFFSETS:[usize; 7] = [11,22,33,44,55,66,77];
+    static OFFSETS:[usize; 8] = [0, 11,22,33,44,55,66,77];
 
     // Verify index.line_offsets match expected set only in the range [start, end]
     fn check_partial(index: &Index, start:usize, end: usize) {
@@ -170,13 +165,6 @@ mod tests {
                 .cloned()
                 .collect();
         assert_eq!(index.iter().cloned().collect::<Vec<usize>>(), offsets);
-    }
-
-    #[test]
-    fn test_index_manual() {
-        let mut index = Index::new();
-        index.push(17);
-        assert_eq!(index.iter().cloned().collect::<Vec<usize>>(), vec![17]);
     }
 
     #[test]
@@ -198,11 +186,26 @@ mod tests {
     fn test_index_empty() {
         let mut index = Index::new();
         index.parse(DATA[..STRIDE-1].as_bytes(), 0);
-        assert!(index.is_empty());
+        assert!(!index.is_empty());
 
         index.parse(DATA[STRIDE-1..STRIDE].as_bytes(), STRIDE-1);
         assert!(!index.is_empty());
         check_partial(&index, 0, STRIDE);
+    }
+
+    #[test]
+    fn test_index_at_zero() {
+        let mut index = Index::new();
+        index.parse(DATA[..STRIDE-1].as_bytes(), 0);
+        assert!(!index.is_empty(), "We should index first line even if no other lines");
+
+        let mut index = Index::new();
+        index.parse(DATA[..0].as_bytes(), 0);
+        assert!(!index.is_empty(), "We should index first line even when empty");
+
+        let mut index = Index::new();
+        index.parse(DATA[..STRIDE-1].as_bytes(), 1);
+        assert!(index.is_empty(), "We should not index first line except at offset zero");
     }
 
     #[test]

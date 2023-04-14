@@ -58,10 +58,8 @@ use Missing::{Bounded, Unbounded};
 
 impl EventualIndex {
     pub fn new() -> EventualIndex {
-        let mut start = Index::new();
-        start.push(0);  // There's always a line at zero
         EventualIndex {
-            indexes: vec![start],
+            indexes: Vec::new(),
         }
     }
 

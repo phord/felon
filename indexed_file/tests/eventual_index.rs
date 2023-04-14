@@ -46,7 +46,7 @@ fn test_cursor_start() {
     let cursor = index.locate(0);
     dbg!(cursor);
     match cursor {
-        Location::Indexed(IndexRef{index: 1, line: 0, offset: 0}) => {},
+        Location::Indexed(IndexRef{index: 0, line: 0, offset: 0}) => {},
         _ => {
             dbg!(cursor);
             panic!("Expected StartOfFile; got something else");
@@ -59,7 +59,7 @@ fn test_cursor_mid_start() {
     let index = get_partial_eventual_index(50, 100);
     let cursor = index.locate(50);
     match cursor {
-        Location::Indexed(IndexRef{index: 1, line: 0, offset: 50}) => {},
+        Location::Indexed(IndexRef{index: 0, line: 0, offset: 52}) => {},
         _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
     }
     let fault = index.locate(10);
@@ -77,7 +77,7 @@ fn test_cursor_last() {
         Location::Indexed(_) => {},
         _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
     }
-    let fault = index.locate(index.bytes());
+    let fault = index.locate(index.bytes() + 1);
     match fault {
         Location::Gap(GapRange { gap: Unbounded(_), .. }) => {},
         _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
@@ -88,7 +88,7 @@ fn test_cursor_last() {
 fn test_cursor_forward() {
     let index = get_eventual_index(100);
     let mut cursor = index.locate(0);
-    let mut count = 1;
+    let mut count = 0;
     loop {
         // dbg!(&cursor);
         match cursor {
@@ -129,7 +129,7 @@ fn test_cursor_reverse() {
 fn test_cursor_reverse_gap() {
     let index = get_partial_eventual_index(50, 100);
     let mut cursor = index.locate(149);
-    let mut count = 1;
+    let mut count = 0;
     loop {
         dbg!(&cursor);
         match cursor {
