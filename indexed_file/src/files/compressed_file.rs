@@ -250,6 +250,9 @@ impl<R: Read + Seek> CompressedFile<R> {
         self.cur_frame = index;
     }
 
+    fn has_file_size(&self) -> bool {
+        self.frames.last().unwrap().len != 0
+    }
     // Update last frame if we just decoded the last byte
     fn end_frame(&mut self) {
         // We may not be on the last frame in the index, but we only update the last frame.  We assume that we are not
@@ -418,9 +421,11 @@ impl<R: Read + Seek> Seek for CompressedFile<R> {
         let (start, offset) = match target {
             SeekFrom::Start(n) => (0_i64, n as i64),
             SeekFrom::Current(n) => (self.pos as i64, n),
-            SeekFrom::End(_n) => {
-                    todo!("We don't know if we know the end-of-file pos yet");
+            SeekFrom::End(_n) =>
+                if self.has_file_size() {
                     (self.source_bytes as i64, _n)
+                } else {
+                    todo!("We don't know if we know the end-of-file pos yet");
                 },
         };
         let pos = (((start as i64).saturating_add(offset)) as u64).min(self.get_length() as u64);
