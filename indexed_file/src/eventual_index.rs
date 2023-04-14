@@ -29,6 +29,7 @@ pub enum Missing {
 pub struct IndexRef {
     pub index: usize,
     pub line: usize,
+    pub offset: usize,
 }
 
 // A logical location in a file, like "Start"
@@ -57,8 +58,10 @@ use Missing::{Bounded, Unbounded};
 
 impl EventualIndex {
     pub fn new() -> EventualIndex {
+        let mut start = Index::new();
+        start.push(0);  // There's always a line at zero
         EventualIndex {
-            indexes: Vec::new(),
+            indexes: vec![start],
         }
     }
 
@@ -104,6 +107,24 @@ impl EventualIndex {
 
     pub fn lines(&self) -> usize {
         self.indexes.iter().fold(0, |a, v| a + v.lines())
+    }
+
+    // Return the first indexed byte
+    pub fn start(&self) -> usize {
+        if let Some(start) = self.indexes.first() {
+            start.start
+        } else {
+            0
+        }
+    }
+
+    // Return the last indexed byte
+    pub fn end(&self) -> usize {
+        if let Some(end) = self.indexes.last() {
+            end.end
+        } else {
+            0
+        }
     }
 }
 
@@ -184,17 +205,20 @@ impl EventualIndex {
         match find {
             Location::Virtual(loc) => match loc {
                 VirtualLocation::Start => {
-                    if let Some(gap) = self.try_gap_at(0, 0) {
+                    if let Some(gap) = self.try_gap_at(0, self.start()) {
                         gap
                     } else {
                         self.get_location(0, 0)
                     }
                 },
                 VirtualLocation::End => {
-                    if let Some(gap) = self.try_gap_at(self.indexes.len(), 0) {
+                    if let Some(gap) = self.try_gap_at(self.indexes.len(), self.end()) {
                         gap
                     } else {
-                        self.get_location(0, 0)
+                        assert!(!self.indexes.is_empty(), "If it's empty, we should have found a gap");
+                        let index = self.indexes.len()-1;
+                        let line = self.indexes.last().unwrap().len()-1;
+                        self.get_location(index, line)
                     }
                 },
             },
@@ -202,19 +226,21 @@ impl EventualIndex {
         }
     }
 
-    // Find index to next EOL after given index
+    // Find index to next line after given index
     pub fn next_line_index(&self, find: Location) -> Location {
         let find = self.resolve(find);
         match find {
-            Location::Indexed(IndexRef{ index, line}) => {
-                    // next line is in the same index
-                    assert!(index < self.indexes.len());
+            Location::Indexed(IndexRef{ index, line, offset:_}) => {
+                assert!(index < self.indexes.len());
                     let i = &self.indexes[index];
                     if line + 1 < i.len() {
+                        // next line is in the same index
                         self.get_location( index, line + 1 )
                     } else if let Some(gap) = self.try_gap_at(index + 1, i.end) {
+                        // next line is not parsed yet
                         gap
                     } else {
+                        // next line is in the next index
                         self.get_location( index + 1, 0 )
                     }
                 },
@@ -222,27 +248,30 @@ impl EventualIndex {
         }
     }
 
-    // Resolve the target index/line pair if they exist, or to a gap if any at the offset
+    // Resolve the target indexed location, which must already exist
     pub fn get_location(&self, index: usize, line: usize) -> Location {
         assert!(index < self.indexes.len());
-        // let j = &self.indexes[index];
-        assert!(line < self.indexes[index].len());
+        let j = &self.indexes[index];
+        assert!(line < j.len());
 
-        // assert!(offset >= j.start);
-        // assert!(offset < j.end);
-        Location::Indexed(IndexRef{ index, line /* , offset: j[line] */ })
+        let offset = j.get(line);
+        assert!(offset >= j.start);
+        assert!(offset <= j.end);
+        Location::Indexed(IndexRef{ index, line , offset })
     }
 
-    // Find index to prev EOL before given index
+    // Find index to prev line before given index
     pub fn prev_line_index(&self, find: Location) -> Location {
-        if let Location::Indexed(IndexRef{ index, line}) = find {
-            // prev line is in the same index
+        if let Location::Indexed(IndexRef{ index, line, offset:_}) = find {
             assert!(index < self.indexes.len());
             if line > 0 {
+                // prev line is in the same index
                 self.get_location(index, line - 1)
             } else if let Some(gap) = self.try_gap_at(index, self.indexes[index].start.max(1) - 1) {
+                // prev line is not parsed yet
                 gap
             } else if index > 0 {
+                // prev line is in the next index
                 let j = &self.indexes[index - 1];
                 self.get_location(index - 1, j.len() - 1)
             } else {
@@ -256,36 +285,8 @@ impl EventualIndex {
 
     // Return offset of start of indexed line, if known
     pub fn start_of_line(&self, find: Location) -> Option<usize> {
-        let find = self.resolve(find);
         match find {
-                Location::Indexed(_) => {
-                    // This line starts one byte after the previous one ends
-                    match self.prev_line_index(find) {
-                        // FIXME: Store BOL in indexes so we don't have to special case the edges?
-                        Location::Virtual(VirtualLocation::Start) => Some(0),  // virtual line before line 1
-                        prev => {
-                                let prev_eol = self.end_of_line(prev);
-                                if let Some(eol) = prev_eol {
-                                    Some(eol + 1)
-                                } else {
-                                    None
-                                }
-                            },
-                        }
-                },
-            _ => None,
-        }
-    }
-
-    // Return offset of end of indexed line, if known
-    pub fn end_of_line(&self, find: Location) -> Option<usize> {
-        let find = self.resolve(find);
-        match find {
-            Location::Indexed(IndexRef{ index, line}) => {
-                    assert!(index < self.indexes.len());
-                    let i = &self.indexes[index];
-                    Some(i.get(line))
-                },
+            Location::Indexed(IndexRef{ index:_, line:_, offset}) => Some(offset),
             _ => None,
         }
     }

@@ -39,23 +39,20 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
+        // FIXME: Move this into resolve_location?
         self.pos = self.file.index.resolve(self.pos);
+        self.pos = self.file.resolve_location(self.pos);
 
-        loop {
-            match self.pos {
-                Location::Gap(gap) => self.pos = self.file.index_chunk(gap),
-                Location::Indexed(_) => break,
-                Location::Virtual(VirtualLocation::End) => return None,
-                Location::Virtual(_) => panic!("Still?"),
-            };
-        }
         if let Some(bol) = self.file.index.start_of_line(self.pos) {
-            if let Some(eol) = self.file.index.end_of_line(self.pos) {
-                self.pos = self.file.index.next_line_index(self.pos);
-                return Some((bol, eol + 1));
+            // FIXME: We should return only `bol` and let caller find eol himself if he wants it
+            self.pos = self.file.index.next_line_index(self.pos); // <-- TODO: Combine these --+
+            self.pos = self.file.resolve_location(self.pos);      // <-------------------------+
+            if let Some(eol) = self.file.index.start_of_line(self.pos) {
+                // FIXME: multi-byte line endings
+                return Some((bol, eol));
             }
         }
-        unreachable!();
+        None
     }
 }
 
@@ -194,11 +191,11 @@ mod logfile_data_iterator_tests {
         let mut it = file.iter_lines().rev();
         let (line, prev, _) = it.next().unwrap();
         let mut prev = prev;
-        assert_eq!(prev, 0);
+        assert_eq!(prev, (lines-1) * patt_len );
         assert_eq!(line, trim_patt);
         for i in it.take(lines - 1) {
             let (line, bol, eol) = i;
-            assert_eq!(bol - prev, patt_len);
+            assert_eq!(prev - bol, patt_len);
             assert_eq!(eol - bol, patt_len);
             assert_eq!(line, trim_patt);
             prev = bol;
@@ -326,24 +323,22 @@ impl<'a, LOG: LogFile> LineIndexerDataIterator<'a, LOG> {
     // Necessary dup?
 
     fn resolve(&mut self, pos: Location) -> (Location, Option<(String, usize, usize)>) {
+        todo!("Fix this to work like LineIndexerIterator");
         let mut pos = pos;
-        pos = self.file.index.resolve(pos);
+        // pos = self.file.index.resolve(pos);
 
         loop {
             match pos {
-                Location::Gap(gap) => pos = self.file.index_chunk(gap),
                 Location::Indexed(_) => break,
-                Location::Virtual(VirtualLocation::End) => return (pos, None),
-                Location::Virtual(_) => panic!("Still?"),
+                _ => pos = self.file.index_chunk(pos),
             };
         }
 
-        // FIXME: Let Location::Indexed contain the bol value; then get rid of start_of_line/end_of_line calls here
         if let Some(bol) = self.file.index.start_of_line(pos) {
-            if let Some(eol) = self.file.index.end_of_line(pos) {
-                let line = read_line(&mut self.file.source, bol, eol - bol).expect("Unhandled file read error");
-                return (pos, Some((line, bol, eol + 1)));
-            }
+            // if let Some(eol) = self.file.index.end_of_line(pos) {
+            //     let line = read_line(&mut self.file.source, bol, eol - bol).expect("Unhandled file read error");
+            //     return (pos, Some((line, bol, eol + 1)));
+            // }
         }
         unreachable!();
     }
@@ -388,17 +383,40 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         }
     }
 
-    fn index_chunk(&mut self, gap: GapRange) -> Location {
+    // fill in any gaps by parsing data from the file when needed
+    fn resolve_location(&mut self, pos: Location) -> Location {
+        let mut pos = pos;
+        loop {
+            match pos {
+                Location::Indexed(_) => return pos,
+                Location::Virtual(_) => return pos,
+                p => pos = self.index_chunk(p),
+            };
+        }
+
+    }
+    fn index_chunk(&mut self, gap: Location) -> Location {
         self.source.quench();
+
         let (offset, start, end) = match gap {
-            GapRange { target, gap: Bounded(start, end) } => (target, start, end.min(self.source.len())),
-            GapRange { target, gap: Unbounded(start) } => (target, start, self.source.len()),
+            Location::Gap(GapRange { target, gap: Bounded(start, end) }) => (target, start, end.min(self.source.len())),
+            Location::Gap(GapRange { target, gap: Unbounded(start) }) => (target, start, self.source.len()),
+            Location::Virtual(VirtualLocation::Start) => (0, 0, self.index.start()),
+            Location::Virtual(VirtualLocation::End) => (self.source.len().saturating_sub(1), self.index.end(), self.source.len() ),
+            Location::Indexed(_) => panic!("Tried to index a loaded chunk"),
         };
 
         assert!(start <= offset);
         assert!(end <= self.source.len());
 
+        // If Location::Virtual && start == end, don't try to index any chunk
+        match gap {
+            Location::Virtual(_) => if start == end { return self.index.locate(offset) },
+            _ => {},
+        };
+
         if start >= end {
+            // FIXME: If this is appropriate, how do we get to Start?
             Location::Virtual(VirtualLocation::End)
         } else {
             let (chunk_start, chunk_end) = self.source.chunk(offset);
@@ -406,7 +424,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
             let end = end.min(chunk_end);
 
             assert!(start <= offset);
-            assert!(offset < end);
+            assert!(offset <= end);
 
             // Send the buffer to the parsers
             self.source.seek(SeekFrom::Start(start as u64)).expect("Seek does not fail");

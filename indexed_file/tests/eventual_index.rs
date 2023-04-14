@@ -37,7 +37,7 @@ fn get_partial_eventual_index(start: usize, size: usize) -> EventualIndex {
 fn test_eventual_index_basic() {
     let index = get_eventual_index(100);
     assert_eq!(index.bytes(), 100);
-    assert_eq!(index.lines(), 50);
+    assert_eq!(index.lines(), 51);
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn test_cursor_start() {
     let cursor = index.locate(0);
     dbg!(cursor);
     match cursor {
-        Location::Indexed(IndexRef{index: 0, line: 0}) => {},
+        Location::Indexed(IndexRef{index: 1, line: 0, offset: 0}) => {},
         _ => {
             dbg!(cursor);
             panic!("Expected StartOfFile; got something else");
@@ -59,7 +59,7 @@ fn test_cursor_mid_start() {
     let index = get_partial_eventual_index(50, 100);
     let cursor = index.locate(50);
     match cursor {
-        Location::Indexed(IndexRef{index: 0, line: 0}) => {},
+        Location::Indexed(IndexRef{index: 1, line: 0, offset: 50}) => {},
         _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
     }
     let fault = index.locate(10);
@@ -88,7 +88,7 @@ fn test_cursor_last() {
 fn test_cursor_forward() {
     let index = get_eventual_index(100);
     let mut cursor = index.locate(0);
-    let mut count = 0;
+    let mut count = 1;
     loop {
         // dbg!(&cursor);
         match cursor {
@@ -97,7 +97,7 @@ fn test_cursor_forward() {
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
         count += 1;
-        println!("Line {}  Cursor: {} {}", count, index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
+        println!("Line {}  Cursor: {}", count, index.start_of_line(cursor).unwrap());
         cursor = index.next_line_index(cursor);
     }
     assert_eq!(count, index.lines());
@@ -108,17 +108,18 @@ fn test_cursor_reverse() {
     let index = get_eventual_index(100);
     let mut cursor = index.locate(99);
     let mut count = 0;
+    let mut prev = 100;
     loop {
         match cursor {
             Location::Virtual(VirtualLocation::Start) => break,
             Location::Indexed(_) => {},
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
-        // dbg!(&cursor);
         count += 1;
-        let (start, end)  = (index.start_of_line(cursor).unwrap(), index.end_of_line(cursor).unwrap());
-        println!("Line {}  Cursor: {} {}", count, start, end);
-        assert!(start <= end);
+        let start = index.start_of_line(cursor).unwrap();
+        println!("Line {}  Cursor: {}", count, start);
+        assert!(start <= prev);
+        prev = start;
         cursor = index.prev_line_index(cursor);
     }
     assert_eq!(count, index.lines());
@@ -128,7 +129,7 @@ fn test_cursor_reverse() {
 fn test_cursor_reverse_gap() {
     let index = get_partial_eventual_index(50, 100);
     let mut cursor = index.locate(149);
-    let mut count = 0;
+    let mut count = 1;
     loop {
         dbg!(&cursor);
         match cursor {
