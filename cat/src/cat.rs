@@ -20,7 +20,7 @@ pub fn cat_cmd() {
         let mut file = LineIndexer::new(files::new_text_file(file).unwrap());
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
-        for (line, _start, _end) in file.iter_lines() {
+        for (line, _start) in file.iter_lines() {
             println!("{line}");
         }
     }
@@ -32,7 +32,7 @@ pub fn tac_cmd() {
         let mut file = LineIndexer::new(files::new_text_file(file).unwrap());
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
-        for (line, _start, _end) in file.iter_lines().rev() {
+        for (line, _start) in file.iter_lines().rev() {
             println!("{line}");
         }
     }

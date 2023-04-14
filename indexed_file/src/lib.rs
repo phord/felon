@@ -93,11 +93,12 @@ mod tests {
         let mut linecount = 0;
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
-        for (start, end) in file.iter_offsets() {
+        for start in file.iter_offsets() {
             linecount += 1;
             assert_eq!(start, offset);
-            offset += scanlines.next().unwrap().unwrap().len() + 1;
-            assert_eq!(end, offset);
+            if let Some(line) = scanlines.next() {
+                offset += line.unwrap().len() + 1;
+            }
         }
 
         // FIXME: This fails. Why?  Create test file stops too early?
@@ -106,7 +107,7 @@ mod tests {
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
         assert_eq!(file.count_lines(), linecount);
-        let (_, count_bytes) = file.iter_offsets().last().unwrap();
+        let count_bytes = file.iter_offsets().last().unwrap();
         assert_eq!(count_bytes, bytes);
     }
 
@@ -132,19 +133,20 @@ mod tests {
         let mut linecount = 0;
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
-        for (start, end) in file.iter_offsets() {
+        for start in file.iter_offsets() {
             linecount += 1;
             assert_eq!(start, offset);
-            offset += scanlines.next().unwrap().unwrap().len() + 1;
-            assert_eq!(end, offset);
+            if let Some(line) = scanlines.next() {
+                offset += line.unwrap().len() + 1;
+            }
         }
 
-        assert_eq!(lines, linecount);
+        assert_eq!(lines + 1, linecount);
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
         assert_eq!(file.count_lines(), linecount);
-        let (_, count_bytes) = file.iter_offsets().last().unwrap();
+        let count_bytes = file.iter_offsets().last().unwrap();
         assert_eq!(count_bytes, bytes);
     }
 
@@ -164,8 +166,8 @@ mod tests {
         let file = new_text_file(Some(path));
         assert!(file.is_ok());
         let mut file = LineIndexer::new( file.unwrap() );
-        for (line, _start, _end) in file.iter_lines() {
-            println!("{_start},{_end}  {line}");
+        for (line, _start) in file.iter_lines() {
+            println!("{_start}  {line}");
         }
     }
 

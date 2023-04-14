@@ -234,7 +234,7 @@ impl EventualIndex {
                     if line + 1 < i.len() {
                         // next line is in the same index
                         self.get_location( index, line + 1 )
-                    } else if let Some(gap) = self.try_gap_at(index + 1, i.end) {
+                    } else if let Some(gap) = self.try_gap_at(index + 1, i.end + 1) {
                         // next line is not parsed yet
                         gap
                     } else {

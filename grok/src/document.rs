@@ -28,7 +28,7 @@ pub enum SearchType {
 
 struct DocFilter {
     search_type: SearchType,
-    matches : Vec<(usize, usize)>,
+    matches : Vec<usize>,
 }
 
 impl DocFilter {
@@ -41,7 +41,7 @@ impl DocFilter {
 
     // Find a line position given some offset into file
     fn after(&self, offset: usize) -> usize {
-        let pos = self.matches.binary_search_by_key(&offset, |&(start, _)| start);
+        let pos = self.matches.binary_search(&offset);
         match pos { Ok(t) => t, Err(e) => e,}
     }
 
@@ -53,10 +53,10 @@ impl DocFilter {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
                     let mut matches = Vec::new();
-                    for (line, start, end) in log.iter_lines() {
+                    for (line, start) in log.iter_lines() {
                         // TODO: For filter-out we will want the unmatched lines instead
                         if regex.is_match(&line) {
-                            matches.push((start, end));
+                            matches.push(start);
                         }
                     }
                     matches
@@ -92,7 +92,7 @@ struct Filters {
     highlight: Vec<DocFilter>,
 
     /// Filtered line numbers
-    filtered_lines: Vec<(usize, usize)>,
+    filtered_lines: Vec<usize>,
 
     file: LineIndexer<LogSource>,
 }
@@ -140,9 +140,9 @@ impl Filters {
 }
 
 impl Filters {
-    fn iter_includes_rev(& self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + '_>  {
+    fn iter_includes_rev(& self, start: usize) -> Box<dyn Iterator<Item = usize> + '_>  {
         if self.filter_in.is_empty() {
-            let start = self.filtered_lines.binary_search_by_key(&start, |&(start, _)| start);
+            let start = self.filtered_lines.binary_search(&start);
             let start = match start { Ok(t) => t, Err(e) => e,};
             Box::new(self.filtered_lines[..start]
                     .iter()
@@ -153,24 +153,24 @@ impl Filters {
                     .map(|x| x.matches[..x.after(start)].iter())
                     .kmerge()
                     .dedup()
-                .map(|&(start, end)| (start, end)))
+                    .cloned())
             }
     }
 
-    fn iter_includes(& self, start: usize) -> Box<dyn Iterator<Item = (usize, usize)> + '_>  {
+    fn iter_includes(& self, start: usize) -> Box<dyn Iterator<Item = usize> + '_>  {
         if self.filter_in.is_empty() {
-            let start = self.filtered_lines.binary_search_by_key(&start, |&(start, _)| start);
+            let start = self.filtered_lines.binary_search(&start);
             let start = match start { Ok(t) => t, Err(e) => e,};
             Box::new(self.filtered_lines[start..]
                     .iter()
-                    .map(|&(start, end)| (start, end)))
+                    .cloned())
         } else {
             // Find the next line that matches any filter-in.
             Box::new(self.filter_in.iter()
                     .map(|x| x.matches[x.after(start)..].iter())
                     .kmerge()
                     .dedup()
-                .map(|&(start, end)| (start, end)))
+                .cloned())
             }
     }
 }
