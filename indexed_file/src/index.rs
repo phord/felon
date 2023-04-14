@@ -24,6 +24,16 @@ impl Index {
         }
     }
 
+    pub fn push(&mut self, pos: usize) {
+        // Helper to create indexes manually
+        if self.end < pos {
+            self.end = pos;
+        }
+        assert!(self.end >= pos);
+        assert!(self.start <= pos);
+        self.line_offsets.push(pos);
+    }
+
     pub fn bytes(&self) -> usize {
         self.end - self.start
     }
@@ -63,12 +73,12 @@ impl Index {
             panic!("multiple parsed blocks must be contiguous: {}..{} and {}..{}", self.start, self.end, offset, end);
         }
 
-        // FIXME: Store line beginnings {instead of, as well as} line endings
+        // Store line beginnings except for the first line
         let newlines = data
             .iter()
             .enumerate()
             .filter(|(_, c)| **c == b'\n')
-            .map(|(i, _)| i + offset);
+            .map(|(i, _)| i + offset + 1);
         self.line_offsets.extend(newlines);
     }
 
@@ -112,7 +122,8 @@ impl Index {
     }
 
     pub fn find(self: &Self, offset: usize) -> Option<usize> {
-        if offset < self.start || offset >= self.end {
+        // FIXME: Special case for index at virtual size 0 goes away with inclusive `end`
+        if offset < self.start || offset > self.end || (offset == self.end && offset > 0) {
             None
         } else {
             match self.binary_search(offset) {
@@ -125,7 +136,12 @@ impl Index {
     // TODO: Is there a standard trait for this?
     pub fn contains_offset(&self, offset: &usize) -> std::cmp::Ordering {
         if offset >= &self.end {
-            std::cmp::Ordering::Less
+            if offset == &0 && &self.end == &0 {
+                // FIXME: Special case for first index with zero bytes indexed
+                std::cmp::Ordering::Equal
+            } else {
+                std::cmp::Ordering::Less
+            }
         } else if offset < &self.start {
             std::cmp::Ordering::Greater
         } else {
@@ -143,7 +159,7 @@ mod tests {
     static STRIDE: usize = 11;
     static DATA: &str = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n";
     static END: usize = DATA.len();
-    static OFFSETS:[usize; 7] = [10,21,32,43,54,65,76];
+    static OFFSETS:[usize; 7] = [11,22,33,44,55,66,77];
 
     // Verify index.line_offsets match expected set only in the range [start, end]
     fn check_partial(index: &Index, start:usize, end: usize) {
@@ -154,6 +170,13 @@ mod tests {
                 .cloned()
                 .collect();
         assert_eq!(index.iter().cloned().collect::<Vec<usize>>(), offsets);
+    }
+
+    #[test]
+    fn test_index_manual() {
+        let mut index = Index::new();
+        index.push(17);
+        assert_eq!(index.iter().cloned().collect::<Vec<usize>>(), vec![17]);
     }
 
     #[test]
