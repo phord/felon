@@ -125,7 +125,7 @@ impl CachedStreamReader {
         }
     }
 
-    fn reader(mut pipe: Option<BufReader<File>>) -> Receiver<Vec<u8>>
+    fn reader(pipe: Option<BufReader<File>>) -> Receiver<Vec<u8>>
     {
         // Use a bounded channel to prevent stdin from running away from us
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);
