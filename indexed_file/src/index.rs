@@ -92,15 +92,17 @@ impl Index {
             self.line_offsets.extend(newlines);
          */
         let mut pos = offset;
-        while pos <= offset + len {
+        let end = offset + len;
+        while pos < end {
             let bytes =
                 match source.fill_buf() {
                     Ok(buf) => {
                         if buf.len() == 0 {
-                            break
+                            break       // EOF
                         }
-                        self.parse(buf, pos);
-                        buf.len()
+                        let len = buf.len().min(end - pos);
+                        self.parse(&buf[..len], pos);
+                        len
                     },
                     Err(e) => {
                         return std::io::Result::Err(e)
@@ -141,6 +143,14 @@ impl Index {
             std::cmp::Ordering::Greater
         } else {
             std::cmp::Ordering::Equal
+        }
+    }
+
+    #[inline(always)]
+    pub fn contains(&self, offset: &usize) -> bool {
+        match self.contains_offset(offset) {
+            std::cmp::Ordering::Equal => true,
+            _ => false
         }
     }
 
