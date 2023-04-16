@@ -1,6 +1,4 @@
-mod config;
-mod tac;
-use tac::tac_cmd;
+use tools::cat::*;
 
 fn main() {
     tac_cmd();

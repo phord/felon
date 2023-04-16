@@ -21,7 +21,7 @@ pub fn cat_cmd() {
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
         for (line, _start) in file.iter_lines() {
-            println!("{line}");
+            print!("{line}");
         }
     }
 }
@@ -33,7 +33,7 @@ pub fn tac_cmd() {
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
         for (line, _start) in file.iter_lines().rev() {
-            println!("{line}");
+            print!("{line}");
         }
     }
 }
@@ -63,7 +63,6 @@ pub fn itercat_cmd() {
 
 // Reverse cat by iterating BufRead::lines().
 // BufRead::lines() is not a double-ended iterator, so we have to make a copy in RAM first
-// TODO: Implement a double-ended line iterator for IndexedFile and test it here
 #[allow(dead_code)]
 pub fn rev_itercat_cmd() {
     let mut out = std::io::stdout();

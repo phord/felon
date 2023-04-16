@@ -1,6 +1,4 @@
-mod config;
-mod cat;
-use cat::cat_cmd;
+use tools::cat::*;
 
 fn main() {
     cat_cmd();               // 21s

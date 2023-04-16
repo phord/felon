@@ -360,16 +360,7 @@ fn read_line<LOG: LogFile>(file: &mut LOG, start: usize) -> std::io::Result<Stri
     file.seek(SeekFrom::Start(start as u64))?;
     let mut line = String::default();
     match file.read_line(&mut line) {
-        Ok(0) => Ok(line),
-        Ok(_n) => {
-            if line.ends_with('\n') {
-                line.pop();
-                if line.ends_with('\r') {
-                    line.pop();
-                }
-            }
-            Ok(line)
-        }
+        Ok(_) => Ok(line),
         Err(e) => Err(e),
     }
 }
