@@ -153,7 +153,6 @@ mod logfile_data_iterator_tests {
     fn test_iterator() {
         let patt = "filler\n";
         let patt_len = patt.len();
-        let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
@@ -161,11 +160,11 @@ mod logfile_data_iterator_tests {
         let (line, prev) = it.next().unwrap();
         let mut prev = prev;
         assert_eq!(prev, 0);
-        assert_eq!(line, trim_patt);
+        assert_eq!(line, patt);
         for i in it.take(lines - 1) {
             let (line, bol) = i;
             assert_eq!(bol - prev, patt_len);
-            assert_eq!(line, trim_patt);
+            assert_eq!(line, patt);
             prev = bol;
         }
     }
@@ -174,7 +173,6 @@ mod logfile_data_iterator_tests {
     fn test_iterator_rev() {
         let patt = "filler\n";
         let patt_len = patt.len();
-        let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
@@ -190,7 +188,7 @@ mod logfile_data_iterator_tests {
             let (line, bol) = i;
             println!("{bol} {prev}");
             assert_eq!(prev - bol, patt_len);
-            assert_eq!(line, trim_patt);
+            assert_eq!(line, patt);
             prev = bol;
         }
     }
@@ -199,7 +197,6 @@ mod logfile_data_iterator_tests {
     fn test_iterator_rev_exhaust() {
         let patt = "filler\n";
         let patt_len = patt.len();
-        let trim_patt = &patt[..patt_len-1];
         let lines = 3; //6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
@@ -216,7 +213,7 @@ mod logfile_data_iterator_tests {
             let (line, bol) = i;
             println!("{bol} {prev}");
             assert_eq!(prev - bol, patt_len);
-            assert_eq!(line, trim_patt);
+            assert_eq!(line, patt);
             prev = bol;
             count += 1;
         }
@@ -227,7 +224,6 @@ mod logfile_data_iterator_tests {
     // fn test_iterator_fwd_rev_meet() {
     //     let patt = "filler\n";
     //     let patt_len = patt.len();
-    //     let trim_patt = &patt[..patt_len-1];
     //     let lines = 6000;
     //     let file = new_mock_file(patt, patt_len * lines, 100);
     //     let mut file = LineIndexer::new(file);
@@ -238,7 +234,7 @@ mod logfile_data_iterator_tests {
     //     for i in it.take(lines/2) {
     //         let (line, bol) = i;
     //         assert_eq!(bol - prev, patt_len);
-    //         assert_eq!(line, trim_patt);
+    //         assert_eq!(line, patt);
     //         prev = bol;
     //     }
 
@@ -249,7 +245,7 @@ mod logfile_data_iterator_tests {
     //     for i in it.rev().take(lines/2) {
     //         let (line, bol) = i;
     //         assert_eq!(prev - bol, patt_len);
-    //         assert_eq!(line, trim_patt);
+    //         assert_eq!(line, patt);
     //         prev = bol;
     //     }
 
@@ -275,7 +271,6 @@ mod logfile_data_iterator_tests {
     fn test_iterator_exhaust_twice() {
         let patt = "filler\n";
         let patt_len = patt.len();
-        let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
@@ -293,7 +288,7 @@ mod logfile_data_iterator_tests {
         for i in it.take(lines - 1) {
             let (line, bol) = i;
             assert_eq!(bol - prev, patt_len);
-            assert_eq!(line, trim_patt);
+            assert_eq!(line, patt);
             prev = bol;
         }
     }
@@ -303,7 +298,6 @@ mod logfile_data_iterator_tests {
     fn test_iterator_exhaust_half_and_twice() {
         let patt = "filler\n";
         let patt_len = patt.len();
-        let trim_patt = &patt[..patt_len-1];
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
@@ -322,7 +316,7 @@ mod logfile_data_iterator_tests {
             for i in it.take(lines - 1) {
                 let (line, bol) = i;
                 assert_eq!(bol - prev, patt_len);
-                assert_eq!(line, trim_patt);
+                assert_eq!(line, patt);
                 prev = bol;
             }
         }
