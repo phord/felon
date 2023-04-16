@@ -434,7 +434,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
     // Resolve virtual locations to real indexed or gap locations
     #[inline]
-    pub fn resolve(&self, find: Location) -> Location {
+    fn resolve(&self, find: Location) -> Location {
         self.index.resolve(find, self.source.len())
     }
 
@@ -508,7 +508,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.index.lines()
     }
 
-    pub fn iter(&mut self) -> impl Iterator<Item = usize> + '_ {
+    fn iter(&mut self) -> impl Iterator<Item = usize> + '_ {
         LineIndexerIterator::new(self)
     }
 

@@ -313,22 +313,21 @@ impl EventualIndex {
 
     // Find index to next line after given index
     pub fn next_line_index(&self, find: Location) -> Location {
-        match find {
-            Location::Indexed(IndexRef{ index, line, offset:_}) => {
-                assert!(index < self.indexes.len());
-                    let i = &self.indexes[index];
-                    if line + 1 < i.len() {
-                        // next line is in the same index
-                        self.get_location( index, line + 1 )
-                    } else if let Some(gap) = self.try_gap_at(index + 1, TargetOffset::After(i.end)) {
-                        // next line is not parsed yet
-                        gap
-                    } else {
-                        // next line is in the next index
-                        self.get_location( index + 1, 0 )
-                    }
-                },
-            _ => find,
+        if let Location::Indexed(IndexRef{ index, line, offset:_}) = find {
+            assert!(index < self.indexes.len());
+            let i = &self.indexes[index];
+            if line + 1 < i.len() {
+                // next line is in the same index
+                self.get_location( index, line + 1 )
+            } else if let Some(gap) = self.try_gap_at(index + 1, TargetOffset::After(i.end)) {
+                // next line is not parsed yet
+                gap
+            } else {
+                // next line is in the next index
+                self.get_location( index + 1, 0 )
+            }
+        } else {
+            find
         }
     }
 
