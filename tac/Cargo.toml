@@ -1,0 +1,10 @@
+[package]
+name = "tac"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+indexed_file = { path = "../indexed_file" }
+pico-args = "0.4.2"
