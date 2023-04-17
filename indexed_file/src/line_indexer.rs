@@ -51,6 +51,16 @@ impl<'a, LOG: LogFile> LineIndexerIterator<'a, LOG> {
             (pos, ret)
         }
     }
+
+    // Read a string at a given start from our log source
+    fn read_line(&mut self, start: usize) -> std::io::Result<String> {
+        self.file.source.seek(SeekFrom::Start(start as u64))?;
+        let mut line = String::default();
+        match self.file.source.read_line(&mut line) {
+            Ok(_) => Ok(line),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
@@ -439,17 +449,13 @@ mod logfile_data_iterator_tests {
 }
 
 struct LineIndexerDataIterator<'a, LOG> {
-    file: &'a mut LineIndexer<LOG>,
-    pos: Location,
-    rev_pos: Location,
+    inner: LineIndexerIterator<'a, LOG>,
 }
 
 impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
-    fn new(file: &'a mut LineIndexer<LOG>) -> Self {
+    fn new(inner: LineIndexerIterator<'a, LOG>) -> Self {
         Self {
-            file,
-            pos: Location::Virtual(VirtualLocation::Start),
-            rev_pos: Location::Virtual(VirtualLocation::End),
+            inner,
         }
     }
 }
@@ -463,36 +469,14 @@ impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
  * TODO: Can we make a filtered iterator that tests the line in the file buffer and only copy to String if it matches?
  */
 
-
-// Read a string at a given start from our log source
-fn read_line<LOG: LogFile>(file: &mut LOG, start: usize) -> std::io::Result<String> {
-    file.seek(SeekFrom::Start(start as u64))?;
-    let mut line = String::default();
-    match file.read_line(&mut line) {
-        Ok(_) => Ok(line),
-        Err(e) => Err(e),
-    }
-}
-
-impl<'a, LOG: LogFile> LineIndexerDataIterator<'a, LOG> {
-    // TODO: Dedup with LineIndexerIterator
-
-    // Resolve virtuals and gaps into indexed locations
-    fn resolve(&mut self, pos: Location) -> (Location, Option<(String, usize)>) {
-        let pos = self.file.resolve_location(pos);
-        let ret = pos.offset();
-
-        if self.rev_pos == self.pos {
-            // End of iterator when fwd and rev meet
-            self.rev_pos = Location::Invalid;
-            self.pos = Location::Invalid;
-        }
-
-        if let Some(bol) = ret {
-            let line = read_line(&mut self.file.source, bol).expect("Unhandled file read error");
-            (pos, Some((line, bol)))
+impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
+    fn iterate(&mut self, value: Option<usize>) -> Option<(String, usize)> {
+        if let Some(bol) = value {
+            // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
+            let line = self.inner.read_line(bol).expect("TODO: return Result");
+            Some((line, bol))
         } else {
-            (pos, None)
+            None
         }
     }
 }
@@ -500,22 +484,17 @@ impl<'a, LOG: LogFile> LineIndexerDataIterator<'a, LOG> {
 // Iterate over lines as position, string
 impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        let (pos, ret) = self.resolve(self.rev_pos);
-        self.rev_pos = self.file.index.prev_line_index(pos);
-        ret
+        let ret = self.inner.next_back();
+        self.iterate(ret)
     }
 }
 
 impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
     type Item = (String, usize);
-
-    // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
     fn next(&mut self) -> Option<Self::Item> {
-        let (pos, ret) = self.resolve(self.pos);
-        self.pos = self.file.index.next_line_index(pos);
-        ret
+        let ret = self.inner.next();
+        self.iterate(ret)
     }
-
 }
 
 impl<LOG: LogFile> LineIndexer<LOG> {
@@ -613,7 +592,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
     }
 
     pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = (String, usize)> + '_ {
-        LineIndexerDataIterator::new(self)
+        LineIndexerDataIterator::new(LineIndexerIterator::new(self))
     }
 
 }
