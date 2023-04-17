@@ -480,8 +480,15 @@ impl<'a, LOG: LogFile> LineIndexerDataIterator<'a, LOG> {
     // Resolve virtuals and gaps into indexed locations
     fn resolve(&mut self, pos: Location) -> (Location, Option<(String, usize)>) {
         let pos = self.file.resolve_location(pos);
+        let ret = pos.offset();
 
-        if let Some(bol) = pos.offset() {
+        if self.rev_pos == self.pos {
+            // End of iterator when fwd and rev meet
+            self.rev_pos = Location::Invalid;
+            self.pos = Location::Invalid;
+        }
+
+        if let Some(bol) = ret {
             let line = read_line(&mut self.file.source, bol).expect("Unhandled file read error");
             (pos, Some((line, bol)))
         } else {
@@ -493,17 +500,9 @@ impl<'a, LOG: LogFile> LineIndexerDataIterator<'a, LOG> {
 // Iterate over lines as position, string
 impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.rev_pos == self.pos {
-            None
-        } else {
-            let (pos, ret) = self.resolve(self.rev_pos);
-            self.rev_pos = pos;
-            match ret {
-                Some(_) => self.rev_pos = self.file.index.prev_line_index(self.rev_pos),
-                _ => {},
-            }
-            ret
-        }
+        let (pos, ret) = self.resolve(self.rev_pos);
+        self.rev_pos = self.file.index.prev_line_index(pos);
+        ret
     }
 }
 
@@ -513,11 +512,7 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
     // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
     fn next(&mut self) -> Option<Self::Item> {
         let (pos, ret) = self.resolve(self.pos);
-        self.pos = pos;
-        match ret {
-            Some(_) => self.pos = self.file.index.next_line_index(self.pos),
-            _ => {},
-        }
+        self.pos = self.file.index.next_line_index(pos);
         ret
     }
 
