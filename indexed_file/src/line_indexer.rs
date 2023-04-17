@@ -479,6 +479,24 @@ impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
             None
         }
     }
+
+    // Advance backwards without reading lines into strings
+    #[inline]
+    fn advance_back_by(&mut self, n: usize) -> Result<(), usize> {
+        for i in 0..n {
+            self.inner.next_back().ok_or(i)?;
+        }
+        Ok(())
+    }
+
+    // Advance without reading lines into strings
+    #[inline]
+    fn advance_by(&mut self, n: usize) -> Result<(), usize> {
+        for i in 0..n {
+            self.inner.next().ok_or(i)?;
+        }
+        Ok(())
+    }
 }
 
 // Iterate over lines as position, string
@@ -487,6 +505,12 @@ impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> 
         let ret = self.inner.next_back();
         self.iterate(ret)
     }
+
+    #[inline]
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        self.advance_back_by(n).ok()?;
+        self.next_back()
+    }
 }
 
 impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
@@ -494,6 +518,12 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.inner.next();
         self.iterate(ret)
+    }
+
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.advance_by(n).ok()?;
+        self.next_back()
     }
 }
 
