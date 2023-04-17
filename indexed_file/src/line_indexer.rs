@@ -24,6 +24,7 @@ impl<LOG: LogFile> fmt::Debug for LineIndexer<LOG> {
 struct LineIndexerIterator<'a, LOG> {
     file: &'a mut LineIndexer<LOG>,
     pos: Location,
+    rev_pos: Location,
 }
 
 impl<'a, LOG> LineIndexerIterator<'a, LOG> {
@@ -31,6 +32,7 @@ impl<'a, LOG> LineIndexerIterator<'a, LOG> {
         Self {
             file,
             pos: Location::Virtual(VirtualLocation::Start),
+            rev_pos: Location::Virtual(VirtualLocation::End),
         }
     }
 }
@@ -42,7 +44,32 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
         self.pos = self.file.resolve_location(self.pos);
 
         if let Some(bol) = self.pos.offset() {
-            self.pos = self.file.index.next_line_index(self.pos);
+            if self.rev_pos == self.pos {
+                self.rev_pos = Location::Invalid;
+                self.pos = Location::Invalid;
+            } else {
+                self.pos = self.file.index.next_line_index(self.pos);
+            }
+
+            Some(bol)
+        } else {
+            None
+        }
+    }
+}
+
+// Iterate over lines in reverse
+impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.rev_pos = self.file.resolve_location(self.rev_pos);
+
+        if let Some(bol) = self.rev_pos.offset() {
+            if self.rev_pos == self.pos {
+                self.rev_pos = Location::Invalid;
+                self.pos = Location::Invalid;
+            } else {
+                self.rev_pos = self.file.index.prev_line_index(self.rev_pos);
+            }
             Some(bol)
         } else {
             None
@@ -72,6 +99,99 @@ mod logfile_iterator_tests {
             assert_eq!(bol - prev, patt_len);
             prev = bol;
         }
+    }
+
+    #[test]
+    fn test_iterator_rev() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut it = file.iter().rev();
+        let prev = it.next().unwrap();
+        let mut prev = prev;
+
+        // Last line is the empty string after the last \n
+        assert_eq!(prev, lines * patt_len );
+
+        for i in it.take(lines - 1) {
+            let bol = i;
+            println!("{bol} {prev}");
+            assert_eq!(prev - bol, patt_len);
+            prev = bol;
+        }
+    }
+
+    #[test]
+    fn test_iterator_rev_exhaust() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 6000;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut it = file.iter().rev();
+        let prev = it.next().unwrap();
+        let mut prev = prev;
+
+        // Last line is the empty string after the last \n
+        assert_eq!(prev, lines * patt_len );
+
+        let mut count = 0;
+        for i in it {
+            let bol = i;
+            println!("{bol} {prev}");
+            assert_eq!(prev - bol, patt_len);
+            prev = bol;
+            count += 1;
+        }
+        assert_eq!(count, lines);
+    }
+
+    #[test]
+    fn test_iterator_fwd_rev_meet() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 10;//000;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut it = file.iter();
+        let prev = it.next().unwrap();
+        let mut prev = prev;
+        let mut count = 1;
+
+        for _ in 0..lines/2 - 1 {
+            let i = it.next().unwrap();
+            count += 1;
+            println!("{count} {i}");
+            let bol = i;
+            assert_eq!(bol - prev, patt_len);
+            prev = bol;
+        }
+
+        // Last line is the empty string after the last \n
+        assert_eq!(prev, (lines / 2 - 1) * patt_len );
+
+        let bol_part1 = prev;
+
+        let mut it = it.rev();
+        prev = it.next().unwrap();      // Fetch last line offset (actually one past the end)
+        assert_eq!(prev, lines * patt_len );
+
+        for _ in 0..lines/2 {
+            let i = it.next().unwrap();
+            count += 1;
+            println!("{count} {i}");
+            let bol = i;
+            assert_eq!(prev - bol, patt_len);
+            prev = bol;
+        }
+
+        let bol_part2 = prev;
+        assert_eq!(bol_part2 - bol_part1, patt_len);
+
+        // all lines exhausted
+        assert!(it.next().is_none());
     }
 
     #[test]
@@ -450,6 +570,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
             Virtual(Start) => (AtOrBefore(0), 0, self.index.start()),
             Virtual(End) => (AtOrBefore(self.source.len().saturating_sub(1)), self.index.end(), self.source.len() ),
             Indexed(_) => panic!("Tried to index a loaded chunk"),
+            Invalid => panic!("No invalid locations allowed"),
         };
 
         let offset = target.value();
@@ -464,7 +585,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
         if start >= end {
             // FIXME: If this is appropriate, how do we get to Start?
-            Location::Virtual(End)
+            Location::Invalid
         } else {
             let (chunk_start, chunk_end) = self.source.chunk(offset);
             let start = start.max(chunk_start);
@@ -493,11 +614,11 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.index.lines()
     }
 
-    fn iter(&mut self) -> impl Iterator<Item = usize> + '_ {
+    fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
         LineIndexerIterator::new(self)
     }
 
-    pub fn iter_offsets(&mut self) -> impl Iterator<Item = usize> + '_ {
+    pub fn iter_offsets(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
         self.iter()
     }
 

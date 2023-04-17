@@ -110,7 +110,7 @@ fn test_cursor_reverse() {
     let mut cursor = index.locate(TargetOffset::AtOrBefore(prev));
     loop {
         match cursor {
-            Location::Virtual(VirtualLocation::Start) => break,
+            Location::Invalid => break,
             Location::Indexed(_) => {},
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }

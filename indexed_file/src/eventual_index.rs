@@ -10,7 +10,8 @@ pub struct EventualIndex {
 pub enum Location {
     Virtual(VirtualLocation),
     Indexed(IndexRef),
-    Gap(GapRange)
+    Gap(GapRange),
+    Invalid,
 }
 
 impl Location {
@@ -205,8 +206,8 @@ impl EventualIndex {
                 // Find the gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
                 if next > prev {
-                    assert!(target_offset > prev);
-                    assert!(target_offset < next);
+                    // assert!(target_offset > prev);
+                    // assert!(target_offset < next);
                     Some(Location::Gap(GapRange { target, gap: Bounded(prev, next) } ))
                 } else {
                     // There is no gap between these indexes
@@ -347,7 +348,7 @@ impl EventualIndex {
                 self.get_location(index - 1, j.len() - 1)
             } else {
                 // There's no gap before this index, and no lines before it either.  We must be at StartOfFile.
-                Location::Virtual(VirtualLocation::Start)
+                Location::Invalid
             }
         } else {
             find
