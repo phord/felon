@@ -37,43 +37,38 @@ impl<'a, LOG> LineIndexerIterator<'a, LOG> {
     }
 }
 
+impl<'a, LOG: LogFile> LineIndexerIterator<'a, LOG> {
+    fn iterate(&mut self, pos: Location) -> (Location, Option<usize>) {
+        let pos = self.file.resolve_location(pos);
+
+        let ret = pos.offset();
+        if self.rev_pos == self.pos {
+            // End of iterator when fwd and rev meet
+            self.rev_pos = Location::Invalid;
+            self.pos = Location::Invalid;
+            (Location::Invalid, ret)
+        } else {
+            (pos, ret)
+        }
+    }
+}
+
 impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.pos = self.file.resolve_location(self.pos);
-
-        if let Some(bol) = self.pos.offset() {
-            if self.rev_pos == self.pos {
-                self.rev_pos = Location::Invalid;
-                self.pos = Location::Invalid;
-            } else {
-                self.pos = self.file.index.next_line_index(self.pos);
-            }
-
-            Some(bol)
-        } else {
-            None
-        }
+        let (pos, ret) = self.iterate(self.pos);
+        self.pos = self.file.index.next_line_index(pos);
+        ret
     }
 }
 
 // Iterate over lines in reverse
 impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.rev_pos = self.file.resolve_location(self.rev_pos);
-
-        if let Some(bol) = self.rev_pos.offset() {
-            if self.rev_pos == self.pos {
-                self.rev_pos = Location::Invalid;
-                self.pos = Location::Invalid;
-            } else {
-                self.rev_pos = self.file.index.prev_line_index(self.rev_pos);
-            }
-            Some(bol)
-        } else {
-            None
-        }
+        let (pos, ret) = self.iterate(self.rev_pos);
+        self.rev_pos = self.file.index.prev_line_index(pos);
+        ret
     }
 }
 
