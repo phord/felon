@@ -21,6 +21,30 @@ impl Location {
             _ => None,
         }
     }
+
+    #[inline]
+    pub fn is_gap(&self) -> bool {
+        match self {
+            Location::Gap(_) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_virtual(&self) -> bool {
+        match self {
+            Location::Virtual(_) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_indexed(&self) -> bool {
+        match self {
+            Location::Indexed(_) => true,
+            _ => false,
+        }
+    }
 }
 
 // Delineates [start, end) of a region of the file.  end is not inclusive.

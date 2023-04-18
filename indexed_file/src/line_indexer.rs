@@ -1,10 +1,10 @@
-// Generic log file source to discover and iterate individual log lines from a LogFile
+// Wrapper to discover and iterate log lines from a LogFile while memoizing parsed line offsets
 
 use std::fmt;
 use std::io::SeekFrom;
 use crate::files::LogFile;
 use crate::index::Index;
-use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, TargetOffset, Missing::{Bounded, Unbounded}};
+use crate::eventual_index::{EventualIndex, Location, VirtualLocation, GapRange, Missing::{Bounded, Unbounded}};
 
 pub struct LineIndexer<LOG> {
     // pub file_path: PathBuf,
@@ -73,8 +73,8 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
     }
 }
 
-// Iterate over lines in reverse
 impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
+    // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         let (pos, ret) = self.iterate(self.rev_pos);
         self.rev_pos = self.file.index.prev_line_index(pos);
@@ -448,6 +448,7 @@ mod logfile_data_iterator_tests {
     }
 }
 
+// Iterate over lines as position, string
 struct LineIndexerDataIterator<'a, LOG> {
     inner: LineIndexerIterator<'a, LOG>,
 }
@@ -470,6 +471,10 @@ impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
  */
 
 impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
+    // Helper function to abstract the wrapping of the inner iterator result
+    // If we got a line offset value, read the string and return the Type tuple.
+    // TODO: Reuse Self::Type here instead of (String, uszize)
+    #[inline]
     fn iterate(&mut self, value: Option<usize>) -> Option<(String, usize)> {
         if let Some(bol) = value {
             // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
@@ -499,8 +504,8 @@ impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
     }
 }
 
-// Iterate over lines as position, string
 impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
+    #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let ret = self.inner.next_back();
         self.iterate(ret)
@@ -515,6 +520,8 @@ impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> 
 
 impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
     type Item = (String, usize);
+
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.inner.next();
         self.iterate(ret)
@@ -544,16 +551,14 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
     // fill in any gaps by parsing data from the file when needed
     fn resolve_location(&mut self, pos: Location) -> Location {
-        // Resolve any virtuals into gaps.
+        // Resolve any virtuals into gaps or indexed
         let mut pos = self.resolve(pos);
 
         // Resolve gaps
-        loop {
-            match pos {
-                Location::Gap(_) => pos = self.index_chunk(pos),
-                _ => break,
-            };
+        while pos.is_gap() {
+            pos = self.index_chunk(pos);
         }
+
         pos
     }
 
