@@ -15,7 +15,6 @@ pub struct LineIndexer<LOG> {
 impl<LOG: LogFile> fmt::Debug for LineIndexer<LOG> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LineIndexer")
-         .field("bytes", &self.count_bytes())
          .field("lines", &self.count_lines())
          .finish()
     }
@@ -196,7 +195,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         pos
     }
 
-    // Index the chunk of file at some gap location
+    // Index a chunk of file at some gap location. May index only part of the gap.
     fn index_chunk(&mut self, gap: Location) -> Location {
         // Quench the file in case new data has arrived
         self.source.quench();
@@ -234,9 +233,6 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         }
     }
 
-    fn count_bytes(&self) -> usize {
-        self.source.len()
-    }
 
     pub fn count_lines(&self) -> usize {
         self.index.lines()
