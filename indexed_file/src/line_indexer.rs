@@ -52,13 +52,9 @@ impl<'a, LOG: LogFile> LineIndexerIterator<'a, LOG> {
     }
 
     // Read a string at a given start from our log source
+    #[inline]
     fn read_line(&mut self, start: usize) -> std::io::Result<String> {
-        self.file.source.seek(SeekFrom::Start(start as u64))?;
-        let mut line = String::default();
-        match self.file.source.read_line(&mut line) {
-            Ok(_) => Ok(line),
-            Err(e) => Err(e),
-        }
+        self.file.source.read_line_at(start)
     }
 }
 

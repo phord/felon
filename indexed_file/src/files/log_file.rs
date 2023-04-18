@@ -14,7 +14,18 @@ use crate::files::ZstdLogFile;
 
 pub type LogSource = Box<dyn LogFile>;
 
-pub trait LogFile: LogFileUtil + BufRead + Seek {}
+pub trait LogFile: LogFileUtil + BufRead + Seek {
+
+    // Read a line from a given offset
+    fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
+        self.seek(SeekFrom::Start(start as u64))?;
+        let mut line = String::default();
+        match self.read_line(&mut line) {
+            Ok(_) => Ok(line),
+            Err(e) => Err(e),
+        }
+    }
+}
 
 impl LogFile for LogSource {}
 
