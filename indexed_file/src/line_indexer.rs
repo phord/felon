@@ -557,33 +557,23 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         pos
     }
 
-
+    // Index the chunk of file at some gap location
     fn index_chunk(&mut self, gap: Location) -> Location {
+        // Quench the file in case new data has arrived
         self.source.quench();
-        use Location::*;
-        use VirtualLocation::*;
-        use TargetOffset::*;
+
         let (target, start, end) = match gap {
-            Gap(GapRange { target, gap: Bounded(start, end) }) => (target, start, end.min(self.source.len())),
-            Gap(GapRange { target, gap: Unbounded(start) }) => (target, start, self.source.len()),
-            Virtual(Start) => (AtOrBefore(0), 0, self.index.start()),
-            Virtual(End) => (AtOrBefore(self.source.len().saturating_sub(1)), self.index.end(), self.source.len() ),
-            Indexed(_) => panic!("Tried to index a loaded chunk"),
-            Invalid => panic!("No invalid locations allowed"),
+            Location::Gap(GapRange { target, gap: Bounded(start, end) }) => (target, start, end.min(self.source.len())),
+            Location::Gap(GapRange { target, gap: Unbounded(start) }) => (target, start, self.source.len()),
+            _ => panic!("Tried to index something which is not a gap: {:?}", gap),
         };
 
         let offset = target.value();
         assert!(start <= offset);
         assert!(end <= self.source.len());
 
-        // If Virtual && start == end, don't try to index any chunk, because there is no gap
-        match gap {
-            Virtual(_) => if start == end { return self.index.locate(target) },
-            _ => {},
-        };
-
         if start >= end {
-            // FIXME: If this is appropriate, how do we get to Start?
+            // End of file
             Location::Invalid
         } else {
             let (chunk_start, chunk_end) = self.source.chunk(offset);
