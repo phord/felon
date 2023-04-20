@@ -91,8 +91,6 @@ impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
 }
 
 /**
- * TODO: Implement Double-ended iterators that produce Strings for each line of input.
- *
  * TODO: an iterator that iterates lines and builds up the EventualIndex as it goes.
  * TODO: an iterator that iterates from a given line offset forward or reverse.
  *

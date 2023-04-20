@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod logfile_iterator_tests {
     use indexed_file::files::new_mock_file;
-    use indexed_file::line_indexer::LineIndexer;
+    use indexed_file::indexer::LineIndexer;
 
     #[test]
     fn test_iterator() {
@@ -190,7 +190,7 @@ mod logfile_iterator_tests {
 #[cfg(test)]
 mod logfile_data_iterator_tests {
     use indexed_file::files::new_mock_file;
-    use indexed_file::line_indexer::LineIndexer;
+    use indexed_file::indexer::LineIndexer;
 
     #[test]
     fn test_iterator() {

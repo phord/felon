@@ -1,5 +1,5 @@
 use crate::config::Config;
-use indexed_file::{line_indexer::LineIndexer, files};
+use indexed_file::{indexer::LineIndexer, files};
 use indexed_file::files::ZstdLogFile;
 use std::io::{BufRead, Write};
 use std::path::PathBuf;

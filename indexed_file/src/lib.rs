@@ -1,12 +1,12 @@
 pub mod eventual_index;
 pub mod files;
+pub mod indexer;
 pub mod filters;
 pub mod index;
-pub mod line_indexer;
 
 #[cfg(test)]
 mod tests {
-    use crate::line_indexer::LineIndexer;
+    use crate::indexer::line_indexer::LineIndexer;
     use crate::files::{LogSource, TextLogFile, new_text_file};
     use std::path::PathBuf;
 
