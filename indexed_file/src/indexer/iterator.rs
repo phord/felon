@@ -19,6 +19,16 @@ impl<'a, LOG> LineIndexerIterator<'a, LOG> {
 }
 
 impl<'a, LOG: LogFile> LineIndexerIterator<'a, LOG> {
+    pub(crate) fn new_from(file: &'a mut LineIndexer<LOG>, offset: usize) -> Self {
+        let rev_pos = Location::Virtual(VirtualLocation::Before(offset));
+        let pos = Location::Virtual(VirtualLocation::After(offset));
+        Self {
+            file,
+            pos,
+            rev_pos,
+        }
+    }
+
     fn iterate(&mut self, pos: Location) -> (Location, Option<usize>) {
         let pos = self.file.resolve_location(pos);
 

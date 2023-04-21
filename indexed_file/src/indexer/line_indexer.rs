@@ -77,7 +77,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
             _ => panic!("Tried to index something which is not a gap: {:?}", gap),
         };
 
-        let offset = target.value();
+        let offset = target.value().min(self.source.len());
         assert!(start <= offset);
         assert!(end <= self.source.len());
 
@@ -119,6 +119,10 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
     pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = (String, usize)> + '_ {
         LineIndexerDataIterator::new(LineIndexerIterator::new(self))
+    }
+
+    pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = (String, usize)> + '_ {
+        LineIndexerDataIterator::new(LineIndexerIterator::new_from(self, offset))
     }
 
 }

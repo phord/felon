@@ -331,4 +331,135 @@ mod logfile_data_iterator_tests {
             }
         }
     }
+
+
+    #[test]
+    fn test_iterator_from_offset_unindexed() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut count = 0;
+
+        // A few bytes after the middle of the file
+        let mut it = file.iter_lines_from(patt_len * lines / 2 - patt_len / 2);
+
+        // Iterate again and verify we get the expected number of lines
+        let (line, prev) = it.next().unwrap();
+        assert_eq!(prev, patt_len * lines / 2);
+        assert_eq!(line, patt);
+
+        for _ in it {
+            count += 1;
+        }
+        assert_eq!(count, lines / 2);
+    }
+
+    #[test]
+    fn test_iterator_from_offset_indexed() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut count = 0;
+        for _ in file.iter_lines() {
+            count += 1;
+        }
+        assert_eq!(count, lines + 1);
+
+        count = 0;
+
+        // A few bytes before the middle of the file
+        let mut it = file.iter_lines_from(patt_len * lines / 2 - patt_len / 2);
+
+        // Iterate again and verify we get the expected number of lines
+        let (line, prev) = it.next().unwrap();
+        assert_eq!(prev, patt_len * lines / 2);
+        assert_eq!(line, patt);
+
+        for _ in it {
+            count += 1;
+        }
+        assert_eq!(count, lines / 2);
+    }
+
+    #[test]
+    fn test_iterator_from_offset_start() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut count = 0;
+        for _ in file.iter_lines_from(0).rev() {
+            count += 1;
+        }
+        assert_eq!(count, 0, "No lines iterable before offset 0");
+
+        for _ in file.iter_lines_from(1).rev() {
+            count += 1;
+        }
+        assert_eq!(count, 1, "First line is reachable from offset 1");
+
+        count = 0;
+
+        let mut it = file.iter_lines_from(0);
+
+        // Verify we see all but the first line
+        let (line, prev) = it.next().unwrap();
+        assert_eq!(prev, patt_len);
+        assert_eq!(line, patt);
+
+        for _ in it {
+            count += 1;
+        }
+        assert_eq!(count, lines - 1);
+    }
+    #[test]
+    fn test_iterator_from_offset_end_of_file() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let out_of_range = patt_len * lines;
+
+        let mut count = 0;
+        for _ in file.iter_lines_from(out_of_range) {
+            count += 1;
+        }
+        assert_eq!(count, 0, "No lines iterable after out-of-range");
+
+        for _ in file.iter_lines_from(out_of_range).rev() {
+            count += 1;
+        }
+        assert_eq!(count, lines, "Whole file is reached from end");
+
+    }
+
+    #[test]
+    fn test_iterator_from_offset_out_of_range() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 100;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+
+        // Length + 1 is ok.  Whole file is iterated.  Length + 2 is "out of range".
+        let out_of_range = patt_len * lines + 2;
+
+        let mut count = 0;
+        for _ in file.iter_lines_from(out_of_range).rev() {
+            count += 1;
+        }
+        assert_eq!(count, 0, "No lines iterable before out-of-range");
+
+        count = 0;
+        for _ in file.iter_lines_from(out_of_range) {
+            count += 1;
+        }
+        assert_eq!(count, 0, "No lines iterable after out-of-range");
+     }
 }

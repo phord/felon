@@ -78,7 +78,9 @@ impl Eq for IndexRef {}
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum VirtualLocation {
     Start,
-    End
+    End,
+    Before(usize),
+    After(usize),
 }
 
 // The target offset we wanted to reach when filling a gap
@@ -268,6 +270,9 @@ impl EventualIndex {
     pub fn resolve(&self, find: Location, end_of_file: usize) -> Location {
         match find {
             Location::Virtual(loc) => match loc {
+                VirtualLocation::Before(0) => Location::Invalid,
+                VirtualLocation::Before(offset) => self.locate(TargetOffset::AtOrBefore(offset-1)),
+                VirtualLocation::After(offset) => self.locate(TargetOffset::After(offset)),
                 VirtualLocation::Start => {
                     if let Some(gap) = self.try_gap_at(0, TargetOffset::AtOrBefore(0)) {
                         gap
