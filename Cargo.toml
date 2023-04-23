@@ -3,6 +3,7 @@
 members = [
     "grok",
     "cat",
+    "document",
     "indexed_file",
     "play",          # a playground to test rust functionality.  Should we move this from `members` to `exclude`?
     "tac",
