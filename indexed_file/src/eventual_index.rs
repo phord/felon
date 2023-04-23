@@ -8,9 +8,16 @@ pub struct EventualIndex {
 // A cursor, representing a location in the EventualIndex
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Location {
+    // A conceptual location, like "Start of file". Use resolve() to get a real location.
     Virtual(VirtualLocation),
+
+    // A location we have indexed before; we know where it is.
     Indexed(IndexRef),
+
+    // A location we have not indexed yet; we need to get more information.
     Gap(GapRange),
+
+    // This location will never exist
     Invalid,
 }
 
@@ -58,7 +65,7 @@ pub enum Missing {
 }
 
 // Literally a reference by subscript to the Index/Line in an EventualIndex.
-// Becomes invalid if the EventualIndex changes, but since we use this as a hint only, it's not fatal.
+// Invalid if the EventualIndex changes, such as when a prior gap is filled in. But we should be holding a GapRange instead, then.
 #[derive(Debug, Copy, Clone)]
 pub struct IndexRef {
     pub index: usize,
@@ -72,7 +79,6 @@ impl PartialEq for IndexRef {
     }
 }
 impl Eq for IndexRef {}
-
 
 // A logical location in a file, like "Start"
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -118,9 +124,7 @@ pub struct GapRange {
     pub gap: Missing,
 }
 
-use Missing::{Bounded, Unbounded};
-
-
+// Manage the internal representation
 impl EventualIndex {
     pub fn new() -> EventualIndex {
         EventualIndex {
@@ -148,17 +152,6 @@ impl EventualIndex {
 
         // FIXME: Merge adjacent indexes if one of them is empty
     }
-
-    // fn line_offset(&self, line_number: usize) -> Option<usize> {
-    //     if line_number >= self.lines() {
-    //         return None;
-    //     }
-    //     self.iter().skip(line_number).cloned().next()
-    // }
-
-    // fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
-    //     self.indexes.iter().flat_map(|x| x.iter())
-    // }
 
     // #[cfg(test)]
     pub fn bytes(&self) -> usize {
@@ -188,10 +181,8 @@ impl EventualIndex {
     }
 }
 
-
 // Gap handlers
 impl EventualIndex {
-
     // Identify the gap before a given index position and return a Missing() hint to include it.
     // panics if there is no gap
     fn gap_at(&self, pos: usize, target: TargetOffset) -> Location {
@@ -201,7 +192,9 @@ impl EventualIndex {
     // Describe the gap before the index at pos which includes the target offset
     // If pos is not indexed yet, find the gap at the end of indexes
     // Returns None if there is no gap
-    pub fn try_gap_at(&self, pos: usize, target: TargetOffset) -> Option<Location> {
+    fn try_gap_at(&self, pos: usize, target: TargetOffset) -> Option<Location> {
+        use Missing::{Bounded, Unbounded};
+
         assert!(pos <= self.indexes.len());
         let target_offset = target.value();
 
@@ -247,8 +240,7 @@ impl EventualIndex {
 
 // Cursor functions for EventualIndex
 impl EventualIndex {
-
-    // Find index to line that contains a given offset or the gap that needs to be loaded to have it
+    // Find index to line that contains a given offset or the gap that needs to be loaded to have it. Somewhat expensive.
     pub fn locate(&self, target: TargetOffset) -> Location {
         // TODO: Trace this fallback finder and ensure it's not being overused.
 
@@ -257,6 +249,8 @@ impl EventualIndex {
             Ok(found) => {
                 let i = &self.indexes[found];
                 let line = i.find(offset).unwrap();
+                // The found offset may be just before or just after where we want to be.  TargetOffset knows the difference.
+                // Fine tune the Location to get the actual line we wanted.
                 self.find_location(found, line, target)
             },
             Err(after) => {
@@ -296,7 +290,7 @@ impl EventualIndex {
     }
 
     // Resolve the target indexed location, which must already exist
-    pub fn get_location(&self, index: usize, line: usize) -> Location {
+    fn get_location(&self, index: usize, line: usize) -> Location {
         assert!(index < self.indexes.len());
         let j = &self.indexes[index];
 
@@ -309,8 +303,9 @@ impl EventualIndex {
         Location::Indexed(IndexRef{ index, line , offset })
     }
 
-    fn locate_fine_tune(&self, pos: Location, target: TargetOffset) -> Location {
-        let mut pos = pos;
+    // Find the target near the hinted location
+    fn find_location(&self, index: usize, line: usize, target: TargetOffset) -> Location {
+        let mut pos = self.get_location(index, line);
         loop {
             if let Some(p_off) = pos.offset() {
                 match target {
@@ -334,11 +329,6 @@ impl EventualIndex {
             }
         }
         pos
-    }
-
-    // Find the target near the hinted location
-    pub fn find_location(&self, index: usize, line: usize, target: TargetOffset) -> Location {
-        self.locate_fine_tune(self.get_location(index, line), target)
     }
 
     // Find index to next line after given index
