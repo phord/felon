@@ -4,6 +4,20 @@ pub mod indexer;
 pub mod filters;
 pub mod index;
 
+use std::path::PathBuf;
+use files::LogSource;
+use crate::indexer::line_indexer::LineIndexer;
+
+pub type Log = LineIndexer<LogSource>;
+
+impl Log {
+    pub fn open(file: Option<PathBuf>) -> std::io::Result<Self> {
+        let src = files::new_text_file(file)?;
+        Ok(LineIndexer::new(src))
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use crate::indexer::line_indexer::LineIndexer;

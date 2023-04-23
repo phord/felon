@@ -1,5 +1,5 @@
 use crate::config::Config;
-use indexed_file::{indexer::LineIndexer, files};
+use indexed_file::{files, Log};
 use indexed_file::files::ZstdLogFile;
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
 #[allow(dead_code)]
 pub fn cat_cmd() {
     for file in get_files_from_cfg() {
-        let mut file = LineIndexer::new(files::new_text_file(file).unwrap());
+        let mut file = Log::open(file).unwrap();
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
         for (line, _start) in file.iter_lines() {
@@ -29,7 +29,7 @@ pub fn cat_cmd() {
 #[allow(dead_code)]
 pub fn tac_cmd() {
     for file in get_files_from_cfg() {
-        let mut file = LineIndexer::new(files::new_text_file(file).unwrap());
+        let mut file = Log::open(file).unwrap();
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
         for (line, _start) in file.iter_lines().rev() {
