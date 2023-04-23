@@ -31,9 +31,9 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         }
     }
 
-    // Resolve virtual locations to real indexed or gap locations
+    // Resolve virtual locations to already indexed or gap locations
     #[inline]
-    pub(crate) fn resolve(&self, find: Location) -> Location {
+    fn resolve(&self, find: Location) -> Location {
         self.index.resolve(find, self.source.len())
     }
 
@@ -43,11 +43,13 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.source.read_line_at(start)
     }
 
+    // Step to the next indexed line or gap
     #[inline]
     pub(crate) fn next_line_index(&self, find: Location) -> Location {
         self.index.next_line_index(find)
     }
 
+    // Step to the previous indexed line or gap
     #[inline]
     pub(crate) fn prev_line_index(&self, find: Location) -> Location {
         self.index.prev_line_index(find)
