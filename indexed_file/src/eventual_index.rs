@@ -333,10 +333,13 @@ impl EventualIndex {
 
     // Find index to next line after given index
     pub fn next_line_index(&self, find: Location) -> Location {
-        if let Location::Indexed(IndexRef{ index, line, offset:_}) = find {
+        if let Location::Indexed(IndexRef{ index, line, offset}) = find {
             assert!(index < self.indexes.len());
             let i = &self.indexes[index];
-            if line + 1 < i.len() {
+            if line >= i.lines() || i.get(line) != offset {
+                // Target location invalidated by changes to self.indexes. Fall back to slow search for line after this offset.
+                self.locate(TargetOffset::After(offset))
+            } else if line + 1 < i.len() {
                 // next line is in the same index
                 self.get_location( index, line + 1 )
             } else if let Some(gap) = self.try_gap_at(index + 1, TargetOffset::After(i.end)) {
@@ -353,9 +356,13 @@ impl EventualIndex {
 
     // Find index to prev line before given index
     pub fn prev_line_index(&self, find: Location) -> Location {
-        if let Location::Indexed(IndexRef{ index, line, offset:_}) = find {
+        if let Location::Indexed(IndexRef{ index, line, offset}) = find {
             assert!(index < self.indexes.len());
-            if line > 0 {
+            let i = &self.indexes[index];
+            if line >= i.lines() || i.get(line) != offset {
+                // Target location invalidated by changes to self.indexes. Fall back to slow search for line before this offset.
+                self.locate(TargetOffset::AtOrBefore(offset-1))
+            } else if line > 0 {
                 // prev line is in the same index
                 self.get_location(index, line - 1)
             } else if let Some(gap) = self.try_gap_at(index, TargetOffset::AtOrBefore(self.indexes[index].start)) {

@@ -189,6 +189,8 @@ mod logfile_iterator_tests {
 // Tests for LineIndexerDataIterator
 #[cfg(test)]
 mod logfile_data_iterator_tests {
+    use std::collections::HashSet;
+
     use indexed_file::files::new_mock_file;
     use indexed_file::indexer::LineIndexer;
 
@@ -354,6 +356,47 @@ mod logfile_data_iterator_tests {
             count += 1;
         }
         assert_eq!(count, lines / 2);
+    }
+
+    #[test]
+    fn test_iterator_middle_out() {
+        let patt = "filler\n";
+        let patt_len = patt.len();
+        let lines = 1000;
+        let file = new_mock_file(patt, patt_len * lines, 100);
+        let mut file = LineIndexer::new(file);
+        let mut count = 0;
+
+        // A few bytes after the middle of the file
+        let mut it = file.iter_lines_from(patt_len * lines / 2 - patt_len / 2);
+
+        // Iterate forwards and backwards simultaneously
+        let mut lineset = HashSet::new();
+        loop {
+            let mut done = true;
+            if let Some((line, offset)) = it.next() {
+                lineset.insert(offset);
+                if offset != lines * patt_len {
+                    assert_eq!(line, patt);
+                } else {
+                    // Last "line" in the file is empty
+                    assert!(line.is_empty());
+                }
+                count += 1;
+                done = false;
+            }
+            if let Some((line, offset)) = it.next_back() {
+                lineset.insert(offset);
+                assert_eq!(line, patt);
+                count += 1;
+                done = false;
+            }
+            if done {
+                break;
+            }
+        }
+        assert_eq!(lines + 1, lineset.len());
+        assert_eq!(count, lines + 1);
     }
 
     #[test]
