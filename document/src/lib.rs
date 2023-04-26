@@ -1,3 +1,5 @@
+pub mod doc;
+use doc::Doc;
 
 #[cfg(test)]
 mod tests {

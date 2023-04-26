@@ -119,7 +119,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.iter()
     }
 
-    pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = (String, usize)> + '_ {
+    pub fn iter_lines<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = (String, usize)> + 'a {
         LineIndexerDataIterator::new(LineIndexerIterator::new(self))
     }
 
