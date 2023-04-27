@@ -42,7 +42,6 @@ impl LogFileUtil for MockLogFile {
 
 impl Read for MockLogFile {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        // FIXME
         let len = buf.len();
         if self.pos as usize > self.len() {
             Ok(0)
