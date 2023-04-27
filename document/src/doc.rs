@@ -2,6 +2,9 @@
 // Lines can be blended by merging (sorted) or by concatenation.
 
 use indexed_file::Log;
+use indexed_file::files::{CursorLogFile, CursorUtil};
+use indexed_file::files::LogSource;
+use indexed_file::indexer::LineIndexer;
 
 /* Thinking:
    Hold a vec of files.
@@ -44,8 +47,8 @@ impl<'a> LogIter<'a> {
 
     // Return ref to next string unless EOF, else prev string
     // Assumes that prev and next are approaching each other in this DoubleEndedIterator
-    fn peek_next(&self) -> &Option<String> {
-        if self.next.is_some() {
+    fn peek_next(&mut self) -> &Option<String> {
+        if self.next.is_some() || self.advance() {
             &self.next
         } else {
             &self.prev
@@ -54,15 +57,15 @@ impl<'a> LogIter<'a> {
 
     // Return ref to prev string unless EOF, else next string
     // Assumes that prev and next are approaching each other in this DoubleEndedIterator
-    fn peek_prev(&self) -> &Option<String> {
-        if self.prev.is_some() {
+    fn peek_prev(&mut self) -> &Option<String> {
+        if self.prev.is_some() || self.advance_back() {
             &self.prev
         } else {
             &self.next
         }
     }
 
-    fn advance(&mut self) {
+    fn advance(&mut self) -> bool {
         // Pre-load the next line for peek
         self.next =
             if let Some((line, _offset)) = self.iter.next() {
@@ -71,9 +74,10 @@ impl<'a> LogIter<'a> {
             } else {
                 None
             };
+        self.next.is_some()
     }
 
-    fn advance_back(&mut self) {
+    fn advance_back(&mut self) -> bool {
         // Pre-load the prev line for peek
         self.prev =
             if let Some((line, _offset)) = self.iter.next_back() {
@@ -82,6 +86,7 @@ impl<'a> LogIter<'a> {
             } else {
                 None
             };
+        self.prev.is_some()
     }
 
     // Return next string unless EOF, else prev string
@@ -187,4 +192,21 @@ impl Doc {
     pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = String> + '_ {
         DocIterator::new(self)
     }
+}
+
+#[test]
+fn test_doc_basic() {
+    let lines = 30000;
+    let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
+    let source:LogSource = Box::new(buff);
+    let index = LineIndexer::new(source);
+    let mut doc = Doc::new(vec![index]);
+
+    // for line in doc.iter_lines() {
+    //     print!(">>> {line}");
+    // }
+    // println!(); // flush
+
+    // FIXME: We get one extra line at the end of the file because that's how indexer currently works.
+    assert_eq!(doc.iter_lines().count(), lines + 1);
 }
