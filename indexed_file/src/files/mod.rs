@@ -1,3 +1,4 @@
+mod cursor_log_file;
 mod mock_log_file;
 mod text_log_file;
 mod text_log_stream;
@@ -6,6 +7,8 @@ mod log_file;
 mod cached_stream_reader;
 mod compressed_file;
 
+pub use cursor_log_file::CursorLogFile;
+pub use cursor_log_file::CursorUtil;
 pub use log_file::LogSource;
 pub use log_file::new_text_file;
 pub use log_file::new_mock_file;
