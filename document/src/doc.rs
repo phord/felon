@@ -2,7 +2,8 @@
 // Lines can be blended by merging (sorted) or by concatenation.
 
 use indexed_file::Log;
-use indexed_file::files::{CursorLogFile, CursorUtil};
+use indexed_file::files::{CursorLogFile, CursorUtil, LogFile};
+use indexed_file::files::LogBase;
 use indexed_file::files::LogSource;
 use indexed_file::indexer::LineIndexer;
 
@@ -176,8 +177,12 @@ impl<'a> DoubleEndedIterator for DocIterator<'a> {
 
 
 impl Doc {
-    pub fn new(files: Vec<Log>) -> Self {
-        Doc { files }
+    pub fn new() -> Self {
+        Doc { files: Vec::default() }
+    }
+
+    pub fn push<L: LogBase + 'static>(&mut self, log: L) {
+        self.files.push(LineIndexer::new(log.to_src()));
     }
 
     // pub fn new(files: Vec<PathBuf>) -> std::io::Result<Self> {
@@ -193,14 +198,12 @@ impl Doc {
         DocIterator::new(self)
     }
 }
-
 #[test]
 fn test_doc_basic() {
     let lines = 30000;
+    let mut doc = Doc::new();
     let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
-    let source:LogSource = Box::new(buff);
-    let index = LineIndexer::new(source);
-    let mut doc = Doc::new(vec![index]);
+    doc.push(buff);
 
     // for line in doc.iter_lines() {
     //     print!(">>> {line}");
@@ -209,4 +212,36 @@ fn test_doc_basic() {
 
     // FIXME: We get one extra line at the end of the file because that's how indexer currently works.
     assert_eq!(doc.iter_lines().count(), lines + 1);
+}
+
+#[test]
+fn test_doc_merge() {
+    let lines = 10;
+    let mut doc = Doc::new();
+
+    let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
+    let odds = CursorLogFile::from_vec(odds).unwrap();
+    doc.push(odds);
+
+    let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
+    let evens = CursorLogFile::from_vec(evens).unwrap();
+    doc.push(evens);
+
+    let mut it = doc.iter_lines();
+    let mut prev = it.next().unwrap();
+
+    print!(">>> {prev}");
+    for line in it {
+        if line.is_empty() {
+            // Empty lines at end of files disturb our sense of order.  Ignore them.
+            continue
+        }
+        print!(">>> {prev} {line}");
+        assert!(prev <= line);
+        prev = line;
+    }
+    println!(); // flush
+
+    // FIXME: We get one extra line at the end of each file because that's how indexer currently works.
+    assert_eq!(doc.iter_lines().count(), lines + 2);
 }

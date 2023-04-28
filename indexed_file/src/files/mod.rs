@@ -9,7 +9,7 @@ mod compressed_file;
 
 pub use cursor_log_file::CursorLogFile;
 pub use cursor_log_file::CursorUtil;
-pub use log_file::LogSource;
+pub use log_file::{LogSource, LogBase};
 pub use log_file::new_text_file;
 pub use log_file::new_mock_file;
 pub use log_file::LogFileUtil;
