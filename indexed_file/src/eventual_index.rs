@@ -275,13 +275,18 @@ impl EventualIndex {
                     }
                 },
                 VirtualLocation::End => {
-                    if let Some(gap) = self.try_gap_at(self.indexes.len(), TargetOffset::AtOrBefore(end_of_file)) {
+                    if let Some(gap) = self.try_gap_at(self.indexes.len(), TargetOffset::AtOrBefore(end_of_file.saturating_sub(1))) {
                         gap
                     } else {
                         assert!(!self.indexes.is_empty(), "If it's empty, we should have found a gap");
                         let index = self.indexes.len()-1;
                         let line = self.indexes.last().unwrap().len()-1;
-                        self.get_location(index, line)
+                        let mut pos = self.get_location(index, line);
+                        // Skip index at very end of file
+                        if pos.offset().unwrap() == end_of_file {
+                            pos = self.prev_line_index(pos);
+                        }
+                        pos
                     }
                 },
             },

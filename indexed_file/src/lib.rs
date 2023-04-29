@@ -120,9 +120,7 @@ mod tests {
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
-        assert_eq!(file.count_lines(), linecount);
-        let count_bytes = file.iter_offsets().last().unwrap();
-        assert_eq!(count_bytes, bytes);
+        assert_eq!(file.count_lines()-1, linecount);
     }
 
     #[test]
@@ -155,13 +153,11 @@ mod tests {
             }
         }
 
-        assert_eq!(lines + 1, linecount);
+        assert_eq!(lines, linecount);
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
-        assert_eq!(file.count_lines(), linecount);
-        let count_bytes = file.iter_offsets().last().unwrap();
-        assert_eq!(count_bytes, bytes);
+        assert_eq!(file.count_lines()-1, linecount);
     }
 
     #[test]

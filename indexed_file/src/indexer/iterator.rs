@@ -56,7 +56,11 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
     fn next(&mut self) -> Option<Self::Item> {
         let (pos, ret) = self.iterate(self.pos);
         self.pos = self.file.next_line_index(pos);
-        ret
+        if ret.is_some() && ret.unwrap() >= self.file.len() {
+            None
+        } else {
+            ret
+        }
     }
 }
 

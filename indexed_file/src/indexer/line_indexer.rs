@@ -17,7 +17,6 @@ pub struct LineIndexer<LOG> {
 impl<LOG: LogFile> fmt::Debug for LineIndexer<LOG> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LineIndexer")
-         .field("lines", &self.count_lines())
          .finish()
     }
 }
@@ -31,10 +30,15 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         }
     }
 
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.source.len()
+    }
+
     // Resolve virtual locations to already indexed or gap locations
     #[inline]
     fn resolve(&self, find: Location) -> Location {
-        self.index.resolve(find, self.source.len())
+        self.index.resolve(find, self.len())
     }
 
     // Read a line at a given offset in the file
@@ -74,14 +78,14 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.source.quench();
 
         let (target, start, end) = match gap {
-            Location::Gap(GapRange { target, gap: Bounded(start, end) }) => (target, start, end.min(self.source.len())),
-            Location::Gap(GapRange { target, gap: Unbounded(start) }) => (target, start, self.source.len()),
+            Location::Gap(GapRange { target, gap: Bounded(start, end) }) => (target, start, end.min(self.len())),
+            Location::Gap(GapRange { target, gap: Unbounded(start) }) => (target, start, self.len()),
             _ => panic!("Tried to index something which is not a gap: {:?}", gap),
         };
 
-        let offset = target.value().min(self.source.len());
+        let offset = target.value().min(self.len());
         assert!(start <= offset);
-        assert!(end <= self.source.len());
+        assert!(end <= self.len());
 
         if start >= end {
             // End of file

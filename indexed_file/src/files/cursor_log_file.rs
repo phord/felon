@@ -53,6 +53,5 @@ fn mock_cursor() {
         print!("{offset}: {line}");
     }
     println!();
-    // FIXME: lines + 1 because we always return the last "empty" line after the last CR
-    assert_eq!(lines + 1, index.iter_lines().count());
+    assert_eq!(lines, index.iter_lines().count());
 }

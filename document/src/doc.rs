@@ -210,8 +210,7 @@ fn test_doc_basic() {
     // }
     // println!(); // flush
 
-    // FIXME: We get one extra line at the end of the file because that's how indexer currently works.
-    assert_eq!(doc.iter_lines().count(), lines + 1);
+    assert_eq!(doc.iter_lines().count(), lines);
 }
 
 #[test]
@@ -232,16 +231,11 @@ fn test_doc_merge() {
 
     print!(">>> {prev}");
     for line in it {
-        if line.is_empty() {
-            // Empty lines at end of files disturb our sense of order.  Ignore them.
-            continue
-        }
         print!(">>> {prev} {line}");
         assert!(prev <= line);
         prev = line;
     }
     println!(); // flush
 
-    // FIXME: We get one extra line at the end of each file because that's how indexer currently works.
-    assert_eq!(doc.iter_lines().count(), lines + 2);
+    assert_eq!(doc.iter_lines().count(), lines);
 }
