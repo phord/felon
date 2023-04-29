@@ -128,6 +128,7 @@ impl<'a> LogIter<'a> {
 
 // A semi-sorted iterator over Doc
 pub(crate) struct DocIterator<'a> {
+    // A vector of iterators over lines in multiple files
     iters: Vec<LogIter<'a>>,
 }
 
@@ -152,8 +153,10 @@ impl<'a> Iterator for DocIterator<'a> {
             .enumerate()
             .filter(|(_, v)| v.is_some())
             .min_by(|(_, line0), (_, line1)| line0.cmp(line1)) {
+                // We found a minimum line
                 self.iters[i].take_next()
         } else {
+            // We ran out of lines
             None
         }
     }
@@ -162,14 +165,17 @@ impl<'a> Iterator for DocIterator<'a> {
 impl<'a> DoubleEndedIterator for DocIterator<'a> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
+        // Find and return the max current line from all our iterators
         if let Some((i, _line)) = self.iters
             .iter_mut()
             .map(|iter| iter.peek_prev())
             .enumerate()
             .filter(|(_, v)| v.is_some())
             .max_by(|(_, line0), (_, line1)| line0.cmp(line1)) {
+                // We found a maximum line
                 self.iters[i].take_prev()
         } else {
+            // We ran out of lines
             None
         }
     }
@@ -189,7 +195,7 @@ impl Doc {
     //     let mut doc = Doc { files: Vec::default() };
     //     for file in files {
     //         let log = Log::open(Some(file))?;
-    //         doc.files.push(log);
+    //         doc.push(log);
     //     }
     //     Ok(doc)
     // }
@@ -238,4 +244,31 @@ fn test_doc_merge() {
     println!(); // flush
 
     assert_eq!(doc.iter_lines().count(), lines);
+}
+
+#[test]
+fn test_doc_merge_reverse() {
+    let lines = 10;
+    let mut doc = Doc::new();
+
+    let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
+    let odds = CursorLogFile::from_vec(odds).unwrap();
+    doc.push(odds);
+
+    let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
+    let evens = CursorLogFile::from_vec(evens).unwrap();
+    doc.push(evens);
+
+    let mut it = doc.iter_lines().rev();
+    let mut prev = it.next().unwrap();
+
+    print!(">>> {prev}");
+    for line in it {
+        print!(">>> {prev} {line}");
+        assert!(prev >= line);
+        prev = line;
+    }
+    println!(); // flush
+
+    assert_eq!(doc.iter_lines().rev().count(), lines);
 }
