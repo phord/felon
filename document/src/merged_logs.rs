@@ -10,6 +10,10 @@ use indexed_file::indexer::LineIndexer;
     TODO: Need a timestamp for each log line so we can sort by timestamp and jump to time offsets.
     Each line is indexed by (doc-index, offset).
 
+    FIXME: Iterators should produce a LineInfo object that contains all the interesting metadata
+           we care about:
+           struct LineInfo { line: String, filename: &str, doc_offset: usize, file_offset: usize,
+                             timestamp: Time}
    For sorting all files:
    Hold a deconstructed EventualIndex-like thing that has
         a map of doc-offset/timestamp -> (file-index, file-offset) for indexed regions
