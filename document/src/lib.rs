@@ -1,5 +1,5 @@
-pub mod doc;
-use doc::Doc;
+pub mod merged_logs;
+use merged_logs::MergedLogs;
 
 #[cfg(test)]
 mod tests {

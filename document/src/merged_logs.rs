@@ -1,15 +1,14 @@
-// A collection of log lines from multiple log files.
-// Lines can be blended by merging (sorted) or by concatenation.
+// A collection of log lines from multiple log files, blended together by sorting.
+
+// FIXME: Right now they're sorted by line contents, but they should be sorted by timestamp in the future.
 
 use indexed_file::Log;
-use indexed_file::files::{CursorLogFile, CursorUtil, LogFile};
 use indexed_file::files::LogBase;
-use indexed_file::files::LogSource;
 use indexed_file::indexer::LineIndexer;
 
 /* Thinking:
-   Hold a vec of files.
-   Each line is indexed by doc-offset.
+    TODO: Need a timestamp for each log line so we can sort by timestamp and jump to time offsets.
+    Each line is indexed by (doc-index, offset).
 
    For sorting all files:
    Hold a deconstructed EventualIndex-like thing that has
@@ -25,7 +24,7 @@ use indexed_file::indexer::LineIndexer;
  */
 
 // A long-lived collection of Logs
-pub struct Doc {
+pub struct MergedLogs {
     files: Vec<Log>
 }
 
@@ -126,14 +125,14 @@ impl<'a> LogIter<'a> {
 
 }
 
-// A semi-sorted iterator over Doc
-pub(crate) struct DocIterator<'a> {
+// A semi-sorted iterator over MergedLogs
+pub(crate) struct MergedLogsIterator<'a> {
     // A vector of iterators over lines in multiple files
     iters: Vec<LogIter<'a>>,
 }
 
-impl<'a> DocIterator<'a> {
-    pub(crate) fn new(doc: &'a mut Doc) -> Self {
+impl<'a> MergedLogsIterator<'a> {
+    pub(crate) fn new(doc: &'a mut MergedLogs) -> Self {
         Self {
             iters: doc.files
                     .iter_mut()
@@ -143,7 +142,7 @@ impl<'a> DocIterator<'a> {
     }
 }
 
-impl<'a> Iterator for DocIterator<'a> {
+impl<'a> Iterator for MergedLogsIterator<'a> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -162,7 +161,7 @@ impl<'a> Iterator for DocIterator<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for DocIterator<'a> {
+impl<'a> DoubleEndedIterator for MergedLogsIterator<'a> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         // Find and return the max current line from all our iterators
@@ -182,9 +181,9 @@ impl<'a> DoubleEndedIterator for DocIterator<'a> {
 }
 
 
-impl Doc {
+impl MergedLogs {
     pub fn new() -> Self {
-        Doc { files: Vec::default() }
+        MergedLogs { files: Vec::default() }
     }
 
     pub fn push<L: LogBase + 'static>(&mut self, log: L) {
@@ -201,74 +200,82 @@ impl Doc {
     // }
 
     pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = String> + '_ {
-        DocIterator::new(self)
+        MergedLogsIterator::new(self)
     }
 }
-#[test]
-fn test_doc_basic() {
-    let lines = 30000;
-    let mut doc = Doc::new();
-    let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
-    doc.push(buff);
 
-    // for line in doc.iter_lines() {
-    //     print!(">>> {line}");
-    // }
-    // println!(); // flush
+#[cfg(test)]
+mod merged_logs_iterator_tests {
 
-    assert_eq!(doc.iter_lines().count(), lines);
-}
+    use indexed_file::files::{CursorLogFile, CursorUtil};
+    use super::MergedLogs;
 
-#[test]
-fn test_doc_merge() {
-    let lines = 10;
-    let mut doc = Doc::new();
+    #[test]
+    fn test_doc_basic() {
+        let lines = 30000;
+        let mut doc = MergedLogs::new();
+        let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
+        doc.push(buff);
 
-    let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
-    let odds = CursorLogFile::from_vec(odds).unwrap();
-    doc.push(odds);
+        // for line in doc.iter_lines() {
+        //     print!(">>> {line}");
+        // }
+        // println!(); // flush
 
-    let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
-    let evens = CursorLogFile::from_vec(evens).unwrap();
-    doc.push(evens);
-
-    let mut it = doc.iter_lines();
-    let mut prev = it.next().unwrap();
-
-    print!(">>> {prev}");
-    for line in it {
-        print!(">>> {prev} {line}");
-        assert!(prev <= line);
-        prev = line;
+        assert_eq!(doc.iter_lines().count(), lines);
     }
-    println!(); // flush
 
-    assert_eq!(doc.iter_lines().count(), lines);
-}
+    #[test]
+    fn test_doc_merge() {
+        let lines = 10;
+        let mut doc = MergedLogs::new();
 
-#[test]
-fn test_doc_merge_reverse() {
-    let lines = 10;
-    let mut doc = Doc::new();
+        let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
+        let odds = CursorLogFile::from_vec(odds).unwrap();
+        doc.push(odds);
 
-    let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
-    let odds = CursorLogFile::from_vec(odds).unwrap();
-    doc.push(odds);
+        let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
+        let evens = CursorLogFile::from_vec(evens).unwrap();
+        doc.push(evens);
 
-    let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
-    let evens = CursorLogFile::from_vec(evens).unwrap();
-    doc.push(evens);
+        let mut it = doc.iter_lines();
+        let mut prev = it.next().unwrap();
 
-    let mut it = doc.iter_lines().rev();
-    let mut prev = it.next().unwrap();
+        print!(">>> {prev}");
+        for line in it {
+            print!(">>> {prev} {line}");
+            assert!(prev <= line);
+            prev = line;
+        }
+        println!(); // flush
 
-    print!(">>> {prev}");
-    for line in it {
-        print!(">>> {prev} {line}");
-        assert!(prev >= line);
-        prev = line;
+        assert_eq!(doc.iter_lines().count(), lines);
     }
-    println!(); // flush
 
-    assert_eq!(doc.iter_lines().rev().count(), lines);
+    #[test]
+    fn test_doc_merge_reverse() {
+        let lines = 10;
+        let mut doc = MergedLogs::new();
+
+        let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
+        let odds = CursorLogFile::from_vec(odds).unwrap();
+        doc.push(odds);
+
+        let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
+        let evens = CursorLogFile::from_vec(evens).unwrap();
+        doc.push(evens);
+
+        let mut it = doc.iter_lines().rev();
+        let mut prev = it.next().unwrap();
+
+        print!(">>> {prev}");
+        for line in it {
+            print!(">>> {prev} {line}");
+            assert!(prev >= line);
+            prev = line;
+        }
+        println!(); // flush
+
+        assert_eq!(doc.iter_lines().rev().count(), lines);
+    }
 }
