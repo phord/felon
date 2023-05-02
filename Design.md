@@ -1,4 +1,4 @@
-# Design.md
+# Planning
 
 Here's how I think this will evolve:
 
@@ -6,26 +6,90 @@ There is a Document that manages the source data.
 The document holds a merged collection of log lines / fragments.
 
 Struct          Description                                 Iterator produces
-Logs            Generic log line sources                    LogLine: Whole log line strings
-TimeStamper     Applies timestamp to log lines              LogLine + Timestamp
+============    =========================================   =======================================================
+Logs            Generic log line sources                    LogLine, Offset
+TimeStamper     Applies timestamp to log lines              LogLine, Offset, Timestamp
 MergedLogs      Collection of logs merged by timestamp      LogInfo: Log lines + source info + MergedOffset
 Filters         Include/Exclude filters to reduce lines     LogInfo + SkipInfo? {number of lines skipped}
-Markers         Highlighter for produced log lines          DispLogInfo: LogInfo + HighlightInfo
-Search          Finds lines that match search exprs         DispLogInfo: LogInfo + HighlightInfo + AnchorInfo
+Markers         Highlighter for produced log lines          DispLogInfo: LogInfo + Marker
+Search          Marks lines that match search exprs         DispLogInfo: LogInfo + Marker + Anchor
+Formatter       Applies Markers to line text
 Framer          Fit log lines to the page width (chopping)  DispLogInfo + ClipInfo {subsection of line to display}
 Navigator       Applies navigation to log lines             FragmentLogInfo + ???
 
+Document        Thing that gets navigated and indexed       Holds: Logs, Searches, Filters, Width, etc.
+
+Cursor          Thing that translates Doc-locations to Log-locations
+                Is timestamp good enough?  Timestamp + Lines?
+                Do we even need this?  Figure it out when we get there.
+
+Iterated log line struct:
+-   LogLine
+-   _?? Text-only LogLine (for matching around ESC codes)_
+-   Offset
+-   Timestamp
+-   FileIndex/FileName
+-   DocOffset
+-   _?? SkipInfo (GapInfo)_
+-   ClipInfo: Vec<usize>
+-   Markers: Vec<Marker>
+-   Anchors: Vec<Marker>  **<--** _Markers that are also navigation points, memoized_
+
+We can lookup these fields when requested, if available:
+-   LineNumber: usize,
+-   DocLineNumber: usize,
+-   DocSizeBytes: usize,
+
+Document:
+-   MergedLogs,
+-   Searches
+-   FilterIns
+-   FilterOuts
+-   FrameWidth
+-
+
+
+Roadmap:
+* Framer
+  * test with `--bin more` pager
+* Markers and Formatter
+* Search: marker generation
+* Search: navigation / memoization
+* Wrappers for rest of above interfaces
+
+## MergedLogs
+Lines are produced in order of (timestamp, file index, file offset). Thus the lines are sorted
+by timestamp, but multiple lines with the same timestamp have a consistent ordering, and
+lines within a file with the same timestamp have a stable ordering.
+
+Placement of MergedLogs in the stack is TBD. Are there benefits to apply search filters
+before or after merging? Suppose we are iterating a large compressed file from the end.
+In that case it's more important to find the chunk of data near the end so we can display
+it, but we don't need to wait for all of it to be searched before then.
+
+How would we navigate the doc if searches are applied per-file?  We would need to ask each
+file to tell us the next target and then choose the least of them by timestamp. Would this
+be more reasonable from a Doc level?  Maybe I'm overthinking it a lot.  How often will
+so many files be present that it even matters?
 
 ## Search
-
-The search layer will produce lines as a "pass-through" service adding HighlightInfo. It
-also memoizes found location to speed up repeated and future searches. Future searches
+The search layer will produce lines as a "pass-through" service adding Anchors.
+It memoizes found location to speed up repeated and future searches. Future searches
 can be managed asynchronously by running some service worker owned by the Search struct.
 This worker walks through bounded iterations of the child structs to find the next
 matching lines and building up the memoization information.
 
-## TimeStamper
+## Markers
+Markers are used for highlighting text according to some rules, highlight requests, or
+search requests.  Rules can be things like timestamp fields in green, semantic highlighted
+module names and numbers, etc. Markers are only needed at display time and they don't get
+memoized or even generated for unseen lines.
 
+## Anchors
+Anchors represent navigation points in the document.  They are places we can jump to by
+searching forward and backward. Do we need anchors for time-based offsets?
+
+## TimeStamper
 Parses the log line to find timestamp information which matches some defined log format.
 If no timestamp is matched, the log operates in some plaintext mode (details TBD).
 The log is presumed to be in _mostly_ sorted order (by timestamp).  Out-of-order lines
@@ -37,12 +101,11 @@ lines to consider as a block, and it requires us to look ahead (or behind) this 
 to process blocks consistently.
 
 ## Framer
-
 Handles displaying and tracking log line fragments. There are two modes to consider here:
-Wrapping or Chopping. But chopping is the same as "no framing" so we can probably ignore it.
+Wrapping or Chopping. Chopping is similar to "no framing", and can be largely ignored.
 
 In wrapping mode, each line is iterated in passthrough mode with a FragmentInfo added. Lines
-which are longer than the desired width will be iterate more than once, with different
+which are longer than the desired width will be iterated more than once, with different
 FragmentInfo for each duplicate indicate a separate section of the line as the fragment.
 A fragment is a section of a line which will fill at most one page-width of text for a row.
 Iterating forward is easy to reason about.  If a line is shorter than the requested width,
@@ -60,16 +123,7 @@ mode, we can scroll to the line that contains that offset. But consider that ver
 may exceed a whole page in size (width * height), so we must scroll to the fragment within
 the line if the fragments since the start of the line exceed our page height.
 
-
-## MergedLogs
-
-Lines are produced in order of (timestamp, file index, file offset). Thus the lines are sorted
-by timestamp, but multiple lines with the same timestamp have a consistent ordering, and
-lines within a file with the same timestamp have a stable ordering.
-
-
 # Async considerations
-
 Some work should be done synchronously to produce immediate display results, but some should
 be deferred to some background process to handle asynchronously. Consider three cases:
 
@@ -112,6 +166,26 @@ their offsets in the Merged document (which has different offsets to consider).
 Question: Can we rely on the LogInfo:file-offset for this information?  How do we turn that
           into a cursor later on to allow us to navigate easily?
 
+### What work is there to do in the background?
+1. Line indexing
+2. Search matches
+3. Filter-in matches
+4. Filter-out matches
+(Highlight matches do **not** need to be in the background.)
+
+One way to organize these is to store sets of all matches vs. non-matches so we can easily turn filters
+on/off without having to re-scan everything later. But we can get results faster if focus on "matched"
+items first; for example, if a line matches a filter-in, we can stop matching further filter-ins for that
+line. Similarly for filter-outs, but we can also delay matching searches on these.  Searches can also be
+delayed for lines which match no filter-ins.  However, the delayed work will need to be done eventually,
+and if we have to load the lines twice, it may be more expensive than applying the searches on the first
+pass.
+
+Probably the right thing to do is to build an EventualIndexSearch struct that knows its gaps for each
+one of these items. Then we can parse gaps for all as they are encountered, skipping parsing for sections
+already indexed, and scanning gaps in the background that need to be filled in for any search.  One
+extra concern for the searches is that they are line-based while the line-index is char-based. We may
+need to load lines separately for the matchers after we index individual lines.
 
 ====
 
