@@ -4,3 +4,5 @@ target/
 .vscode/
 indexed_file/resources/test
 Cargo.lock
+foo
+notes.md
