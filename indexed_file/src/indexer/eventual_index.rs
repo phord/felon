@@ -1,4 +1,4 @@
-use crate::index::Index;
+use crate::indexer::index::Index;
 
 // An index of some lines in a file, possibly with gaps, but eventually a whole index
 pub struct EventualIndex {

@@ -160,7 +160,7 @@ impl Index {
 // Tests for Index
 #[cfg(test)]
 mod tests {
-    use crate::index::Index;
+    use crate::indexer::index::Index;
     static STRIDE: usize = 11;
     static DATA: &str = "0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n0123456789\n";
     static END: usize = DATA.len();

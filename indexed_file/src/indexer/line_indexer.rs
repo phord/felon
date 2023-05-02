@@ -3,7 +3,7 @@
 use std::fmt;
 use std::io::SeekFrom;
 use crate::files::LogFile;
-use crate::index::Index;
+use crate::indexer::index::Index;
 use crate::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
 
 use super::{LineIndexerIterator, LineIndexerDataIterator};

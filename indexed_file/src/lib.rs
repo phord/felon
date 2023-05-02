@@ -1,8 +1,7 @@
-pub mod eventual_index;
+use indexer::eventual_index;
 pub mod files;
 pub mod indexer;
 pub mod filters;
-pub mod index;
 
 use std::path::PathBuf;
 use files::LogSource;
