@@ -7,6 +7,17 @@ pub struct LogLine {
     pub time: Option<NaiveDateTime>,
     pub line: String,
     pub offset: usize,
+    // pub number: Option<usize>,   // TODO: Relative line number in file;  Future<usize>?
+}
+
+impl LogLine {
+    pub fn new(line: String, offset: usize, time: Option<NaiveDateTime>) -> Self {
+        Self {
+            line,
+            offset,
+            time,
+        }
+    }
 }
 
 
@@ -17,11 +28,6 @@ impl std::fmt::Display for LogLine {
     }
 }
 
-
-
-// let parse_from_str = NaiveDateTime::parse_from_str;
-// assert_eq!(parse_from_str("2015-09-05 23:56:04", "%Y-%m-%d %H:%M:%S"),
-//            Ok(NaiveDate::from_ymd_opt(2015, 9, 5).unwrap().and_hms_opt(23, 56, 4).unwrap()));
 
 pub(crate) struct LineIndexerIterator<'a, LOG> {
     file: &'a mut LineIndexer<LOG>,
@@ -123,7 +129,7 @@ impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
         if let Some(bol) = value {
             // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
             let line = self.inner.read_line(bol).expect("TODO: return Result");
-            let line = LogLine { line, offset: bol, time: None};
+            let line = LogLine::new(line, bol, None);
             Some(line)
         } else {
             None
