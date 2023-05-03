@@ -376,12 +376,9 @@ mod logfile_data_iterator_tests {
             let mut done = true;
             if let Some(line) = it.next() {
                 lineset.insert(line.offset);
-                if line.offset != lines * patt_len {
-                    assert_eq!(line.line, patt);
-                } else {
-                    // Last "line" in the file is empty   <-- FIXME:  Didn't we fix this?  Why no breaky?
-                    assert!(line.line.is_empty());
-                }
+                // We don't reach the end of the file
+                assert!(line.offset < lines * patt_len);
+                assert_eq!(line.line, patt);
                 count += 1;
                 done = false;
             }
