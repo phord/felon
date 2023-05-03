@@ -6,6 +6,7 @@ use crate::files::LogFile;
 use crate::indexer::index::Index;
 use crate::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
 
+use super::iterator::LogLine;
 use super::{LineIndexerIterator, LineIndexerDataIterator};
 
 pub struct LineIndexer<LOG> {
@@ -123,11 +124,11 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.iter()
     }
 
-    pub fn iter_lines<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = (String, usize)> + 'a {
+    pub fn iter_lines<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = LogLine> + 'a {
         LineIndexerDataIterator::new(LineIndexerIterator::new(self))
     }
 
-    pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = (String, usize)> + '_ {
+    pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
         LineIndexerDataIterator::new(LineIndexerIterator::new_from(self, offset))
     }
 

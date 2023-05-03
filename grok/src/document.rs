@@ -53,10 +53,10 @@ impl DocFilter {
                     // Search all lines for regex
                     // FIXME: search only filtered-in lines when possible
                     let mut matches = Vec::new();
-                    for (line, start) in log.iter_lines() {
+                    for line in log.iter_lines() {
                         // TODO: For filter-out we will want the unmatched lines instead
-                        if regex.is_match(&line) {
-                            matches.push(start);
+                        if regex.is_match(&line.line) {
+                            matches.push(line.offset);
                         }
                     }
                     matches

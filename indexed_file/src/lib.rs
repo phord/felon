@@ -175,8 +175,8 @@ mod tests {
         let file = new_text_file(Some(path));
         assert!(file.is_ok());
         let mut file = LineIndexer::new( file.unwrap() );
-        for (line, _start) in file.iter_lines() {
-            println!("{_start}  {line}");
+        for line in file.iter_lines() {
+            println!("{}  {line}", line.offset);
         }
     }
 

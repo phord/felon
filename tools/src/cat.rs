@@ -20,7 +20,7 @@ pub fn cat_cmd() {
         let mut file = Log::open(file).unwrap();
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
-        for (line, _start) in file.iter_lines() {
+        for line in file.iter_lines() {
             print!("{line}");
         }
     }
@@ -32,7 +32,7 @@ pub fn tac_cmd() {
         let mut file = Log::open(file).unwrap();
         // TODO: Open all files at once and iterate them sorted if timestamped
         // TODO: Print lines with colors
-        for (line, _start) in file.iter_lines().rev() {
+        for line in file.iter_lines().rev() {
             print!("{line}");
         }
     }

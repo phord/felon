@@ -200,12 +200,13 @@ mod logfile_data_iterator_tests {
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut it = file.iter_lines();
-        let (line, prev) = it.next().unwrap();
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
         let mut prev = prev;
         assert_eq!(prev, 0);
         assert_eq!(line, patt);
         for i in it.take(lines - 1) {
-            let (line, bol) = i;
+            let (line, bol) = (i.line, i.offset);
             assert_eq!(bol - prev, patt_len);
             assert_eq!(line, patt);
             prev = bol;
@@ -220,13 +221,14 @@ mod logfile_data_iterator_tests {
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut it = file.iter_lines().rev();
-        let (line, prev) = it.next().unwrap();
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
         let mut prev = prev;
 
         assert_eq!(prev, lines * patt_len - patt_len);
 
         for i in it.take(lines - 2) {
-            let (line, bol) = i;
+            let (line, bol) = (i.line, i.offset);
             // println!("{bol} {prev}");
             assert_eq!(prev - bol, patt_len);
             assert_eq!(line, patt);
@@ -242,14 +244,16 @@ mod logfile_data_iterator_tests {
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = LineIndexer::new(file);
         let mut it = file.iter_lines().rev();
-        let (line, prev) = it.next().unwrap();
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
+
         let mut prev = prev;
 
         assert_eq!(prev, lines * patt_len - patt_len);
 
         let mut count = 1;
         for i in it {
-            let (line, bol) = i;
+            let (line, bol) = (i.line, i.offset);
             println!("{bol} {prev}");
             assert_eq!(prev - bol, patt_len);
             assert_eq!(line, patt);
@@ -288,11 +292,11 @@ mod logfile_data_iterator_tests {
 
         let mut it = file.iter_lines();
         // Iterate again and measure per-line and offsets
-        let (_, prev) = it.next().unwrap();
-        let mut prev = prev;
+        let line = it.next().unwrap();
+        let mut prev = line.offset;
         assert_eq!(prev, 0);
         for i in it.take(lines - 1) {
-            let (line, bol) = i;
+            let (line, bol) = (i.line, i.offset);
             assert_eq!(bol - prev, patt_len);
             assert_eq!(line, patt);
             prev = bol;
@@ -316,11 +320,11 @@ mod logfile_data_iterator_tests {
         for _ in 0..2 {
             let mut it = file.iter_lines();
             // Iterate again and measure per-line and offsets
-            let (_, prev) = it.next().unwrap();
-            let mut prev = prev;
+            let line = it.next().unwrap();
+            let mut prev = line.offset;
             assert_eq!(prev, 0);
             for i in it.take(lines - 1) {
-                let (line, bol) = i;
+                let (line, bol) = (i.line, i.offset);
                 assert_eq!(bol - prev, patt_len);
                 assert_eq!(line, patt);
                 prev = bol;
@@ -341,7 +345,9 @@ mod logfile_data_iterator_tests {
         let mut it = file.iter_lines_from(patt_len * lines / 2 - patt_len / 2);
 
         // Iterate again and verify we get the expected number of lines
-        let (line, prev) = it.next().unwrap();
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
+
         let mut count = 1;
         assert_eq!(prev, patt_len * lines / 2);
         assert_eq!(line, patt);
@@ -368,20 +374,20 @@ mod logfile_data_iterator_tests {
         let mut lineset = HashSet::new();
         loop {
             let mut done = true;
-            if let Some((line, offset)) = it.next() {
-                lineset.insert(offset);
-                if offset != lines * patt_len {
-                    assert_eq!(line, patt);
+            if let Some(line) = it.next() {
+                lineset.insert(line.offset);
+                if line.offset != lines * patt_len {
+                    assert_eq!(line.line, patt);
                 } else {
-                    // Last "line" in the file is empty
-                    assert!(line.is_empty());
+                    // Last "line" in the file is empty   <-- FIXME:  Didn't we fix this?  Why no breaky?
+                    assert!(line.line.is_empty());
                 }
                 count += 1;
                 done = false;
             }
-            if let Some((line, offset)) = it.next_back() {
-                lineset.insert(offset);
-                assert_eq!(line, patt);
+            if let Some(line) = it.next_back() {
+                lineset.insert(line.offset);
+                assert_eq!(line.line, patt);
                 count += 1;
                 done = false;
             }
@@ -410,7 +416,9 @@ mod logfile_data_iterator_tests {
         let mut it = file.iter_lines_from(patt_len * lines / 2 - patt_len / 2);
 
         // Iterate again and verify we get the expected number of lines
-        let (line, prev) = it.next().unwrap();
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
+
         count = 1;
         assert_eq!(prev, patt_len * lines / 2);
         assert_eq!(line, patt);
@@ -442,7 +450,9 @@ mod logfile_data_iterator_tests {
         let mut it = file.iter_lines_from(0);
 
         // Verify we see all but the first line
-        let (line, prev) = it.next().unwrap();
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
+
         count = 1;
         assert_eq!(prev, patt_len);
         assert_eq!(line, patt);

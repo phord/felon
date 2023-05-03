@@ -1,6 +1,27 @@
 use super::LineIndexer;
 use crate::{eventual_index::{Location, VirtualLocation}, files::LogFile};
+use chrono::NaiveDateTime;
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct LogLine {
+    pub time: Option<NaiveDateTime>,
+    pub line: String,
+    pub offset: usize,
+}
+
+
+impl std::fmt::Display for LogLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: time, offset?
+        write!(f, "{}", self.line)
+    }
+}
+
+
+
+// let parse_from_str = NaiveDateTime::parse_from_str;
+// assert_eq!(parse_from_str("2015-09-05 23:56:04", "%Y-%m-%d %H:%M:%S"),
+//            Ok(NaiveDate::from_ymd_opt(2015, 9, 5).unwrap().and_hms_opt(23, 56, 4).unwrap()));
 
 pub(crate) struct LineIndexerIterator<'a, LOG> {
     file: &'a mut LineIndexer<LOG>,
@@ -98,11 +119,12 @@ impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
     // If we got a line offset value, read the string and return the Type tuple.
     // TODO: Reuse Self::Type here instead of (String, uszize)
     #[inline]
-    fn iterate(&mut self, value: Option<usize>) -> Option<(String, usize)> {
+    fn iterate(&mut self, value: Option<usize>) -> Option<LogLine> {
         if let Some(bol) = value {
             // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
             let line = self.inner.read_line(bol).expect("TODO: return Result");
-            Some((line, bol))
+            let line = LogLine { line, offset: bol, time: None};
+            Some(line)
         } else {
             None
         }
@@ -142,7 +164,7 @@ impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> 
 }
 
 impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
-    type Item = (String, usize);
+    type Item = LogLine;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {

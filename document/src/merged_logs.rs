@@ -5,6 +5,7 @@
 use indexed_file::Log;
 use indexed_file::files::LogBase;
 use indexed_file::indexer::LineIndexer;
+use indexed_file::indexer::LogLine;
 
 /* Thinking:
     TODO: Need a timestamp for each log line so we can sort by timestamp and jump to time offsets.
@@ -32,11 +33,11 @@ pub struct MergedLogs {
     files: Vec<Log>
 }
 
-type Iter<'a> = Box<dyn DoubleEndedIterator<Item = (String, usize)> + 'a>;
+type Iter<'a> = Box<dyn DoubleEndedIterator<Item = LogLine> + 'a>;
 
 struct LogIter<'a> {
-    next: Option<String>,
-    prev: Option<String>,
+    next: Option<LogLine>,
+    prev: Option<LogLine>,
     iter: Iter<'a>,
 }
 
@@ -51,7 +52,7 @@ impl<'a> LogIter<'a> {
 
     // Return ref to next string unless EOF, else prev string
     // Assumes that prev and next are approaching each other in this DoubleEndedIterator
-    fn peek_next(&mut self) -> &Option<String> {
+    fn peek_next(&mut self) -> &Option<LogLine> {
         if self.next.is_some() || self.advance() {
             &self.next
         } else {
@@ -61,7 +62,7 @@ impl<'a> LogIter<'a> {
 
     // Return ref to prev string unless EOF, else next string
     // Assumes that prev and next are approaching each other in this DoubleEndedIterator
-    fn peek_prev(&mut self) -> &Option<String> {
+    fn peek_prev(&mut self) -> &Option<LogLine> {
         if self.prev.is_some() || self.advance_back() {
             &self.prev
         } else {
@@ -72,7 +73,7 @@ impl<'a> LogIter<'a> {
     fn advance(&mut self) -> bool {
         // Pre-load the next line for peek
         self.next =
-            if let Some((line, _offset)) = self.iter.next() {
+            if let Some(line) = self.iter.next() {
                 // FIXME: Return offset to construct a Cursor with
                 Some(line)
             } else {
@@ -84,7 +85,7 @@ impl<'a> LogIter<'a> {
     fn advance_back(&mut self) -> bool {
         // Pre-load the prev line for peek
         self.prev =
-            if let Some((line, _offset)) = self.iter.next_back() {
+            if let Some(line) = self.iter.next_back() {
                 // FIXME: Return offset to construct a Cursor with
                 Some(line)
             } else {
@@ -95,7 +96,7 @@ impl<'a> LogIter<'a> {
 
     // Return next string unless EOF, else prev string
     // Assumes that prev and next are approaching each other in this DoubleEndedIterator
-    fn take_next(&mut self) -> Option<String> {
+    fn take_next(&mut self) -> Option<LogLine> {
         if self.next.is_none() {
             // No next line to peek.  Maybe we're not initialized.
             self.advance();
@@ -112,7 +113,7 @@ impl<'a> LogIter<'a> {
 
     // Return prev string unless EOF, else next string
     // Assumes that prev and next are approaching each other in this DoubleEndedIterator
-    fn take_prev(&mut self) -> Option<String> {
+    fn take_prev(&mut self) -> Option<LogLine> {
         if self.prev.is_none() {
             // No next line to peek.  Maybe we're not initialized.
             self.advance_back();
@@ -146,8 +147,9 @@ impl<'a> MergedLogsIterator<'a> {
     }
 }
 
+
 impl<'a> Iterator for MergedLogsIterator<'a> {
-    type Item = String;
+    type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((i, _line)) = self.iters
@@ -203,7 +205,7 @@ impl MergedLogs {
     //     Ok(doc)
     // }
 
-    pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = String> + '_ {
+    pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
         MergedLogsIterator::new(self)
     }
 }

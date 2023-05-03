@@ -49,8 +49,8 @@ fn mock_cursor() {
     use crate::indexer::LineIndexer;
     let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
     let mut index = LineIndexer::new(buff);
-    for (line, offset) in index.iter_lines() {
-        print!("{offset}: {line}");
+    for line in index.iter_lines() {
+        print!("{}: {line}", line.offset);
     }
     println!();
     assert_eq!(lines, index.iter_lines().count());
