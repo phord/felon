@@ -1,4 +1,5 @@
 use crate::config::Config;
+use document::MergedLogs;
 use indexed_file::{files, Log};
 use indexed_file::files::ZstdLogFile;
 use std::io::{BufRead, Write};
@@ -14,27 +15,25 @@ fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
     files
 }
 
-#[allow(dead_code)]
 pub fn cat_cmd() {
+    let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
-        let mut file = Log::open(file).unwrap();
-        // TODO: Open all files at once and iterate them sorted if timestamped
-        // TODO: Print lines with colors
-        for line in file.iter_lines() {
-            print!("{line}");
-        }
+        logs.push(Log::open(file).unwrap());
+    }
+    // TODO: Print lines with colors
+    for line in logs.iter_lines() {
+        print!("{line}");
     }
 }
 
-#[allow(dead_code)]
 pub fn tac_cmd() {
+    let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
-        let mut file = Log::open(file).unwrap();
-        // TODO: Open all files at once and iterate them sorted if timestamped
-        // TODO: Print lines with colors
-        for line in file.iter_lines().rev() {
-            print!("{line}");
-        }
+        logs.push(Log::open(file).unwrap());
+    }
+    // TODO: Print lines with colors
+    for line in logs.iter_lines().rev() {
+        print!("{line}");
     }
 }
 

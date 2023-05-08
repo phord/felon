@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 pico-args = "0.4.2"
 indexed_file = { path = "../indexed_file" }
+document = { path = "../document" }

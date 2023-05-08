@@ -192,7 +192,12 @@ impl MergedLogs {
         MergedLogs { files: Vec::default() }
     }
 
-    pub fn push<L: LogBase + 'static>(&mut self, log: L) {
+    pub fn push(&mut self, log: Log) {
+        self.files.push(log);
+    }
+
+    #[cfg(test)]
+    pub fn push_logbase<L: LogBase + 'static>(&mut self, log: L) {
         let log = Log::new(LineIndexer::new(log.to_src()));
         self.files.push(log);
     }
@@ -222,7 +227,7 @@ mod merged_logs_iterator_tests {
         let lines = 30000;
         let mut doc = MergedLogs::new();
         let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
-        doc.push(buff);
+        doc.push_logbase(buff);
 
         // for line in doc.iter_lines() {
         //     print!(">>> {line}");
@@ -239,11 +244,11 @@ mod merged_logs_iterator_tests {
 
         let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
         let odds = CursorLogFile::from_vec(odds).unwrap();
-        doc.push(odds);
+        doc.push_logbase(odds);
 
         let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
         let evens = CursorLogFile::from_vec(evens).unwrap();
-        doc.push(evens);
+        doc.push_logbase(evens);
 
         let mut it = doc.iter_lines();
         let mut prev = it.next().unwrap();
@@ -266,11 +271,11 @@ mod merged_logs_iterator_tests {
 
         let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
         let odds = CursorLogFile::from_vec(odds).unwrap();
-        doc.push(odds);
+        doc.push_logbase(odds);
 
         let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
         let evens = CursorLogFile::from_vec(evens).unwrap();
-        doc.push(evens);
+        doc.push_logbase(evens);
 
         let mut it = doc.iter_lines().rev();
         let mut prev = it.next().unwrap();
