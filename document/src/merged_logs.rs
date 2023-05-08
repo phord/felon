@@ -5,7 +5,7 @@
 use indexed_file::Log;
 use indexed_file::files::LogBase;
 use indexed_file::indexer::LineIndexer;
-use indexed_file::indexer::LogLine;
+use indexed_file::LogLine;
 
 /* Thinking:
     TODO: Need a timestamp for each log line so we can sort by timestamp and jump to time offsets.

@@ -1,5 +1,5 @@
 // A factory for timestamps for log lines in a file
-use chrono::{NaiveDateTime, NaiveDate, NaiveTime, Datelike, Timelike};
+use chrono::{NaiveDateTime, NaiveDate, NaiveTime};
 use regex::Regex;
 
 pub struct TimeStamper {
@@ -118,6 +118,7 @@ impl TimeStamper {
 
 #[test]
 fn test_timestamp_fields() {
+    use chrono::{Datelike, Timelike};
     let mut stamper = TimeStamper::default();
     let line = "Apr  7 22:21:15.813 some log data here";
 

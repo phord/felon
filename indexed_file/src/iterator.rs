@@ -1,4 +1,4 @@
-use crate::{eventual_index::{Location, VirtualLocation}, Log};
+use crate::{indexer::{eventual_index::{Location, VirtualLocation}}, Log};
 use chrono::NaiveDateTime;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -124,7 +124,7 @@ impl<'a> LineIndexerDataIterator<'a> {
 impl<'a>  LineIndexerDataIterator<'a> {
     // Helper function to abstract the wrapping of the inner iterator result
     // If we got a line offset value, read the string and return the Type tuple.
-    // TODO: Reuse Self::Type here instead of (String, uszize)
+    // TODO: Reuse Self::Type here instead of respecifying LogLine
     #[inline]
     fn iterate(&mut self, value: Option<usize>) -> Option<LogLine> {
         if let Some(bol) = value {

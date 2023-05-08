@@ -4,7 +4,7 @@ use std::fmt;
 use std::io::SeekFrom;
 use crate::files::LogFile;
 use crate::indexer::index::Index;
-use crate::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
+use crate::indexer::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
 
 pub struct LineIndexer<LOG> {
     // pub file_path: PathBuf,
