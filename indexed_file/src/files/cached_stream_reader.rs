@@ -62,11 +62,22 @@ impl CachedStreamReader {
                 ..base
             }
         } else {
+            let log:Option<BufReader<File>> = None;
             Self {
-                rx: Some(Self::reader(None)),
+                rx: Some(Self::reader(log)),
                 ..base
             }
         };
+        Ok(stream)
+    }
+
+    pub fn from_reader<LOG: BufRead + Send + 'static>(pipe: LOG) -> std::io::Result<Self> {
+        let stream = Self {
+            rx: Some(Self::reader(Some(pipe))),
+            buffer: Vec::default(),
+            pos: 0,
+        };
+
         Ok(stream)
     }
 
@@ -125,7 +136,7 @@ impl CachedStreamReader {
         }
     }
 
-    fn reader(pipe: Option<BufReader<File>>) -> Receiver<Vec<u8>>
+    fn reader<LOG: BufRead + Send + 'static>(pipe: Option<LOG>) -> Receiver<Vec<u8>>
     {
         // Use a bounded channel to prevent stdin from running away from us
         let (tx, rx) = mpsc::sync_channel::<Vec<u8>>(QUEUE_SIZE);

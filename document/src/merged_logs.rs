@@ -219,7 +219,7 @@ impl MergedLogs {
 #[cfg(test)]
 mod merged_logs_iterator_tests {
 
-    use indexed_file::files::{CursorLogFile, CursorUtil};
+    use indexed_file::files::{CursorLogFile, CursorUtil, CachedStreamReader};
     use super::MergedLogs;
 
     #[test]
@@ -289,5 +289,33 @@ mod merged_logs_iterator_tests {
         println!(); // flush
 
         assert_eq!(doc.iter_lines().rev().count(), lines);
+    }
+
+    #[test]
+    fn test_stream_reverse() {
+        // FIXME: Test is failing on streams.  We can only iterate first element via MergedLogs.
+        let lines = 10;
+        let mut doc = MergedLogs::new();
+
+        let nums = (0..lines).into_iter().map(|x| x ).collect();
+        let nums = CursorLogFile::from_vec(nums).unwrap();
+        let nums = CachedStreamReader::from_reader(nums).unwrap();
+        doc.push_logbase(nums);
+
+        let mut it = doc.iter_lines().rev();
+        let mut prev = it.next().unwrap();
+
+        let mut count = 1;
+        print!(">>> {prev}");
+        for line in it {
+            print!(">>> {prev} {line}");
+            assert!(prev >= line);
+            prev = line;
+            count += 1;
+        }
+        println!(); // flush
+
+        assert_eq!(doc.iter_lines().rev().count(), lines);
+        assert_eq!(count, lines);
     }
 }
