@@ -72,6 +72,7 @@ impl<'a> LineIndexerIterator<'a> {
     // Read and timestamp a string at a given start from our log source
     #[inline]
     fn read_line(&mut self, offset: usize) -> std::io::Result<LogLine> {
+        // TODO: TimeStamp is expensive. Can we make it lazy and only use it when needed?
         let line = self.log.file.read_line_at(offset)?;
         let time = self.log.format.time(line.as_str());
         Ok(LogLine { time, line, offset })
