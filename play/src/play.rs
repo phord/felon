@@ -2,7 +2,6 @@
 use std::{time::{SystemTime, UNIX_EPOCH}, io::Read};
 use indexed_file::files::{CachedStreamReader, LogFileUtil};
 use std::thread::sleep;
-use indexed_file::files::Stream;
 
 
 fn millis() -> u64 {
@@ -15,6 +14,7 @@ fn millis() -> u64 {
     in_ms
 }
 
+#[allow(dead_code)]
 fn stdin_read_one_line() {
     use std::io::{self, BufRead};
 
@@ -26,6 +26,7 @@ fn stdin_read_one_line() {
     println!("Read {} bytes", buffer.len());
 }
 
+#[allow(dead_code)]
 fn stdin_read_all_lines() {
     use std::io::{self, BufRead};
 
@@ -67,6 +68,7 @@ fn stdin_read_buffered() {
 
 // Demonstrates that linux is not using line-buffered stdin from processes
 // (while true ; do echo -n "test" ; sleep 0.5 ; printf "\n" ; sleep 0.5 ; done) | cargo run --bin play
+#[allow(dead_code)]
 fn stdin_read_bytes() {
     use std::io;
 
@@ -87,6 +89,7 @@ fn stdin_read_bytes() {
 
 // from https://phrohdoh.com/blog/read-from-file-or-stdin-rust/
 // How to anonymize types as traits using Box<dyn Trait>
+#[allow(dead_code)]
 fn cat() {
     use std::{env, io, fs};
     // file path provided by user
@@ -108,8 +111,9 @@ fn is_seekable(file: &mut dyn std::io::Seek) -> bool {
 }
 
 // This fails when taking data from a pipe, as expected
+#[allow(dead_code)]
 fn stdin_seek_front_to_back() -> std::io::Result<()>{
-    use std::io::{self, BufRead, BufReader, Seek, SeekFrom};
+    use std::io::{BufRead, BufReader, Seek, SeekFrom};
     let lock = std::io::stdin().lock();
 
     #[cfg(any(target_family="unix", target_family="wasi"))]
@@ -145,6 +149,7 @@ fn stdin_seek_front_to_back() -> std::io::Result<()>{
 
 
 //  (for x in {1..100} ; do echo $x ; sleep 0.1 ; done) | cargo run --bin play
+#[allow(dead_code)]
 fn try_async_stdin() -> std::io::Result<()> {
     let mut stdin = CachedStreamReader::new(None)?;
     let mut prev = millis();
@@ -173,6 +178,7 @@ fn try_async_stdin() -> std::io::Result<()> {
 }
 
 //  (for x in {1..100} ; do echo $x ; sleep 0.1 ; done) | cargo run --bin play
+#[allow(dead_code)]
 fn try_async_stdin_terminate_early() -> std::io::Result<()> {
     let mut stdin = CachedStreamReader::new(None)?;
     let mut prev = millis();
@@ -202,6 +208,7 @@ fn try_async_stdin_terminate_early() -> std::io::Result<()> {
 }
 
 // Seek works in AsyncStdin
+#[allow(dead_code)]
 fn async_stdin_seek_front_to_back() -> std::io::Result<()>{
     use std::io::{BufRead, Seek, SeekFrom};
     let mut file = CachedStreamReader::new(None)?;

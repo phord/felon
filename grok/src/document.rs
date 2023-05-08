@@ -13,6 +13,7 @@ use indexed_file::{files, Log};
 use itertools::Itertools;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[allow(dead_code)]
 pub enum FilterType {
     FilterOut,
     FilterIn,

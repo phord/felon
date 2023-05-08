@@ -1,7 +1,7 @@
 // Tests for EventualIndex
 
 use indexed_file::indexer::index::Index;
-use indexed_file::indexer::eventual_index::{ EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}, TargetOffset, VirtualLocation, IndexRef };
+use indexed_file::indexer::eventual_index::{ EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}, TargetOffset, IndexRef };
 
 static DATA: &str = "a\na\na\na\na\noops";
 
