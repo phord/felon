@@ -2,6 +2,7 @@
 // use indexed_file::files::{LogSource, TextLogFile, new_text_file};
 
 use std::io::Cursor;
+use std::io::Seek;
 use std::io::Write;
 use super::{Stream, LogFile};
 
@@ -39,6 +40,7 @@ impl CursorUtil for CursorLogFile {
         for t in data {
             writeln!(c, "{t}")?;
         }
+        c.seek(std::io::SeekFrom::Start(0))?;
         Ok(c)
     }
 }
