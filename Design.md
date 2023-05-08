@@ -48,8 +48,24 @@ Document:
 -   FrameWidth
 -
 
+## Multi-regex matching
+There is some advantage to be had when matching multiple regexes on a string. But there is also some cost
+which can be eliminated. If we know we will show a line, we could choose to match all the regexes needed
+for displaying it (the formatter, timestamp, search, highlight, etc.).  But some regexes will include or
+exclude the line.  So we should categorize them somewhere.
 
-Roadmap:
+1. Timestamp - is needed to determine whether the line is to be displayed next
+2. FilterOut - is used to exclude lines from display
+3. FilterIn - is used to include lines and highlight matched locations
+4. Highlight - is used to color parts of lines
+5. Format - is used to color parts of lines
+
+Maybe only the last two are useful to combine.  But within each type we could combine all the regexes for that
+type together in one RegexSet. RegexSet can tell us if any matches exist cheaply, so it can be used efficiently
+for both filterIn and filterOut.
+
+
+## Roadmap:
 * Framer
   * test with `--bin more` pager
 * Markers and Formatter
