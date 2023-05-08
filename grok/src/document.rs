@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{indexer::LineIndexer, files::LogSource, files};
+use indexed_file::{files, Log};
 // use std::collections::BTreeSet;
 // use std::ops::Bound::{Excluded, Unbounded};
 use itertools::Itertools;
@@ -46,7 +46,7 @@ impl DocFilter {
     }
 
     // Resolve a filter against a LogFileLines and store the matches
-    fn bind(&mut self, log: &mut LineIndexer<LogSource>) {
+    fn bind(&mut self, log: &mut Log) {
         let matches =
             match self.search_type {
                 SearchType::SearchRegex(ref regex) => {
@@ -94,21 +94,21 @@ struct Filters {
     /// Filtered line numbers
     filtered_lines: Vec<usize>,
 
-    file: LineIndexer<LogSource>,
+    log: Log,
 }
 
 impl Filters {
-    fn new(file: LineIndexer<LogSource>) -> Self {
+    fn new(file: Log) -> Self {
 
         let mut s = Self {
             filter_in: vec![],
             filter_out: vec![],
             highlight: vec![],
             filtered_lines: vec![], // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
-            file
+            log: file
         };
 
-        let v : Vec<_> = s.file.iter_offsets()
+        let v : Vec<_> = s.log.iter_offsets()
             .collect();
 
         s.filtered_lines = v;
@@ -119,7 +119,7 @@ impl Filters {
     fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
         println!("Adding filter {:?} {:?}", filter_type, search_type);
         let mut f = DocFilter::new(search_type);
-        f.bind(&mut self.file);
+        f.bind(&mut self.log);
         println!("Done");
         match filter_type {
             FilterType::FilterIn =>   self.filter_in.push(f),
@@ -220,9 +220,7 @@ impl Document {
 impl Document {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
-        let file = LineIndexer::new(files::new_text_file(Some(filename)).expect("Failed to open file"));
-        println!("{:?}", file);
-
+        let file = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         let mut s = Self {
             filters: Filters::new(file),
@@ -240,7 +238,7 @@ impl Document {
     }
 
     pub fn all_line_count(&self) -> usize {
-        self.filters.file.count_lines()
+        self.filters.log.count_lines()
     }
 
     pub fn filtered_line_count(&self) -> usize {

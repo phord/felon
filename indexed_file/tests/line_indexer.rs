@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod logfile_iterator_tests {
     use indexed_file::files::new_mock_file;
-    use indexed_file::indexer::LineIndexer;
+    use indexed_file::Log;
 
     #[test]
     fn test_iterator() {
@@ -12,7 +12,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_offsets();
         let prev = it.next().unwrap();
         let mut prev = prev;
@@ -30,7 +30,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_offsets().rev();
         let prev = it.next().unwrap();
         let mut prev = prev;
@@ -51,7 +51,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_offsets().rev();
         let prev = it.next().unwrap();
         let mut prev = prev;
@@ -75,7 +75,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 10;//000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_offsets();
         let prev = it.next().unwrap();
         let mut prev = prev;
@@ -121,7 +121,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_offsets() {
             count += 1;
@@ -135,7 +135,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_offsets() {
             count += 1;
@@ -161,7 +161,7 @@ mod logfile_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_offsets().take(lines/2) {
             count += 1;
@@ -190,7 +190,7 @@ mod logfile_data_iterator_tests {
     use std::collections::HashSet;
 
     use indexed_file::files::new_mock_file;
-    use indexed_file::indexer::LineIndexer;
+    use indexed_file::Log;
 
     #[test]
     fn test_iterator() {
@@ -198,7 +198,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_lines();
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
@@ -219,7 +219,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_lines().rev();
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
@@ -242,7 +242,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 3; //6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut it = file.iter_lines().rev();
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
@@ -269,7 +269,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_lines() {
             count += 1;
@@ -283,7 +283,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_lines() {
             count += 1;
@@ -310,7 +310,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 6000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_lines().take(lines/2) {
             count += 1;
@@ -339,7 +339,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 100;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
 
         // A few bytes before the middle of the file
         let mut it = file.iter_lines_from(patt_len * lines / 2 - patt_len / 2);
@@ -364,7 +364,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 1000;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
 
         // A few bytes after the middle of the file
@@ -402,7 +402,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 100;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_lines() {
             count += 1;
@@ -432,7 +432,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 100;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let mut count = 0;
         for _ in file.iter_lines_from(0).rev() {
             count += 1;
@@ -465,7 +465,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 100;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
         let out_of_range = patt_len * lines;
 
         let mut count = 0;
@@ -487,7 +487,7 @@ mod logfile_data_iterator_tests {
         let patt_len = patt.len();
         let lines = 100;
         let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = LineIndexer::new(file);
+        let mut file = Log::from(file);
 
         // Length + 1 is ok.  Whole file is iterated.  Length + 2 is "out of range".
         let out_of_range = patt_len * lines + 2;

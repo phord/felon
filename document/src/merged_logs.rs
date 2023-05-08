@@ -42,9 +42,9 @@ struct LogIter<'a> {
 }
 
 impl<'a> LogIter<'a> {
-    fn new(file: &'a mut Log) -> Self {
+    fn new(log: &'a mut Log) -> Self {
         Self {
-            iter: Box::new(file.iter_lines()),
+            iter: Box::new(log.iter_lines()),
             next: None,
             prev: None,
         }
@@ -193,7 +193,8 @@ impl MergedLogs {
     }
 
     pub fn push<L: LogBase + 'static>(&mut self, log: L) {
-        self.files.push(LineIndexer::new(log.to_src()));
+        let log = Log::new(LineIndexer::new(log.to_src()));
+        self.files.push(log);
     }
 
     // pub fn new(files: Vec<PathBuf>) -> std::io::Result<Self> {

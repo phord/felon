@@ -1,5 +1,4 @@
-use super::LineIndexer;
-use crate::{eventual_index::{Location, VirtualLocation}, files::LogFile};
+use crate::{eventual_index::{Location, VirtualLocation}, Log};
 use chrono::NaiveDateTime;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -29,35 +28,35 @@ impl std::fmt::Display for LogLine {
 }
 
 
-pub(crate) struct LineIndexerIterator<'a, LOG> {
-    file: &'a mut LineIndexer<LOG>,
+pub(crate) struct LineIndexerIterator<'a> {
+    log: &'a mut Log,
     pos: Location,
     rev_pos: Location,
 }
 
-impl<'a, LOG> LineIndexerIterator<'a, LOG> {
-    pub(crate) fn new(file: &'a mut LineIndexer<LOG>) -> Self {
+impl<'a> LineIndexerIterator<'a> {
+    pub(crate) fn new(log: &'a mut Log) -> Self {
         Self {
-            file,
+            log,
             pos: Location::Virtual(VirtualLocation::Start),
             rev_pos: Location::Virtual(VirtualLocation::End),
         }
     }
 }
 
-impl<'a, LOG: LogFile> LineIndexerIterator<'a, LOG> {
-    pub(crate) fn new_from(file: &'a mut LineIndexer<LOG>, offset: usize) -> Self {
+impl<'a> LineIndexerIterator<'a> {
+    pub(crate) fn new_from(log: &'a mut Log, offset: usize) -> Self {
         let rev_pos = Location::Virtual(VirtualLocation::Before(offset));
         let pos = Location::Virtual(VirtualLocation::After(offset));
         Self {
-            file,
+            log,
             pos,
             rev_pos,
         }
     }
 
     fn iterate(&mut self, pos: Location) -> (Location, Option<usize>) {
-        let pos = self.file.resolve_location(pos);
+        let pos = self.log.file.resolve_location(pos);
 
         let ret = pos.offset();
         if self.rev_pos == self.pos {
@@ -70,20 +69,22 @@ impl<'a, LOG: LogFile> LineIndexerIterator<'a, LOG> {
         }
     }
 
-    // Read a string at a given start from our log source
+    // Read and timestamp a string at a given start from our log source
     #[inline]
-    fn read_line(&mut self, start: usize) -> std::io::Result<String> {
-        self.file.read_line_at(start)
+    fn read_line(&mut self, offset: usize) -> std::io::Result<LogLine> {
+        let line = self.log.file.read_line_at(offset)?;
+        let time = self.log.format.time(line.as_str());
+        Ok(LogLine { time, line, offset })
     }
 }
 
-impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
+impl<'a> Iterator for LineIndexerIterator<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
         let (pos, ret) = self.iterate(self.pos);
-        self.pos = self.file.next_line_index(pos);
-        if ret.is_some() && ret.unwrap() >= self.file.len() {
+        self.pos = self.log.file.next_line_index(pos);
+        if ret.is_some() && ret.unwrap() >= self.log.file.len() {
             None
         } else {
             ret
@@ -91,22 +92,22 @@ impl<'a, LOG: LogFile> Iterator for LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
+impl<'a> DoubleEndedIterator for LineIndexerIterator<'a> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         let (pos, ret) = self.iterate(self.rev_pos);
-        self.rev_pos = self.file.prev_line_index(pos);
+        self.rev_pos = self.log.file.prev_line_index(pos);
         ret
     }
 }
 
 // Iterate over lines as position, string
-pub(crate) struct LineIndexerDataIterator<'a, LOG> {
-    inner: LineIndexerIterator<'a, LOG>,
+pub(crate) struct LineIndexerDataIterator<'a> {
+    inner: LineIndexerIterator<'a>,
 }
 
-impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
-    pub(crate) fn new(inner: LineIndexerIterator<'a, LOG>) -> Self {
+impl<'a> LineIndexerDataIterator<'a> {
+    pub(crate) fn new(inner: LineIndexerIterator<'a>) -> Self {
         Self {
             inner,
         }
@@ -120,7 +121,7 @@ impl<'a, LOG> LineIndexerDataIterator<'a, LOG> {
  * TODO: Can we make a filtered iterator that tests the line in the file buffer and only copy to String if it matches?
  */
 
-impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
+impl<'a>  LineIndexerDataIterator<'a> {
     // Helper function to abstract the wrapping of the inner iterator result
     // If we got a line offset value, read the string and return the Type tuple.
     // TODO: Reuse Self::Type here instead of (String, uszize)
@@ -129,7 +130,6 @@ impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
         if let Some(bol) = value {
             // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
             let line = self.inner.read_line(bol).expect("TODO: return Result");
-            let line = LogLine::new(line, bol, None);
             Some(line)
         } else {
             None
@@ -155,7 +155,7 @@ impl<'a, LOG: LogFile>  LineIndexerDataIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
+impl<'a> DoubleEndedIterator for LineIndexerDataIterator<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let ret = self.inner.next_back();
@@ -169,7 +169,7 @@ impl<'a, LOG: LogFile> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> 
     }
 }
 
-impl<'a, LOG: LogFile> Iterator for LineIndexerDataIterator<'a, LOG> {
+impl<'a> Iterator for LineIndexerDataIterator<'a> {
     type Item = LogLine;
 
     #[inline]

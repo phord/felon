@@ -1,26 +1,85 @@
-use indexer::eventual_index;
+use indexer::{eventual_index, time_stamper::TimeStamper, LineIndexerIterator, LineIndexerDataIterator, LogLine};
 pub mod files;
 pub mod indexer;
 pub mod filters;
 
 use std::path::PathBuf;
-use files::LogSource;
+use files::{LogSource, LogBase};
 use crate::indexer::line_indexer::LineIndexer;
 
-pub type Log = LineIndexer<LogSource>;
+pub struct Log {
+    pub(crate) file: LineIndexer<LogSource>,
+    pub(crate) format: TimeStamper,
+}
+
+impl<LOG: LogBase + 'static> From<LOG> for Log {
+    fn from(file: LOG) -> Self {
+        let src = LogSource::from(file);
+        Self::from(src)
+    }
+}
+
+impl From<LogSource> for Log {
+    fn from(src: LogSource) -> Self {
+        let src = LineIndexer::new(src);
+        Self {
+            file: src,
+            format: TimeStamper::default(),
+        }
+    }
+}
 
 impl Log {
+    pub fn new(src: LineIndexer<LogSource>) -> Self {
+        Self {
+            file: src,
+            format: TimeStamper::default(),
+        }
+    }
+
+    pub fn from_source(file: LogSource) -> Self {
+        let src = LineIndexer::new(file);
+        Self {
+            file: src,
+            format: TimeStamper::default(),
+        }
+    }
+
     pub fn open(file: Option<PathBuf>) -> std::io::Result<Self> {
         let src = files::new_text_file(file)?;
-        Ok(LineIndexer::new(src))
+        let log = Log {
+            file: LineIndexer::new(src),
+            format: TimeStamper::default(),
+        };
+        Ok(log)
+    }
+
+    pub fn count_lines(&self) -> usize {
+        self.file.count_lines()
+    }
+
+    fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
+        LineIndexerIterator::new(self)
+    }
+
+    pub fn iter_offsets(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
+        self.iter()
+    }
+
+    pub fn iter_lines<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = LogLine> + 'a {
+        LineIndexerDataIterator::new(LineIndexerIterator::new(self))
+    }
+
+    pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
+        LineIndexerDataIterator::new(LineIndexerIterator::new_from(self, offset))
     }
 }
 
 
 #[cfg(test)]
 mod tests {
-    use crate::indexer::line_indexer::LineIndexer;
-    use crate::files::{LogSource, TextLogFile, new_text_file};
+    use crate::Log;
+    use crate::files::{LogSource, new_text_file};
     use std::path::PathBuf;
 
     fn open_log_file(filename: &str) -> std::io::Result<LogSource> {
@@ -28,10 +87,10 @@ mod tests {
         new_text_file(Some(path))
     }
 
-    fn open_log_file_lines(path: PathBuf) -> LineIndexer<TextLogFile> {
+    fn open_log_file_lines(path: PathBuf) -> Log {
         let file = File::open(&path).unwrap();
         let file = BufReader::new(file);
-        LineIndexer::new(file)
+        Log::from(file)
     }
 
     #[test]
@@ -137,7 +196,6 @@ mod tests {
         assert!(bytes > chunk_size * 2);
 
         let mut file = open_log_file_lines(path);
-        println!("{:?}", file);
 
         // Walk the file and compare each line offset to the expected offset
         let mut offset = 0;
@@ -174,7 +232,7 @@ mod tests {
         println!("{:?}", path);
         let file = new_text_file(Some(path));
         assert!(file.is_ok());
-        let mut file = LineIndexer::new( file.unwrap() );
+        let mut file = Log::from( file.unwrap() );
         for line in file.iter_lines() {
             println!("{}  {line}", line.offset);
         }
