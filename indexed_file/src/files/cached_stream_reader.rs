@@ -72,11 +72,14 @@ impl CachedStreamReader {
     }
 
     pub fn from_reader<LOG: BufRead + Send + 'static>(pipe: LOG) -> std::io::Result<Self> {
-        let stream = Self {
+        let mut stream = Self {
             rx: Some(Self::reader(Some(pipe))),
             buffer: Vec::default(),
             pos: 0,
         };
+
+        // Try to init some read
+        stream.quench();
 
         Ok(stream)
     }
