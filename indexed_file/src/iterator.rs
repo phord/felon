@@ -72,9 +72,11 @@ impl<'a> LineIndexerIterator<'a> {
     // Read and timestamp a string at a given start from our log source
     #[inline]
     fn read_line(&mut self, offset: usize) -> std::io::Result<LogLine> {
-        // TODO: TimeStamp is expensive. Can we make it lazy and only use it when needed?
         let line = self.log.file.read_line_at(offset)?;
-        let time = self.log.format.time(line.as_str());
+        // TODO: TimeStamp is expensive. Make it lazy and only use it when needed
+        // Consider that log lines with similar & sortable time formats do not need to be stamped to be sorted
+        // Beware of unstamped lines, however. They will screw up the rest of the ordering between two files.
+        let time = None; // self.log.format.time(line.as_str());
         Ok(LogLine { time, line, offset })
     }
 }

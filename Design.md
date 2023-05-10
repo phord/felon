@@ -116,6 +116,15 @@ Handling this correctly requires some supposition about the maximum number of ou
 lines to consider as a block, and it requires us to look ahead (or behind) this many lines
 to process blocks consistently.
 
+Timestamp parsing is somewhat expensive.  We can mitigate it somewhat by only calling for
+it when needed.  It is only needed when two files are being merged, or when a user wants
+to jump to some time offset in a single file, or wants to show the delta column (time between
+lines), or something.
+
+We can also avoid timestamping lines that later get filtered out. This requires us to filter
+before we need the timestamp, though.  It implies that we filter at a low level, perhaps. At
+least it must happen at some level before we merge files together.
+
 ## Framer
 Handles displaying and tracking log line fragments. There are two modes to consider here:
 Wrapping or Chopping. Chopping is similar to "no framing", and can be largely ignored.
