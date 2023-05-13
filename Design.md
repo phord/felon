@@ -212,7 +212,13 @@ already indexed, and scanning gaps in the background that need to be filled in f
 extra concern for the searches is that they are line-based while the line-index is char-based. We may
 need to load lines separately for the matchers after we index individual lines.
 
+# Filters
+
+I have a lot of random thoughts about filter implementations, but not all of them are good ideas.  I've placed
+them in Filters.md
+
 ====
+# Old notes
 
 Filters are applied
 LogFile - access to lines from files
