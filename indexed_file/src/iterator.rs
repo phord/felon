@@ -1,20 +1,17 @@
 use crate::{indexer::{eventual_index::{Location, VirtualLocation}}, Log};
-use chrono::NaiveDateTime;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct LogLine {
-    pub time: Option<NaiveDateTime>,
     pub line: String,
     pub offset: usize,
     // pub number: Option<usize>,   // TODO: Relative line number in file;  Future<usize>?
 }
 
 impl LogLine {
-    pub fn new(line: String, offset: usize, time: Option<NaiveDateTime>) -> Self {
+    pub fn new(line: String, offset: usize) -> Self {
         Self {
             line,
             offset,
-            time,
         }
     }
 }
@@ -22,7 +19,7 @@ impl LogLine {
 
 impl std::fmt::Display for LogLine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: time, offset?
+        // TODO: offset?
         write!(f, "{}", self.line)
     }
 }
@@ -73,11 +70,7 @@ impl<'a> LineIndexerIterator<'a> {
     #[inline]
     fn read_line(&mut self, offset: usize) -> std::io::Result<LogLine> {
         let line = self.log.file.read_line_at(offset)?;
-        // TODO: TimeStamp is expensive. Make it lazy and only use it when needed
-        // Consider that log lines with similar & sortable time formats do not need to be stamped to be sorted
-        // Beware of unstamped lines, however. They will screw up the rest of the ordering between two files.
-        let time = None; // self.log.format.time(line.as_str());
-        Ok(LogLine { time, line, offset })
+        Ok(LogLine::new( line, offset ))
     }
 }
 
