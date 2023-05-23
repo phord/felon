@@ -1,6 +1,7 @@
 pub mod files;
-pub mod indexer;
+pub mod filter;
 pub mod filters;
+pub mod indexer;
 pub mod log;
 
 pub(crate) mod iterator;
