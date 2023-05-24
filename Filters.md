@@ -80,6 +80,35 @@ our filters will operate on iterators, it's not so straightforward.  We'll proba
 
 Notice that the `before` and `after` filters fit nicely in the `excludes` bucket.
 
+## Filters do not contain LogFiles
+I could make a filter a "layer" in the stack such that it replaced the LogFile higher up.  In fact, this has been my plan.
+It won't work.  I need to be able to pass LogFile to different filters to be handled discretely, so no Filter can own
+the LogFile, as it turns out, unless each Filter owns each subsequent Filter. They could own a `RefCell<Rc<LogFile>>` or
+something, but that's unnecessary.  It's probably better to have an interface that accepts Log or LogFile instead.
+
+    trait Filter {
+        memoize(&mut self, line: &LogLine, result: bool)  {
+            // Insert line offset into matches or nomatches
+        }
+
+        eval(&mut self, line: &LogLine) -> bool {
+            // Evaluate the filter and remember the result
+            let eval:bool = self.apply_filter(line);
+        }
+
+        quick_next(&self, offset: usize) -> Option<usize> {
+            // Evaluate offset if we already have this line memoized.
+            //    If so, return location of next included line, or Gap<Location>
+        }
+
+        iter_range(&mut self, log: &mut Log) -> Iterator<> {
+            type Item = LogLine;
+        }
+    }
+
+#### Thinking: Skip list?
+Maybe our include/exclude list should be a skiplist.  This would allow us to quickly answer the question "wh
+
 ## Filter ordering
 Implementation note: When combining filters with `and` the order doesn't matter much to the user. But it may matter a lot to us.
 A filter with a higher number of excluded lines is better to do first since the downstream filters will then have less work to

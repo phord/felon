@@ -54,9 +54,9 @@ which can be eliminated. If we know we will show a line, we could choose to matc
 for displaying it (the formatter, timestamp, search, highlight, etc.).  But some regexes will include or
 exclude the line.  So we should categorize them somewhere.
 
-1. Timestamp - is needed to determine whether the line is to be displayed next
-2. FilterOut - is used to exclude lines from display
-3. FilterIn - is used to include lines and highlight matched locations
+1. FilterOut - is used to exclude lines from display
+2. FilterIn - is used to include lines and highlight matched locations
+3. Timestamp - is needed to determine whether the line is to be displayed next
 4. Highlight - is used to color parts of lines
 5. Format - is used to color parts of lines
 
@@ -88,12 +88,61 @@ file to tell us the next target and then choose the least of them by timestamp. 
 be more reasonable from a Doc level?  Maybe I'm overthinking it a lot.  How often will
 so many files be present that it even matters?
 
+### Decision: Apply filters at the file-level
+
+Filters (including/excluding/counting lines) should be applied at the file level, before merging.
+**Reason:** If we filter *after* the merge, it simplifies our code a bit, but it also requires that we
+compare every line in every file with others to determine the order first. Then we would apply
+the filters afterwards.  If we filter out 99% of 1 million lines, we would have to first order
+the million lines and then filter them all.  But if we filter first and then sort, we only need
+to filter 1 million and then sort 100,000. However, in fact we only have to sort the lines we
+end up displaying.  So we may filter 1M then only sort 200.  But if we merge first, we would not
+be able to avoid sorting at least a lot more lines.
+
+There may be some filters which apply to timestamps. These should be applied at the file-level, too.
+Timestamp is trying to be lazy so we don't calc it on every line. For range-filters (e.g. filter-out
+lines before 10pm) we can apply the filter quickly by a binary search on file data, so still every
+line doesn't need to be stamped. As similar optimization can apply to sorting where, for example,
+two files which do not overlap in time do not need to be compared line-by-line to determine
+ordering.
+
 ## Search
 The search layer will produce lines as a "pass-through" service adding Anchors.
 It memoizes found location to speed up repeated and future searches. Future searches
 can be managed asynchronously by running some service worker owned by the Search struct.
 This worker walks through bounded iterations of the child structs to find the next
 matching lines and building up the memoization information.
+
+This layering needs some interface to allow us to quickly filter immediate results,
+to concurrently build filters for complete results in the background, and to identify
+regions still needing to be filled.  For example, we use normal iterator functions for
+immediate results, but we should constrain the result to a given timestamp.  This
+allows us to take the next matching line from one file without burning too much CPU
+searching all the other files to find a match whose timestamp then needs to be checked.
+Instead, the search for the other files can know they can stop when they exceed some
+timestamp.  But for this we assume there is some "lead" file who already found a line
+and therefore can tell us a target timestamp. This is not guaranteed, though, so instead
+we also need our iterator to search in small ranges whenever it's in a gap so we can
+rotate among other sources until we do find one with a match.
+
+This seems like it might not be an improvement, but I believe it is.  Supposed we have
+two 1 million line files and we apply a filter that removes 99% of the lines.  So we have
+20,000 lines remaining to be displayed.  Perhaps all 20,000 are in one file. If I try
+naively to search the other file for its "next" visible line, I won't find any. So I have to
+search the entire file applying the filter to every line in the file. But we can do better.
+
+1. Search up to 1,000 lines of file1 for the next matching line.
+   a. Get the timestamp of the last line we checked in file1.
+2. Search up to 1,000 lines of file2 for the next matching line.
+   a. Get the timestamp of the last line we checked in file2.
+3. There are three possibilities:
+   a. We have no matching lines.  --> Repeat from step 1.
+   b. We have a match from both files.  --> Yield the line whose timestamp is lower.
+   c. We have a match from one file, but not the other.
+      i. If the timestamp of the matched file is lower than the checked timestamp of all the other logs, yield that line.
+     ii. Otherwise, keep searching the other files in 1,000 line blocks until all timestamps are larger than our matched line.  (3.c.i)
+
+
 
 ## Markers
 Markers are used for highlighting text according to some rules, highlight requests, or
