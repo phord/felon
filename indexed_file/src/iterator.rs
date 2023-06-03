@@ -66,7 +66,7 @@ impl<'a> LineIndexerIterator<'a> {
         }
     }
 
-    // Read and timestamp a string at a given start from our log source
+    // Read a string at a given start from our log source
     #[inline]
     fn read_line(&mut self, offset: usize) -> std::io::Result<LogLine> {
         let line = self.log.file.read_line_at(offset)?;
@@ -112,7 +112,6 @@ impl<'a> LineIndexerDataIterator<'a> {
 
 /**
  * TODO: an iterator that iterates lines and builds up the EventualIndex as it goes.
- * TODO: an iterator that iterates from a given line offset forward or reverse.
  *
  * TODO: Can we make a filtered iterator that tests the line in the file buffer and only copy to String if it matches?
  */

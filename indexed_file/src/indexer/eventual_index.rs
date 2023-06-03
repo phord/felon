@@ -176,7 +176,7 @@ impl EventualIndex {
     }
 
     pub fn finalize(&mut self) {
-        if self.indexes.is_empty() {
+        if self.indexes.len() < 2 {
             return;
         }
 
