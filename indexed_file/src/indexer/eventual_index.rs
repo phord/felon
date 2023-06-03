@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use crate::indexer::index::Index;
 
 // An index of some lines in a file, possibly with gaps, but eventually a whole index
@@ -51,6 +53,42 @@ impl Location {
             Location::Indexed(_) => true,
             _ => false,
         }
+    }
+
+    #[inline]
+    pub fn is_invalid(&self) -> bool {
+        match self {
+            Location::Invalid => true,
+            _ => false,
+        }
+    }
+
+    // Get offset in file strictly for comparison in Ord::cmp
+    fn relative_offset(&self) -> usize {
+        use Location::*;
+        use VirtualLocation::*;
+        match self {
+            Virtual(Start) => 0,
+            Virtual(End) => usize::MAX,
+            Virtual(Before(off)) => off.saturating_sub(1),
+            Virtual(After(off)) => off.saturating_add(1),
+            Indexed(iref) => iref.offset,
+            Gap(GapRange{target: off, gap: _}) => off.value(),
+
+            Invalid => unreachable!(),
+        }
+    }
+}
+
+impl Ord for Location {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.relative_offset().cmp(&other.relative_offset())
+    }
+}
+
+impl PartialOrd for Location {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
