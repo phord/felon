@@ -73,7 +73,7 @@ impl Location {
             Virtual(Before(off)) => off.saturating_sub(1),
             Virtual(After(off)) => off.saturating_add(1),
             Indexed(iref) => iref.offset,
-            Gap(GapRange{target: off, gap: _}) => off.value(),
+            Gap(GapRange{target: off, ..}) => off.value(),
 
             Invalid => unreachable!(),
         }
@@ -158,6 +158,9 @@ pub struct GapRange {
     // The approximate offset we wanted to reach
     pub target: TargetOffset,
 
+    // The index before our gap, or indexes.len()
+    pub index: usize,
+
     // The type and size of the gap
     pub gap: Missing,
 }
@@ -237,13 +240,13 @@ impl EventualIndex {
         let target_offset = target.value();
 
         if self.indexes.is_empty() {
-            Some(Location::Gap(GapRange { target, gap: Unbounded(0) } ))
+            Some(Location::Gap(GapRange { target, index: 0, gap: Unbounded(0) } ))
         } else if pos == 0 {
             // gap is at start of file
             let next = self.indexes[pos].start;
             if next > 0 {
                 assert!(target_offset <= next);
-                Some(Location::Gap(GapRange { target, gap: Bounded(0, next) } ))
+                Some(Location::Gap(GapRange { target, index: 0, gap: Bounded(0, next) } ))
             } else {
                 // There is no gap at start of file
                 None
@@ -258,14 +261,14 @@ impl EventualIndex {
             } else if pos == self.indexes.len() {
                 // gap is at end of file; return unbounded range
                 assert!(target_offset >= prev);
-                Some(Location::Gap(GapRange { target, gap: Unbounded(prev) } ))
+                Some(Location::Gap(GapRange { target, index: pos-1,  gap: Unbounded(prev) } ))
             } else {
                 // Find the gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
                 if next > prev {
                     // assert!(target_offset > prev);
                     // assert!(target_offset < next);
-                    Some(Location::Gap(GapRange { target, gap: Bounded(prev, next) } ))
+                    Some(Location::Gap(GapRange { target, index: pos-1, gap: Bounded(prev, next) } ))
                 } else {
                     // There is no gap between these indexes
                     assert!(next == prev);
