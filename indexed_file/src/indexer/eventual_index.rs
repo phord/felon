@@ -158,7 +158,7 @@ pub struct GapRange {
     // The approximate offset we wanted to reach
     pub target: TargetOffset,
 
-    // The index before our gap, or indexes.len()
+    // The index after our gap, or indexes.len() if none after
     pub index: usize,
 
     // The type and size of the gap
@@ -261,14 +261,14 @@ impl EventualIndex {
             } else if pos == self.indexes.len() {
                 // gap is at end of file; return unbounded range
                 assert!(target_offset >= prev);
-                Some(Location::Gap(GapRange { target, index: pos-1,  gap: Unbounded(prev) } ))
+                Some(Location::Gap(GapRange { target, index: pos,  gap: Unbounded(prev) } ))
             } else {
                 // Find the gap between two indexes; bracket result by their [end, start)
                 let next = self.indexes[pos].start;
                 if next > prev {
                     // assert!(target_offset > prev);
                     // assert!(target_offset < next);
-                    Some(Location::Gap(GapRange { target, index: pos-1, gap: Bounded(prev, next) } ))
+                    Some(Location::Gap(GapRange { target, index: pos, gap: Bounded(prev, next) } ))
                 } else {
                     // There is no gap between these indexes
                     assert!(next == prev);
