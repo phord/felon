@@ -140,3 +140,67 @@ fn test_cursor_reverse_gap() {
     }
     assert_eq!(count, index.lines());
 }
+
+#[test]
+fn test_insert_basic() {
+    let mut index = EventualIndex::new();
+    let loc = index.locate(TargetOffset::AtOrBefore(0));
+    index.insert(loc, 0..20, Some(0));
+    assert_eq!(index.bytes(), 20);
+    assert_eq!(index.end(), 20);
+
+    let cursor = index.locate(TargetOffset::AtOrBefore(0));
+    assert_eq!(cursor.offset().unwrap(), 0);
+    assert!(index.next_line_index(cursor).is_gap());
+}
+
+
+#[test]
+fn test_insert_basic_nz() {
+    let mut index = EventualIndex::new();
+    let loc = index.locate(TargetOffset::AtOrBefore(0));
+    index.insert(loc, 0..20, Some(10));
+    assert_eq!(index.bytes(), 20);
+    assert_eq!(index.end(), 20);
+
+    let cursor = index.locate(TargetOffset::AtOrBefore(0));
+    assert!(cursor.offset().is_none());
+    let cursor = index.locate(TargetOffset::After(0));
+    assert_eq!(cursor.offset().unwrap(), 10);
+    assert!(index.next_line_index(cursor).is_gap());
+}
+
+
+#[test]
+fn test_insert_before() {
+    let mut index = get_partial_eventual_index(50, 100);
+    let loc = index.locate(TargetOffset::After(0));
+    assert!(loc.is_gap());
+    index.insert(loc, 0..50, Some(10));
+
+    let cursor = index.locate(TargetOffset::AtOrBefore(0));
+    assert!(cursor.offset().is_none());
+    let cursor = index.locate(TargetOffset::After(0));
+    assert_eq!(cursor.offset().unwrap(), 10);
+    assert!(index.next_line_index(cursor).offset().unwrap() >= 50);
+}
+
+
+#[test]
+fn test_insert_after() {
+    let mut index = get_partial_eventual_index(50, 100);
+    let loc = index.locate(TargetOffset::After(170));
+    assert!(loc.is_gap());
+    index.insert(loc, 170..200, Some(180));
+
+    let cursor = index.locate(TargetOffset::After(170));
+    assert_eq!(cursor.offset().unwrap(), 180);
+    let foo = index.next_line_index(cursor);
+    assert!(index.next_line_index(cursor).is_gap());
+}
+
+// TODO: test_insert_between()
+// TODO: test_insert_adjacent_start()
+// TODO: test_insert_adjacent_end()
+// TODO: test_insert_adjacent_both()
+// TODO: test_insert_empty_range()  // Insert a range with no found offsets

@@ -76,8 +76,8 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.source.quench();
 
         let (target, start, end) = match gap {
-            Location::Gap(GapRange { target, index, gap: Bounded(start, end) }) => (target, start, end.min(self.len())),
-            Location::Gap(GapRange { target, index, gap: Unbounded(start) }) => (target, start, self.len()),
+            Location::Gap(GapRange { target, index: _, gap: Bounded(start, end) }) => (target, start, end.min(self.len())),
+            Location::Gap(GapRange { target, index: _, gap: Unbounded(start) }) => (target, start, self.len()),
             _ => panic!("Tried to index something which is not a gap: {:?}", gap),
         };
 

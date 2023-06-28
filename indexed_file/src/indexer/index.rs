@@ -114,6 +114,31 @@ impl Index {
         Ok(pos - offset)
     }
 
+    pub fn adjacent(&self, range: &std::ops::Range<usize>) -> bool {
+        self.start == range.end + 1 || self.end == range.start
+    }
+
+    // Insert a value into index at start or end; return index to where new value would go
+    // range must be adjacent to this index
+    pub fn insert(&mut self, range: std::ops::Range<usize>, offset: Option<usize>) -> usize {
+        if self.start == range.end + 1 {
+            self.start = range.start;
+            if let Some(offset) = offset {
+                self.line_offsets.insert(0, offset);
+            }
+            0
+        } else if self.end == range.start {
+            self.end = range.end;
+            let ret = self.line_offsets.len();
+            if let Some(offset) = offset {
+                self.line_offsets.push(offset);
+            }
+            ret
+        } else {
+            panic!("Range {:?} is not adjacent to index {}..{}", range, self.start, self.end);
+        }
+    }
+
     pub fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
         self.line_offsets.iter()
     }

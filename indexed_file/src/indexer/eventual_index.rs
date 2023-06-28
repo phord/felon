@@ -178,6 +178,45 @@ impl EventualIndex {
         self.indexes.push(other);
     }
 
+    // Insert an explored range into the eventualIndex and optionally add a found line offset.
+    // Location must be a gap.
+    // Returns location of the inserted offset, or the next location after the range if no offset given.
+    pub fn insert(&mut self, pos: Location, range: std::ops::Range<usize>, offset: Option<usize>) -> Location {
+        let ix = match pos {
+            Location::Gap(range) => range.index,
+            Location::Virtual(_) => panic!("Location not resolved"),
+            Location::Indexed(_) => panic!("Location not a gap"),
+            Location::Invalid => panic!("Location invalid"),
+        };
+
+        let index = if ix > 0 && self.indexes[ix - 1].adjacent(&range) {
+            // Append to previous index if it's adjacent (this is the most efficient option)
+            ix - 1
+        } else if ix < self.indexes.len() && self.indexes[ix].adjacent(&range) {
+            // Prepend to next index if it's adjacent
+            ix
+        } else {
+            // No adjacent index exists.  Insert a new one.
+            self.indexes.insert(ix, Index::new());
+            self.indexes[ix].start = range.start;
+            self.indexes[ix].end = range.start;
+            ix
+        };
+        let end = range.end;
+        let line = self.indexes[index].insert(range, offset);
+
+        if let Some(offset) = offset {
+            // Will always find 'offset'
+            self.find_location(index, line, TargetOffset::AtOrBefore(offset))
+            // TODO: assert we found our offset
+        } else {
+            // Returns some line that is not in our range, or a gap.
+            self.find_location(index, line, TargetOffset::After(end))
+            // FIXME: Support TargetOffset::AtOrBefore(...) for reverse-walking
+        }
+    }
+
+
     pub fn finalize(&mut self) {
         if self.indexes.len() < 2 {
             return;
@@ -309,7 +348,7 @@ impl EventualIndex {
                 VirtualLocation::Before(offset) => self.locate(TargetOffset::AtOrBefore(offset-1)),
                 VirtualLocation::After(offset) => self.locate(TargetOffset::After(offset)),
                 VirtualLocation::Start => {
-                    if let Some(gap) = self.try_gap_at(0, TargetOffset::AtOrBefore(0)) {
+                    if let Some(gap) = self.try_gap_at(0, TargetOffset::AtOrBefore(0)) {    // FIXME: Assumes there will always be offset @ zero
                         gap
                     } else {
                         self.get_location(0, 0)
