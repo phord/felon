@@ -30,7 +30,9 @@ pub fn cat_cmd() {
 pub fn tac_cmd() {
     let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
-        logs.push(Log::open(file).unwrap());
+        let mut log = Log::open(file).unwrap();
+        log.wait_for_end();
+        logs.push(log);
     }
     // TODO: Print lines with colors
     for line in logs.iter_lines().rev() {

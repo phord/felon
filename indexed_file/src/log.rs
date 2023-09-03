@@ -59,6 +59,12 @@ impl Log {
         Ok(log)
     }
 
+    #[inline]
+    pub fn wait_for_end(&mut self) {
+        log::trace!("Wait for end of file");
+        self.file.wait_for_end()
+    }
+
     pub fn count_lines(&self) -> usize {
         self.file.count_lines()
     }

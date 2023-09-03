@@ -86,6 +86,7 @@ impl LogFileUtil for LogSource {
     #[inline(always)] fn len(&self) -> usize { self.as_ref().len() }
     #[inline(always)] fn chunk(&self, target: usize) -> (usize, usize) { self.as_ref().chunk(target) }
     #[inline(always)] fn quench(&mut self) { self.as_mut().quench() }
+    #[inline(always)] fn wait_for_end(&mut self) { self.as_mut().wait_for_end() }
 }
 
 pub trait LogFileUtil {
@@ -101,4 +102,5 @@ pub trait LogFileUtil {
 
     // Check for more data in file and update state
     fn quench(&mut self) -> ();
+    fn wait_for_end(&mut self) {}
 }

@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
-use std::thread;
+use std::{thread, time};
 
 use crate::files::LogFileUtil;
 use crate::files::LogFile;
@@ -38,6 +38,8 @@ pub trait Stream {
     fn get_length(&self) -> usize;
     // Wait on any data at all; Returns true if file is still open
     fn wait(&mut self) -> bool;
+    // Wait until we're sure the stream is closed
+    fn wait_for_end(&mut self) {}
 }
 
 pub struct CachedStreamReader {
@@ -177,6 +179,15 @@ impl Stream for CachedStreamReader {
         self.fill_buffer(self.pos as usize);
         self.is_open()
     }
+
+    // Read stream until the file is closed
+    fn wait_for_end(&mut self) {
+        // TODO: add a timeout
+        log::trace!("wait_for_end");
+        while self.wait() {
+            thread::sleep(time::Duration::from_millis(10));
+        }
+    }
 }
 
 use std::io::Read;
@@ -199,6 +210,27 @@ impl  Read for CachedStreamReader {
 use std::io::{Seek, SeekFrom};
 impl  Seek for CachedStreamReader {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        // There's a dilemma here for stream readers. If we seek to the end, we can't know if more data is coming.
+        // So we can choose to either block until the end of the stream, or return the current end position. We
+        // choose the latter, but we also ensure that we have read as far as possible in the moment. This will allow
+        // us to at least find the current end of the stream, even if more data is coming later.
+        // Code that needs to guarantee the end of the stream should call wait_for_end() first.
+
+        match pos {
+            SeekFrom::End(_) => {
+                let mut end = self.get_length();
+                while self.wait() {
+                    let len = self.get_length();
+                    if end == len {
+                        // End stopped moving
+                        break
+                    }
+                    end = len;
+                }
+            },
+            _ => {}
+        }
+
         let (start, offset) = match pos {
             SeekFrom::Start(n) => (0_i64, n as i64),
             SeekFrom::Current(n) => (self.pos as i64, n),
@@ -224,5 +256,12 @@ impl std::io::BufRead for CachedStreamReader {
 // FIXME: Is Stream any different than LogFileUtil?
 impl<T: Stream> LogFileUtil for T {
     #[inline(always)] fn len(&self) -> usize { self.get_length() }
-    #[inline(always)] fn quench(&mut self) { self.wait(); }
+    #[inline(always)] fn quench(&mut self) {
+        log::trace!("Stream::quench");
+        self.wait();
+    }
+    fn wait_for_end(&mut self) {
+        log::trace!("wait_for_end");
+        Stream::wait_for_end(self)
+    }
 }

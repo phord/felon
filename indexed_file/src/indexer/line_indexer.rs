@@ -33,6 +33,11 @@ impl<LOG: LogFile> LineIndexer<LOG> {
         self.source.len()
     }
 
+    #[inline]
+    pub fn wait_for_end(&mut self) {
+        self.source.wait_for_end()
+    }
+
     // Resolve virtual locations to already indexed or gap locations
     #[inline]
     fn resolve(&self, find: Location) -> Location {
