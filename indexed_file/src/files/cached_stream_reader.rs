@@ -52,6 +52,7 @@ impl LogFile for CachedStreamReader {}
 
 impl CachedStreamReader {
     pub fn new(pipe: Option<PathBuf>) -> std::io::Result<Self> {
+        log::trace!("new");
         let base = Self {
             rx: None,
             buffer: Vec::default(),
@@ -74,6 +75,7 @@ impl CachedStreamReader {
     }
 
     pub fn from_reader<LOG: BufRead + Send + 'static>(pipe: LOG) -> std::io::Result<Self> {
+        log::trace!("from_reader");
         let mut stream = Self {
             rx: Some(Self::reader(Some(pipe))),
             buffer: Vec::default(),
