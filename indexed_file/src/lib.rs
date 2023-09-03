@@ -8,7 +8,7 @@ pub(crate) mod iterator;
 pub(crate) mod time_stamper;
 
 pub use iterator::LogLine;
-pub use log::Log;
+pub use crate::log::Log;
 
 pub(crate) use iterator::{LineIndexerDataIterator, LineIndexerIterator};
 

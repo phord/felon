@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
     let cfg = Config::from_env().expect("Config should not error");
+    log::trace!("Init config: {:?}", cfg);
     let mut files:Vec<Option<_>> = cfg.filename.iter().cloned().map(|file| Some(file)).collect();
     if files.is_empty() {
         files.push(None);

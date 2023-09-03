@@ -3,7 +3,11 @@ use std::path::PathBuf;
 use crate::indexer::line_indexer::LineIndexer;
 
 use crate::files::{LogBase, LogSource, new_text_file};
+use log::{debug, error, info, trace, warn};
 
+/**
+ * Log is an adapter interface used to instantiate a LineIndexer from different kinds of LogSources.
+ */
 pub struct Log {
     pub(crate) file: LineIndexer<LogSource>,
     pub(crate) format: TimeStamper,
@@ -11,6 +15,7 @@ pub struct Log {
 
 impl<LOG: LogBase + 'static> From<LOG> for Log {
     fn from(file: LOG) -> Self {
+        log::trace!("Instantiate log from LOG");
         let src = LogSource::from(file);
         Self::from(src)
     }
@@ -18,6 +23,7 @@ impl<LOG: LogBase + 'static> From<LOG> for Log {
 
 impl From<LogSource> for Log {
     fn from(src: LogSource) -> Self {
+        log::trace!("Instantiate log via From<LogSource>");
         let src = LineIndexer::new(src);
         Self {
             file: src,
@@ -35,6 +41,7 @@ impl Log {
     }
 
     pub fn from_source(file: LogSource) -> Self {
+        log::trace!("Instantiate log from LogSource");
         let src = LineIndexer::new(file);
         Self {
             file: src,
@@ -43,6 +50,7 @@ impl Log {
     }
 
     pub fn open(file: Option<PathBuf>) -> std::io::Result<Self> {
+        log::trace!("Instantiate log from file {:?}", file);
         let src = new_text_file(file)?;
         let log = Log {
             file: LineIndexer::new(src),
