@@ -324,12 +324,12 @@ impl Display {
             if row == start + len {
                 break;
             }
-            self.draw_line(doc, &mut buff, row, &line.to_string());
+            self.draw_line(doc, &mut buff, row, line);
             self.displayed_lines[row] = *pos;
             row += 1;
         }
         // DEBUG HACK
-        self.draw_line(doc, &mut buff, self.height - 2, &format!("scroll={} displayed={:?}", scroll, self.displayed_lines));
+        // self.draw_line(doc, &mut buff, self.height - 2, &format!("scroll={} displayed={:?}", scroll, self.displayed_lines));
         buff.flush()
     }
 

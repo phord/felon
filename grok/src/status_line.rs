@@ -22,8 +22,9 @@ impl StatusLine {
 
         let mut stdout = stdout();
 
-        let message = format!("Showing {} lines   {} filtered",
-                                      doc.filtered_line_count(), doc.all_line_count());
+        let message = format!("Showing {} of {} lines, {} filtered",
+                                      doc.filtered_line_count(), doc.all_line_count(),
+                                      doc.all_line_count() - doc.filtered_line_count());
 
 
         let width = std::cmp::min(width as usize, message.len());
