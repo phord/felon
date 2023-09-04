@@ -272,6 +272,14 @@ impl Document {
 
     pub fn line_colors(&self, line: &str) -> StyledLine {
         // FIXME: Doesn't need &self
+
+        // TODO: Generalize this to remove unwanted esc sequences and line endings anywhere in the line
+        let mut line = line;
+        while line.ends_with('\n') || line.ends_with('\r') {
+            let len = line.len();
+            line = &line[..len-1];
+        }
+
         lazy_static! {
             // TODO: Move these regexes to a config file
             // Apr  4 22:21:16.056 E8ABF4F03A6F I      vol.flush.cb ...
