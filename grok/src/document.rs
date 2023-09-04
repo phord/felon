@@ -184,16 +184,23 @@ pub struct Document {
 
 impl Document {
 
-    pub fn get_lines_from_rev(&self, start: usize, len: usize) -> Vec<(usize, String)> {
-        todo!("Replace iterators");
-        // let iter = self.iter_filtered_rev(start);
-        // iter.take(len).collect()
+    pub fn get_lines_from_rev(&mut self, start: usize, len: usize) -> Vec<(usize, String)> {
+        // FIXME: Use Filters::iter() instead of bypassing it to get to log
+        self.filters.log
+            .iter_lines_from(start)
+            .rev()
+            .take(len)
+            .map(|x| (x.offset, x.line))
+            .collect()
     }
 
-    pub fn get_lines_from(&self, start: usize, len: usize) -> Vec<(usize, String)> {
-        todo!("Replace iterators");
-        // let iter = self.iter_filtered(start);
-        // iter.take(len).collect()
+    pub fn get_lines_from(&mut self, start: usize, len: usize) -> Vec<(usize, String)> {
+        // FIXME: Use Filters::iter() instead of bypassing it to get to log
+        self.filters.log
+            .iter_lines_from(start)
+            .take(len)
+            .map(|x| (x.offset, x.line))
+            .collect()
     }
 
     // pub fn iter_start(&self, start: usize) -> impl Iterator<Item = (usize, String)>  {
