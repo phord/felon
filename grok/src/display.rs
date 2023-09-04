@@ -287,7 +287,8 @@ impl Display {
                 // doc.get_lines_from(start + self.prev.top, len)
                 // FIXME: Backwards iterator isn't working
                 let begin = self.displayed_lines.first().unwrap();
-                doc.get_lines_from_rev(begin-1, len+1)[1..].to_vec()
+                let lines = doc.get_lines_from_rev(*begin, len);
+                lines.into_iter().rev().collect()
             } else if scroll > 0 {
                 // get 'len' lines after the last line displayed
                 let begin = self.displayed_lines.last().unwrap();
