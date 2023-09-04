@@ -9,5 +9,4 @@ edition = "2021"
 pico-args = "0.4.2"
 indexed_file = { path = "../indexed_file" }
 document = { path = "../document" }
-
 log = "0.4"

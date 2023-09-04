@@ -118,10 +118,10 @@ impl Filters {
     }
 
     fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        println!("Adding filter {:?} {:?}", filter_type, search_type);
+        log::info!("Adding filter {:?} {:?}", filter_type, search_type);
         let mut f = DocFilter::new(search_type);
         f.bind(&mut self.log);
-        println!("Done");
+        log::trace!("Done");
         match filter_type {
             FilterType::FilterIn =>   self.filter_in.push(f),
             FilterType::FilterOut =>  self.filter_out.push(f),

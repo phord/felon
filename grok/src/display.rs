@@ -217,6 +217,7 @@ impl Display {
 
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
         // FIXME: Discard unused cached lines
+        log::trace!("refresh_screen");
 
         let view_height = self.page_size();
         self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
