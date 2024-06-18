@@ -30,13 +30,15 @@ impl Viewer {
     }
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
-        log::trace!("run");
-
         self.display.refresh_screen(&mut self.doc)?;
         self.status.refresh_screen(&mut self.doc)?;
 
         let cmd = self.input.get_command()?;
-        log::trace!("Got command: {:?}", cmd);
+        match cmd {
+            UserCommand::None => {},
+            _ => {  log::trace!("Got command: {:?}", cmd); }
+        };
+
         match cmd {
             UserCommand::Quit => Ok(false),
             UserCommand::SearchPrompt => {

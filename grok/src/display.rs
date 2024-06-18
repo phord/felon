@@ -243,7 +243,6 @@ impl Display {
 
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
         // FIXME: Discard unused cached lines
-        log::trace!("refresh_screen");
 
         let view_height = self.page_size();
         self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
@@ -306,6 +305,7 @@ impl Display {
         let lines =
             if self.displayed_lines.len() == 0 {
                 // Blank slate; start of file
+                log::trace!("start of file");
                 doc.get_lines_from(0, len)
             } else if scroll < 0 {
                 // // get 'len' lines after the top line
@@ -313,14 +313,19 @@ impl Display {
                 // FIXME: Backwards iterator isn't working
                 let begin = self.displayed_lines.first().unwrap();
                 let lines = doc.get_lines_from_rev(*begin, len);
+                log::trace!("scrolling backwards: {} lines", lines.len());
                 lines.into_iter().rev().collect()
             } else if scroll > 0 {
                 // get 'len' lines after the last line displayed
                 let begin = self.displayed_lines.last().unwrap();
-                doc.get_lines_from(begin+1, len)
+                let lines = doc.get_lines_from(begin+1, len);
+                log::trace!("scrolling forwards: {} lines", lines.len());
+                lines
             } else {
                 // get 'len' lines after the top line
-                doc.get_lines_from(self.prev.top, len)
+                let lines = doc.get_lines_from(self.prev.top, len);
+                log::trace!("displaying: {} lines", lines.len());
+                lines
             };
 
         if scroll < 0 {
