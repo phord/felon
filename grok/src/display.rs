@@ -111,16 +111,14 @@ pub struct Display {
 
 impl Drop for Display {
     fn drop(&mut self) {
-        if self.on_alt_screen {
-            execute!(stdout(), terminal::LeaveAlternateScreen).expect("Failed to exit alt mode");
-        }
-        // FIXME: Show the cursor (and reset other missing things?)
+        log::trace!("Display closing");
+        self.stop().expect("Failed to stop display");
     }
 }
 
 impl Display {
     pub fn new(config: Config) -> Self {
-        let mut s = Self {
+        let s = Self {
             height: 0,
             width: 0,
             on_alt_screen: false,
@@ -131,8 +129,36 @@ impl Display {
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
         };
-        s.update_size();
         s
+    }
+
+    // Begin owning the terminal
+    pub fn start(&mut self) -> crossterm::Result<()> {
+        if ! self.on_alt_screen && self.use_alt {
+            execute!(stdout(), terminal::EnterAlternateScreen)?;
+            self.on_alt_screen = true;
+        }
+
+        // Hide the cursor
+        execute!(stdout(), cursor::Hide)?;
+
+        // Collect display size info
+        self.update_size();
+
+        Ok(())
+    }
+
+    fn stop(&mut self) -> crossterm::Result<()> {
+        if self.on_alt_screen {
+            execute!(stdout(), terminal::LeaveAlternateScreen).expect("Failed to exit alt mode");
+            self.on_alt_screen = false;
+            log::trace!("display: leave alt screen");
+        }
+
+        // Show the cursor
+        execute!(stdout(), cursor::Show)?;
+
+        Ok(())
     }
 
     fn update_size(&mut self) {
@@ -222,11 +248,6 @@ impl Display {
         let view_height = self.page_size();
         self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
 
-        if ! self.on_alt_screen && self.use_alt {
-            execute!(stdout(), terminal::EnterAlternateScreen)?;
-            self.on_alt_screen = true;
-        }
-
         // What we want to display
         let disp = DisplayState {
             top: self.top,
@@ -238,6 +259,10 @@ impl Display {
             // No change; nothing to do.
             return Ok(());
         }
+
+        // FIXME: We never show line 0
+        // FIXME: scrolling back from end of README drops some lines -- why?
+        // FIXME: Startup iterates whole file first
 
         // Calc screen difference from previous display in scroll-lines (pos or neg)
         let scroll = disp.top as isize - self.prev.top as isize;
@@ -316,8 +341,6 @@ impl Display {
 
         // TODO: Vector is short on last page.  Allow it?
         // assert!(self.displayed_lines.len() == self.page_size());
-
-        queue!(buff, cursor::Hide)?;
 
         let mut row = start;
         for (pos, line) in lines.iter(){

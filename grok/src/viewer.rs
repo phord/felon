@@ -24,6 +24,11 @@ impl Viewer {
         }
     }
 
+    // Begin owning the terminal
+    pub fn start(&mut self) -> crossterm::Result<()> {
+        self.display.start()
+    }
+
     pub fn run(&mut self) -> crossterm::Result<bool> {
         log::trace!("run");
 

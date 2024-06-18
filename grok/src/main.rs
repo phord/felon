@@ -15,7 +15,12 @@ fn main() -> crossterm::Result<()> {
         .start().unwrap();
     let cfg = Config::from_env();
     log::info!("Init config: {:?}", cfg);
+
     let mut viewer = viewer::Viewer::new(cfg.unwrap());
+    viewer.start()?;
+
     while viewer.run()? {}
+
+    log::info!("main exit");
     Ok(())
 }
