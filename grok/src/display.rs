@@ -8,7 +8,7 @@ use crate::document::Document;
 use crate::styled_text::RGB_BLACK;
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 struct DisplayState {
     top: usize,     // deprecated
     bottom: usize,  // FIXME: height
@@ -240,17 +240,109 @@ impl Display {
         // TODO: Memoize the line_colors along with the lines
         self.draw_styled_line(buff, row, doc.line_colors(line));
     }
+}
+
+#[derive(Debug)]
+struct ScrollVector {
+    offset: usize,  // line offset in Document
+    pos: usize,     // position on screen
+    lines: usize,   // number of lines to display
+}
+
+#[derive(Debug)]
+enum Scroll {
+    Up(ScrollVector),
+    Down(ScrollVector),
+    Repaint(ScrollVector),
+    None,
+}
+
+impl Scroll {
+    fn down(offset: usize, pos: usize, lines: usize) -> Self {
+        Self::Down( ScrollVector {offset, pos, lines} )
+    }
+    fn up(offset: usize, pos: usize, lines: usize) -> Self {
+        Self::Up( ScrollVector {offset, pos, lines} )
+    }
+    fn repaint(offset: usize, pos: usize, lines: usize) -> Self {
+        Self::Repaint( ScrollVector {offset, pos, lines} )
+    }
+    fn none() -> Self {
+        Self::None
+    }
+    fn is_none(&self) -> bool {
+        match self {
+            Self::None => true,
+            _ => false,
+        }
+    }
+}
+
+impl Display {
+    // Pull lines from an iterator and display them.  There are two modes:
+    // 1. Scroll up:  Display each new line at the next lower position, and scroll up from bottom
+    // 2. Scroll down:  Display each new line at the next higher position, and scroll down from top
+    // pos is the offset in the file for the first line
+    // if size is larger than display height, we may skip unnecessary lines
+    // Scroll distance is in screen rows.  If a read line takes multiple rows, they count as multiple lines.
+    fn feed_lines(&mut self, doc: &mut Document, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
+        log::trace!("feed_lines: {:?}", scroll);
+
+        let mut buff = ScreenBuffer::new();
+
+        // Check if scroll is an Up type
+        let (lines, v) = match scroll {
+            Scroll::Up(sv) => {
+                // Partial screen scroll backwards
+                let lines: Vec<_> = doc.get_lines_from_rev(sv.offset, sv.lines).into_iter().rev().collect();
+                queue!(buff, terminal::ScrollDown(sv.lines as u16)).unwrap();
+                self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(sv.lines));
+                self.displayed_lines.truncate(self.page_size());
+                (lines, sv)
+            },
+            Scroll::Down(sv) => {
+                // Partial screen scroll forwards
+                let lines = doc.get_lines_from(sv.offset, sv.lines);
+                queue!(buff, terminal::ScrollUp(sv.lines as u16)).unwrap();
+                self.displayed_lines = self.displayed_lines[sv.lines as usize..].to_vec();
+                self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(sv.lines));
+                // self.displayed_lines.resize(self.page_size(), 0usize);
+                (lines, sv)
+            },
+            Scroll::Repaint(sv) => {
+                // Repainting whole screen, no scrolling
+                let lines = doc.get_lines_from(sv.offset, sv.lines);
+                queue!(buff, terminal::Clear(ClearType::All)).unwrap();
+                self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(sv.lines).collect();
+                (lines, sv)
+            },
+            Scroll::None => unreachable!("Scroll::None")
+        };
+
+        let mut row = v.pos;
+        for (pos, line) in lines.iter(){
+            if row == v.pos + v.lines {
+                break;
+            }
+            self.draw_line(doc, &mut buff, row, line);
+            // self.displayed_lines[row] = *pos;
+            row += 1;
+        }
+
+        Ok(buff)
+    }
 
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
         // FIXME: Discard unused cached lines
 
         let view_height = self.page_size();
-        self.top = cmp::min(self.top, doc.filtered_line_count().saturating_sub(view_height));
+        let last_page = doc.filtered_line_count().saturating_sub(view_height+1);
+        self.top = cmp::min(self.top, last_page);
 
         // What we want to display
         let disp = DisplayState {
             top: self.top,
-            bottom: self.top + self.page_size(),
+            bottom: self.top + view_height,
             width: self.width,
         };
 
@@ -259,103 +351,67 @@ impl Display {
             return Ok(());
         }
 
+        log::trace!("New display: {:?}", disp);
         // FIXME: We never show line 0
-        // FIXME: scrolling back from end of README drops some lines -- why?
         // FIXME: Startup iterates whole file first
+        // FIXME: Scroll to end doesn't update display; fucks up line position trackers
+        // TODO: We only use displayed_lines.{first,last}.  Do we need to keep the whole array?
+        // TODO: Line wrapping
 
-        // Calc screen difference from previous display in scroll-lines (pos or neg)
-        let scroll = disp.top as isize - self.prev.top as isize;
-        let (scroll, top, bottom) =
-            if scroll == 0 {
-                // No scrolling; check height/width
-                if disp.width <= self.prev.width {
-                    if self.page_size() <= self.prev.bottom - self.prev.top {
-                        // Screen is the same or smaller. Nothing to do.
-                        (0, disp.bottom, disp.bottom)
-                    } else {
-                        // Just need to display new rows at bottom
-                        (0, self.prev.bottom, disp.bottom)
-                    }
-                } else {
-                    // Screen got wider.  Repaint everything.
-                    (0, disp.top, disp.bottom)
-                }
-            } else if scroll.abs() > self.page_size() as isize {
-                // Scrolling too far; clear the screen
-                (0, disp.top, disp.bottom)
-            } else if scroll < 0 {
-                // Scroll down
-                (scroll, (disp.top as isize) as usize, self.prev.top)
-            } else if scroll > 0 {
-                // Scroll up
-                (scroll, self.prev.bottom, self.prev.bottom + scroll as usize)
-            } else {
-                unreachable!("Unexpected scroll value: {}", scroll);
-            };
-
-        assert!(top >= disp.top);
-
-        let len = bottom - top;
-        let start = top - disp.top;
-
-        self.prev = disp;
-
-        let mut buff = ScreenBuffer::new();
-
-        let lines =
+        let prev_height = self.prev.bottom - self.prev.top;
+        let prev_width = self.prev.width;
+        let plan =
             if self.displayed_lines.len() == 0 {
                 // Blank slate; start of file
                 log::trace!("start of file");
-                doc.get_lines_from(0, len)
-            } else if scroll < 0 {
+                Scroll::repaint(0, 0, view_height)
+            } else if self.prev.top > disp.bottom || self.prev.bottom < disp.top {
+                // new screen has no overlap with old one
+                if disp.top == 0 {
+                    Scroll::repaint(0, 0, view_height)
+                } else if disp.top == last_page {
+                    // FIXME: Scrolling in last page is broken horribly
+                    Scroll::up(usize::MAX, view_height-1, view_height)
+                } else {
+                    panic!("How did we scroll here? Not start; not end. Get offset from line number? {:?}", disp);
+                    let offset = 0;
+                    Scroll::repaint(offset, self.top, view_height)
+                }
+            } else if self.prev.top > disp.top {
                 // // get 'len' lines after the top line
                 // doc.get_lines_from(start + self.prev.top, len)
                 // FIXME: Backwards iterator isn't working
                 let begin = self.displayed_lines.first().unwrap();
-                let lines = doc.get_lines_from_rev(*begin, len);
-                log::trace!("scrolling backwards: {} lines", lines.len());
-                lines.into_iter().rev().collect()
-            } else if scroll > 0 {
+                Scroll::up(*begin, 0, self.prev.top - disp.top)
+            } else if self.prev.top < disp.top {
                 // get 'len' lines after the last line displayed
                 let begin = self.displayed_lines.last().unwrap();
-                let lines = doc.get_lines_from(begin+1, len);
-                log::trace!("scrolling forwards: {} lines", lines.len());
-                lines
+                let len = disp.top - self.prev.top;
+                Scroll::down(*begin, view_height - len, len)
             } else {
-                // get 'len' lines after the top line
-                let lines = doc.get_lines_from(self.prev.top, len);
-                log::trace!("displaying: {} lines", lines.len());
-                lines
+                // No scrolling; check height/width
+                if disp.width <= prev_width {
+                    if view_height <= prev_height {
+                        // Screen is the same or smaller. Nothing to do.
+                        Scroll::none()
+                    } else {
+                        // Terminal got taller; display new rows at bottom
+                        let begin = self.displayed_lines.last().unwrap();
+                        Scroll::down(*begin, self.prev.bottom, view_height - prev_height)
+                    }
+                } else {
+                    // Screen got wider.  Repaint everything.
+                    Scroll::repaint(0, 0, view_height)
+                }
             };
 
-        if scroll < 0 {
-            // Partial screen scroll backwards
-            queue!(buff, terminal::ScrollDown(scroll.abs() as u16)).unwrap();
-            self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(len));
-            self.displayed_lines.truncate(self.page_size());
-        } else if scroll > 0 || self.displayed_lines.len() == 0 {
-            // Partial screen scroll forwards
-            queue!(buff, terminal::ScrollUp(scroll as u16)).unwrap();
-            self.displayed_lines = self.displayed_lines[scroll as usize..].to_vec();
-            self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(len));
-            // self.displayed_lines.resize(self.page_size(), 0usize);
-        } else {
-            // Redraw whole screen
-            self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(len).collect();
-        };
-
-        // TODO: Vector is short on last page.  Allow it?
-        // assert!(self.displayed_lines.len() == self.page_size());
-
-        let mut row = start;
-        for (pos, line) in lines.iter(){
-            if row == start + len {
-                break;
-            }
-            self.draw_line(doc, &mut buff, row, line);
-            self.displayed_lines[row] = *pos;
-            row += 1;
+        if plan.is_none() {
+            return Ok(());
         }
+
+        let mut buff = self.feed_lines(doc, plan)?;
+        self.prev = disp;
+
         // DEBUG HACK
         // self.draw_line(doc, &mut buff, self.height - 2, &format!("scroll={} displayed={:?}", scroll, self.displayed_lines));
         buff.flush()
