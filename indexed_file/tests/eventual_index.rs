@@ -56,7 +56,7 @@ fn test_cursor_start() {
 #[test]
 fn test_cursor_mid_start() {
     let index = get_partial_eventual_index(50, 100);
-    let cursor = index.locate(TargetOffset::After(50));
+    let cursor = index.locate(TargetOffset::AtOrAfter(50));
     match cursor {
         Location::Indexed(IndexRef{index: 0, line: 0, offset: 52}) => {},
         _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
@@ -76,7 +76,7 @@ fn test_cursor_last() {
         Location::Indexed(_) => {},
         _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
     }
-    let fault = index.locate(TargetOffset::After(index.bytes()));
+    let fault = index.locate(TargetOffset::AtOrAfter(index.bytes()));
     match fault {
         Location::Gap(GapRange { gap: Unbounded(_), .. }) => {},
         _ => panic!("Expected MissingUnbounded; got something else: {:?}", fault),
@@ -165,7 +165,7 @@ fn test_insert_basic_nz() {
 
     let cursor = index.locate(TargetOffset::AtOrBefore(0));
     assert!(cursor.offset().is_none());
-    let cursor = index.locate(TargetOffset::After(0));
+    let cursor = index.locate(TargetOffset::AtOrAfter(0));
     assert_eq!(cursor.offset().unwrap(), 10);
     assert!(index.next_line_index(cursor).is_gap());
 }
@@ -174,13 +174,13 @@ fn test_insert_basic_nz() {
 #[test]
 fn test_insert_before() {
     let mut index = get_partial_eventual_index(50, 100);
-    let loc = index.locate(TargetOffset::After(0));
+    let loc = index.locate(TargetOffset::AtOrAfter(0));
     assert!(loc.is_gap());
     index.insert(loc, 0..50, Some(10));
 
     let cursor = index.locate(TargetOffset::AtOrBefore(0));
     assert!(cursor.offset().is_none());
-    let cursor = index.locate(TargetOffset::After(0));
+    let cursor = index.locate(TargetOffset::AtOrAfter(0));
     assert_eq!(cursor.offset().unwrap(), 10);
     assert!(index.next_line_index(cursor).offset().unwrap() >= 50);
 }
@@ -189,11 +189,11 @@ fn test_insert_before() {
 #[test]
 fn test_insert_after() {
     let mut index = get_partial_eventual_index(50, 100);
-    let loc = index.locate(TargetOffset::After(170));
+    let loc = index.locate(TargetOffset::AtOrAfter(170));
     assert!(loc.is_gap());
     index.insert(loc, 170..200, Some(180));
 
-    let cursor = index.locate(TargetOffset::After(170));
+    let cursor = index.locate(TargetOffset::AtOrAfter(170));
     assert_eq!(cursor.offset().unwrap(), 180);
     let foo = index.next_line_index(cursor);
     assert!(index.next_line_index(cursor).is_gap());

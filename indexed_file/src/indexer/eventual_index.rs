@@ -131,20 +131,20 @@ pub enum VirtualLocation {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TargetOffset {
     AtOrBefore(usize),
-    After(usize),
+    AtOrAfter(usize),
 }
 
 impl TargetOffset {
     pub fn value(&self) -> usize {
         match self {
-            TargetOffset::After(x) => *x + 1,
+            TargetOffset::AtOrAfter(x) => *x,
             TargetOffset::AtOrBefore(x) => *x,
         }
     }
 
     pub fn is_after(&self) -> bool {
         match self {
-            TargetOffset::After(_) => true,
+            TargetOffset::AtOrAfter(_) => true,
             TargetOffset::AtOrBefore(_) => false,
         }
     }
@@ -211,7 +211,7 @@ impl EventualIndex {
             // TODO: assert we found our offset
         } else {
             // Returns some line that is not in our range, or a gap.
-            self.find_location(index, line, TargetOffset::After(end))
+            self.find_location(index, line, TargetOffset::AtOrAfter(end))
             // FIXME: Support TargetOffset::AtOrBefore(...) for reverse-walking
         }
     }
@@ -346,7 +346,7 @@ impl EventualIndex {
             Location::Virtual(loc) => match loc {
                 VirtualLocation::Before(0) => Location::Invalid,
                 VirtualLocation::Before(offset) => self.locate(TargetOffset::AtOrBefore(offset-1)),
-                VirtualLocation::After(offset) => self.locate(TargetOffset::After(offset)),
+                VirtualLocation::After(offset) => self.locate(TargetOffset::AtOrAfter(offset)),
                 VirtualLocation::Start => {
                     if let Some(gap) = self.try_gap_at(0, TargetOffset::AtOrBefore(0)) {    // FIXME: Assumes there will always be offset @ zero
                         gap
@@ -394,8 +394,8 @@ impl EventualIndex {
         loop {
             if let Some(p_off) = pos.offset() {
                 match target {
-                    TargetOffset::After(offset) => {
-                        if p_off <= offset {
+                    TargetOffset::AtOrAfter(offset) => {
+                        if p_off < offset {
                             pos = self.next_line_index(pos);
                         } else {
                             break
@@ -423,11 +423,11 @@ impl EventualIndex {
             let i = &self.indexes[index];
             if line >= i.lines() || i.get(line) != offset {
                 // Target location invalidated by changes to self.indexes. Fall back to slow search for line after this offset.
-                self.locate(TargetOffset::After(offset))
+                self.locate(TargetOffset::AtOrAfter(offset+1))
             } else if line + 1 < i.len() {
                 // next line is in the same index
                 self.get_location( index, line + 1 )
-            } else if let Some(gap) = self.try_gap_at(index + 1, TargetOffset::After(i.end)) {
+            } else if let Some(gap) = self.try_gap_at(index + 1, TargetOffset::AtOrAfter(i.end+1)) {
                 // next line is not parsed yet
                 gap
             } else {

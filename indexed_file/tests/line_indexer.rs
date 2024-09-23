@@ -446,18 +446,18 @@ mod logfile_data_iterator_tests {
 
         let mut it = file.iter_lines_from(0);
 
-        // Verify we see all but the first line
+        // Verify we see the first line
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
         count = 1;
-        assert_eq!(prev, patt_len);
+        assert_eq!(prev, 0);
         assert_eq!(line, patt);
 
         for _ in it {
             count += 1;
         }
-        assert_eq!(count, lines - 1);
+        assert_eq!(count, lines);
     }
     #[test]
     fn test_iterator_from_offset_end_of_file() {
