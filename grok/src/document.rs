@@ -8,187 +8,16 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
 use indexed_file::{files, Log};
-// use std::collections::BTreeSet;
-// use std::ops::Bound::{Excluded, Unbounded};
-use itertools::Itertools;
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[allow(dead_code)]
-pub enum FilterType {
-    FilterOut,
-    FilterIn,
-    Search,
-}
-
-// use std::cell::RefCell;
-
-#[derive(Debug)]
-pub enum SearchType {
-    SearchRegex(Regex),
-}
-
-struct DocFilter {
-    search_type: SearchType,
-    matches : Vec<usize>,
-}
-
-impl DocFilter {
-    pub fn new(search_type: SearchType) -> Self {
-        Self {
-            search_type,
-            matches : Vec::new(),
-        }
-    }
-
-    // Find a line position given some offset into file
-    fn after(&self, offset: usize) -> usize {
-        let pos = self.matches.binary_search(&offset);
-        match pos { Ok(t) => t, Err(e) => e,}
-    }
-
-    // Resolve a filter against a LogFileLines and store the matches
-    fn bind(&mut self, log: &mut Log) {
-        let matches =
-            match self.search_type {
-                SearchType::SearchRegex(ref regex) => {
-                    // Search all lines for regex
-                    // FIXME: search only filtered-in lines when possible
-                    let mut matches = Vec::new();
-                    for line in log.iter_lines() {
-                        // TODO: For filter-out we will want the unmatched lines instead
-                        if regex.is_match(&line.line) {
-                            matches.push(line.offset);
-                        }
-                    }
-                    matches
-                }
-            };
-        self.matches = matches;
-    }
-
-    // fn apply(&self, log: &LogFileLines, active: &BTreeSet<usize>) -> BTreeSet<usize> {
-    //     let matches = self.first(log);
-    //     match self.filter_type {
-    //         FilterType::FilterOut => {
-    //             active.difference(&matches).copied().collect()
-    //         }
-    //         FilterType::FilterIn => {
-    //             active.union(&matches).copied().collect()
-    //         }
-    //         FilterType::Search => {
-    //             active.intersection(&matches).copied().collect()
-    //         }
-    //     }
-    // }
-}
-
-struct Filters {
-    // if any filter_in exist, all matching lines are included; all non-matching lines are excluded
-    filter_in: Vec<DocFilter>,
-
-    // if any filter_out exist, all matching lines are excluded
-    filter_out: Vec<DocFilter>,
-
-    // Highlight-matching lines, even if they're filtered out
-    highlight: Vec<DocFilter>,
-
-    /// Filtered line numbers
-    filtered_lines: Vec<usize>,
-
-    log: Log,
-}
-
-impl Filters {
-    fn new(file: Log) -> Self {
-
-        let mut s = Self {
-            filter_in: vec![],
-            filter_out: vec![],
-            highlight: vec![],
-            filtered_lines: vec![], // Some(vec![5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]),
-            log: file
-        };
-
-        // let v : Vec<_> = s.log.iter_offsets()
-        //     .collect();
-
-        // log::trace!("filtered_lines {:?}", &v[..150.min(v.len())]);
-
-        // s.filtered_lines = v;
-
-        s
-    }
-
-    fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        log::info!("Adding filter {:?} {:?}", filter_type, search_type);
-        let mut f = DocFilter::new(search_type);
-        f.bind(&mut self.log);
-        log::trace!("Done");
-        match filter_type {
-            FilterType::FilterIn =>   self.filter_in.push(f),
-            FilterType::FilterOut =>  self.filter_out.push(f),
-            FilterType::Search =>     self.highlight.push(f),
-        };
-        // self.apply_filters();
-    }
-
-    fn apply_filters(&mut self) {
-        // XXX: Keep filters in vectors, but keep Searches in a FnvHashMap.
-        // XXX: For filter-out,
-        //    1. find the maximum next line in each filter
-        //    2. If the difference is small, linearly step the other filters until they match.
-        //       If it's large, try a binary search.
-    }
-
-}
-
-impl Filters {
-    fn iter_includes_rev(& self, start: usize) -> Box<dyn Iterator<Item = usize> + '_>  {
-        if self.filter_in.is_empty() {
-            let start = self.filtered_lines.binary_search(&start);
-            let start = match start { Ok(t) => t, Err(e) => e,};
-            Box::new(self.filtered_lines[..start]
-                    .iter()
-                    .cloned())
-        } else {
-            // Find the next line that matches any filter-in.
-            Box::new(self.filter_in.iter()
-                    .map(|x| x.matches[..x.after(start)].iter())
-                    .kmerge()
-                    .dedup()
-                    .cloned())
-            }
-    }
-
-    fn iter_includes(& self, start: usize) -> Box<dyn Iterator<Item = usize> + '_>  {
-        if self.filter_in.is_empty() {
-            let start = self.filtered_lines.binary_search(&start);
-            let start = match start { Ok(t) => t, Err(e) => e,};
-            Box::new(self.filtered_lines[start..]
-                    .iter()
-                    .cloned())
-        } else {
-            // Find the next line that matches any filter-in.
-            Box::new(self.filter_in.iter()
-                    .map(|x| x.matches[x.after(start)..].iter())
-                    .kmerge()
-                    .dedup()
-                .cloned())
-            }
-    }
-}
 pub struct Document {
-    // File contents
-    // FIXME: Replace this with a filtered-view so we can apply filters
     // FIXME: StyledLine caching -- premature optimization?
-    filters: Filters,
+    // File contents
+    log: Log,
 }
 
 impl Document {
 
     pub fn get_lines_from_rev(&mut self, start: usize, len: usize) -> Vec<(usize, String)> {
-        // FIXME: Use Filters::iter() instead of bypassing it to get to log
-        self.filters.log
+        self.log
             .iter_lines_from(start)
             .rev()
             .take(len)
@@ -197,68 +26,29 @@ impl Document {
     }
 
     pub fn get_lines_from(&mut self, start: usize, len: usize) -> Vec<(usize, String)> {
-        // FIXME: Use Filters::iter() instead of bypassing it to get to log
-        self.filters.log
+        self.log
             .iter_lines_from(start)
             .take(len)
             .map(|x| (x.offset, x.line))
             .collect()
     }
 
-    // pub fn iter_start(&self, start: usize) -> impl Iterator<Item = (usize, String)>  {
-    //     self.iter_filtered(start)
-    // //     DocumentIterator::<'a> {
-    // //         doc: self,
-    // //         index: start,
-    // //         inner: Some(Box::new(self.filters.iter_includes()
-    // //             .map(|(start, end)| self.filters.file.readline_fixed(start, end).unwrap())))
-    // //     }
-    // }
-
-
-    // pub fn iter_filtered_rev(&mut self, pos: usize) -> impl Iterator<Item = (usize, String)> + '_ {
-    //     let i = self.filters.iter_includes_rev(pos);
-    //     i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~".to_owned())))
-    // }
-
-    // pub fn iter_filtered(&mut self, pos: usize) -> impl Iterator<Item = (usize, String)> + '_ {
-    //     let i = self.filters.iter_includes(pos);
-    //     i.map(|(start, end)| (start, self.filters.file.readline_fixed(start, end).unwrap_or("~".to_owned())))
-    // }
 }
 
 impl Document {
     pub fn new(config: Config) -> Self {
         let filename = config.filename.get(0).expect("No filename specified").clone();
-        let file = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
+        let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
-        let mut s = Self {
-            filters: Filters::new(file),
+        let s = Self {
+            log,
         };
-
-        // FIXME: This works for adding filters now. What about in the future?
-        // filters.add_filter(FilterType::FilterOut, SearchType::SearchWord("flutter".to_string()));
-        // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"sectors").unwrap()));
-        // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"foo").unwrap()));
-        // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"segmap.segmap measurement timing").unwrap()));
-        // s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"flutter").unwrap()));
-
-        // Filters are borked.  They try to iterate the whole file up-front.  wtf?
-        // s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"e").unwrap()));
 
         s
     }
 
     pub fn all_line_count(&self) -> usize {
-        self.filters.log.count_lines()
-    }
-
-    pub fn filtered_line_count(&self) -> usize {
-        self.filters.filtered_lines.len()
-    }
-
-    pub fn add_filter(&mut self, filter_type: FilterType, search_type: SearchType) {
-        self.filters.add_filter(filter_type, search_type)
+        self.log.count_lines()
     }
 
     fn hash_color(&self, text: &str) -> Color {
@@ -352,16 +142,4 @@ impl Document {
 
         styled
     }
-
-    // // Deprecated
-    // pub fn get(&mut self, lrow: usize) -> &str {
-    //     let line =
-    //         match self.filters.filtered_lines {
-    //             Some(ref lines) =>
-    //                 if lrow < lines.len() { self.filters.file.readline_at(lines[lrow])} else {None},
-    //             None =>
-    //                 self.filters.file.readline(lrow),
-    //         };
-    //     line.unwrap_or("~")
-    // }
 }

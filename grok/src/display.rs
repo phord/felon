@@ -336,7 +336,9 @@ impl Display {
         // FIXME: Discard unused cached lines
 
         let view_height = self.page_size();
-        let last_page = doc.filtered_line_count().saturating_sub(view_height+1);
+
+        // FIXME: We don't know last page if file isn't fully loaded yet
+        let last_page = 1000; // FIXME: doc.filtered_line_count();
         self.top = cmp::min(self.top, last_page);
 
         // What we want to display
