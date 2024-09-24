@@ -109,10 +109,12 @@ impl Filters {
             log: file
         };
 
-        let v : Vec<_> = s.log.iter_offsets()
-            .collect();
+        // let v : Vec<_> = s.log.iter_offsets()
+        //     .collect();
 
-        s.filtered_lines = v;
+        // log::trace!("filtered_lines {:?}", &v[..150.min(v.len())]);
+
+        // s.filtered_lines = v;
 
         s
     }
@@ -240,7 +242,9 @@ impl Document {
         // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"foo").unwrap()));
         // doc.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"segmap.segmap measurement timing").unwrap()));
         // s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"flutter").unwrap()));
-        s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"e").unwrap()));
+
+        // Filters are borked.  They try to iterate the whole file up-front.  wtf?
+        // s.add_filter(FilterType::FilterIn, SearchType::SearchRegex(Regex::new(r"e").unwrap()));
 
         s
     }
