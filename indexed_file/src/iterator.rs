@@ -52,6 +52,7 @@ impl<'a> LineIndexerIterator<'a> {
         }
     }
 
+    // helper: resolves pos into a location in the file, but does not actually "move" the iterator
     fn iterate(&mut self, pos: Location) -> (Location, Option<usize>) {
         let pos = self.log.file.resolve_location(pos);
 
@@ -103,7 +104,15 @@ pub(crate) struct LineIndexerDataIterator<'a> {
 }
 
 impl<'a> LineIndexerDataIterator<'a> {
-    pub(crate) fn new(inner: LineIndexerIterator<'a>) -> Self {
+    pub(crate) fn new(log: &'a mut Log) -> Self {
+        let inner = LineIndexerIterator::new(log);
+        Self {
+            inner,
+        }
+    }
+
+    pub(crate) fn new_from(log: &'a mut Log, offset: usize) -> Self {
+        let inner = LineIndexerIterator::new_from(log, offset);
         Self {
             inner,
         }
