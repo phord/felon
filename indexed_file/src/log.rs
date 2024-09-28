@@ -82,7 +82,6 @@ impl Log {
     }
 
     pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
-        // FIXME: sublineindexer::next_back is going forward instead of backwards?
         LineIndexerDataIterator::new_from(self, offset)
     }
 }

@@ -101,8 +101,7 @@ impl SubLineHelper {
         self.sub_next(mode)
     }
 
-    // Supply a new line and get the last chunk
-    fn next_back(&mut self, mode: &LineViewMode, line: Option<LogLine>) -> Option<LogLine> {
+    fn init_back(&mut self, mode: &LineViewMode, line: Option<LogLine>) {
         self.buffer = line;
         match mode {
             LineViewMode::Wrap{width} => {
@@ -112,6 +111,11 @@ impl SubLineHelper {
             },
             _ => {},
         }
+    }
+
+    // Supply a new line and get the last chunk
+    fn next_back(&mut self, mode: &LineViewMode, line: Option<LogLine>) -> Option<LogLine> {
+        self.init_back(mode, line);
         self.sub_next_back(mode)
     }
 
@@ -125,34 +129,34 @@ impl SubLineHelper {
     }
 
     // If we're wrapping lines, this helper splits the initial line into fwd and rev chunks given some desired offset starting point.
-    // This should only be called on the "rev" SubLineHelper; we will modify self to prepare for future calls to sub_next_back.
-    // A new SubLineHelper will be returned to be used for the "fwd" iterator, if needed.  If the offset is at the end of the line,
-    // or is not contained in this line, or if the mode is not Wrap, then the returned SubLineHelper will be empty.
-    // Adjust index to reference the chuck before the one containing the offset
-    // Return cloned SubLineHelper with index pointing to fwd chunk that this object (rev) will never use
-    fn chop_prev(&mut self, mode: &LineViewMode, offset: usize) -> SubLineHelper {
+    // Two new SubLineHelpers will be returned to be used for the "fwd" and "rev" iterators.
+    // The rev helper will be built to return the chunk before the one containing the offset. The fwd will ref the chunk containing the offset.
+    fn chop_prev(buffer: LogLine, mode: &LineViewMode, offset: usize) -> (SubLineHelper, SubLineHelper) {
+        let mut rev = Self::new();
+        rev.init_back(mode, Some(buffer));
         match mode {
             LineViewMode::Wrap{width} => {
-                if self.contains(offset) {
+                if rev.contains(offset) {
                     // We're definitely going to split the buffer. Determine where and adjust the index.
-                    let buffer = self.buffer.as_ref().unwrap();
+                    let buffer = rev.buffer.as_ref().unwrap();
                     let fwd_index = (offset - buffer.offset) / width * width;
 
                     // Construct a SubLineHelper for the fwd iterator
                     let fwd_buf = if fwd_index > 0 {
-                        self.index = fwd_index - width;
+                        rev.index = fwd_index - width;
                         Some(LogLine::new(buffer.line.clone(), buffer.offset))
                     } else {
-                        // If the offset is in the first chunk, we don't have any rev chunk remaining
-                        self.buffer.take()
+                        // Fwd offset is in the first chunk; we don't have any rev chunk remaining
+                        rev.buffer.take()
                     };
-                    Self { index: fwd_index, buffer: fwd_buf }
+                    let fwd = Self { index: fwd_index, buffer: fwd_buf };
+                    (rev, fwd)
                 } else {
                     // TODO assert buffer.offset + buffer.line.len() == offset
-                    Self::new()
+                    (rev, Self::new())
                 }
             },
-            _ => Self::new(),
+            _ => (rev, Self::new()),
         }
     }
 }
@@ -196,19 +200,25 @@ impl<'a> SubLineIterator<'a> {
 }
 
 impl<'a>  SubLineIterator<'a> {
-        // Usually when an offset is given we can count on the lineindexer to correctly load the previous line and next line correctly.
-        // But if we are wrapping lines, the "next" and "prev" chunks may come from the same line in the file. We handle this here.
-        // When we load the first line of this iterator, if an offset was given, we may need to split the line into two chunks.
-        // If the offset was at the start of the line, we don't need to do anything.  But if it was in the middle, then the line we
-        // need will be in the "prev" line loader.  That is, it will be before the given offset.  So we need to load the previous line
-        // and split it in two. The chop_prev function handles cleaving at the right place.
-        #[inline]
+    // Usually when an offset is given we can count on the lineindexer to correctly load the previous line and next line correctly.
+    // But if we are wrapping lines, the "next" and "prev" chunks may come from the same line in the file. We handle this here.
+    // When we load the first line of this iterator, if an offset was given, we may need to split the line into two chunks.
+    // If the offset was at the start of the line, we don't need to do anything.  But if it was in the middle, then the line we
+    // need will be in the "prev" line loader.  That is, it will be before the given offset.  So we need to load the previous line
+    // and split it in two. The chop_prev function handles cleaving at the right place.
+    #[inline]
     fn adjust_first_helpers(&mut self) {
         if let Some(offset) = self.start {
             assert!(self.rev.buffer.is_none());
             assert!(self.fwd.buffer.is_none());
-            self.rev.next_back(&self.mode, self.inner.next());
-            self.fwd = self.rev.chop_prev(&self.mode, offset);
+            match self.mode {
+                LineViewMode::Wrap{width: _} => {
+                    if let Some(prev) = self.inner.next_back() {
+                        (self.rev, self.fwd) = SubLineHelper::chop_prev(prev, &self.mode, offset);
+                    }
+                },
+                _ => {},
+            }
             self.start = None;
         }
     }
@@ -222,7 +232,7 @@ impl<'a> DoubleEndedIterator for SubLineIterator<'a> {
         if ret.is_some() {
             ret
         } else {
-            self.rev.next_back(&self.mode, self.inner.next())
+            self.rev.next_back(&self.mode, self.inner.next_back())
         }
     }
 }
