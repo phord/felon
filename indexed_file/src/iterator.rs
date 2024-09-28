@@ -25,14 +25,14 @@ impl std::fmt::Display for LogLine {
 }
 
 
-pub(crate) struct LineIndexerIterator<'a> {
+pub struct LineIndexerIterator<'a> {
     log: &'a mut Log,
     pos: Location,
     rev_pos: Location,
 }
 
 impl<'a> LineIndexerIterator<'a> {
-    pub(crate) fn new(log: &'a mut Log) -> Self {
+    pub fn new(log: &'a mut Log) -> Self {
         Self {
             log,
             pos: Location::Virtual(VirtualLocation::Start),
@@ -42,7 +42,7 @@ impl<'a> LineIndexerIterator<'a> {
 }
 
 impl<'a> LineIndexerIterator<'a> {
-    pub(crate) fn new_from(log: &'a mut Log, offset: usize) -> Self {
+    pub fn new_from(log: &'a mut Log, offset: usize) -> Self {
         let rev_pos = Location::Virtual(VirtualLocation::Before(offset));
         let pos = Location::Virtual(VirtualLocation::After(offset));
         Self {
@@ -99,19 +99,19 @@ impl<'a> DoubleEndedIterator for LineIndexerIterator<'a> {
 }
 
 // Iterate over lines as position, string
-pub(crate) struct LineIndexerDataIterator<'a> {
+pub struct LineIndexerDataIterator<'a> {
     inner: LineIndexerIterator<'a>,
 }
 
 impl<'a> LineIndexerDataIterator<'a> {
-    pub(crate) fn new(log: &'a mut Log) -> Self {
+    pub fn new(log: &'a mut Log) -> Self {
         let inner = LineIndexerIterator::new(log);
         Self {
             inner,
         }
     }
 
-    pub(crate) fn new_from(log: &'a mut Log, offset: usize) -> Self {
+    pub fn new_from(log: &'a mut Log, offset: usize) -> Self {
         let inner = LineIndexerIterator::new_from(log, offset);
         Self {
             inner,
