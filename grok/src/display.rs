@@ -10,9 +10,7 @@ use crate::styled_text::RGB_BLACK;
 
 #[derive(PartialEq, Debug)]
 struct DisplayState {
-    top: usize,     // deprecated
-    bottom: usize,  // FIXME: height
-    // left_offset: usize, // column offset
+    height: usize,
     width: usize,
 }
 
@@ -85,6 +83,14 @@ impl io::Write for ScreenBuffer {
     }
 }
 
+enum ScrollAction {
+    None,   // Nothing to do
+    StartOfFile,
+    EndOfFile,
+    Up(usize),
+    Down(usize),
+}
+
 pub struct Display {
     // Physical size of the display
     height: usize,
@@ -92,14 +98,13 @@ pub struct Display {
     on_alt_screen: bool,
     use_alt: bool,
 
-
-    /// First line on the display (line-number in the filtered file)
-    top: usize,
+    /// Scroll command from user
+    scroll: ScrollAction,
 
     /// Size of the bottom status panel
     panel: usize,
 
-    /// Previously displayed lines
+    /// Previous display info
     prev: DisplayState,
 
     // Displayed line offsets
@@ -123,9 +128,9 @@ impl Display {
             width: 0,
             on_alt_screen: false,
             use_alt: config.altscreen,
-            top: 0,
+            scroll: ScrollAction::StartOfFile,
             panel: 1,
-            prev: DisplayState { top: 0, bottom: 0, width: 0},
+            prev: DisplayState { height: 0, width: 0},
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
         };
@@ -177,31 +182,25 @@ impl Display {
         // self.action = Action::Message;
     }
 
-    fn vert_scroll(&mut self, amount: isize) {
-        let top = self.top as isize + amount;
-        self.top = cmp::max(top, 0) as usize;
-    }
-
-
     pub fn handle_command(&mut self, cmd: UserCommand) {
         match cmd {
             UserCommand::ScrollDown => {
-                self.vert_scroll(1);
+                self.scroll = ScrollAction::Down(1);
             }
             UserCommand::ScrollUp => {
-                self.vert_scroll(-1);
+                self.scroll = ScrollAction::Up(1);
             }
             UserCommand::PageDown => {
-                self.vert_scroll(self.page_size() as isize);
+                self.scroll = ScrollAction::Down(self.page_size());
             }
             UserCommand::PageUp => {
-                self.vert_scroll(-(self.page_size() as isize));
+                self.scroll = ScrollAction::Up(self.page_size());
             }
             UserCommand::ScrollToTop => {
-                self.top = 0;
+                self.scroll = ScrollAction::StartOfFile;
             }
             UserCommand::ScrollToBottom => {
-                self.top = usize::MAX;
+                self.scroll = ScrollAction::EndOfFile;
             }
             UserCommand::TerminalResize => {
                 self.update_size();
@@ -216,11 +215,11 @@ impl Display {
                 self.set_status_msg(format!("{:?}", cmd));
             }
             UserCommand::MouseScrollUp => {
-                self.vert_scroll(-(self.mouse_wheel_height as isize));
+                self.scroll = ScrollAction::Up(self.mouse_wheel_height as usize);
                 self.set_status_msg(format!("{:?}", cmd));
             }
             UserCommand::MouseScrollDown => {
-                self.vert_scroll(self.mouse_wheel_height as isize);
+                self.scroll = ScrollAction::Down(self.mouse_wheel_height as usize);
                 self.set_status_msg(format!("{:?}", cmd));
             }
             _ => {}
@@ -244,8 +243,7 @@ impl Display {
 
 #[derive(Debug)]
 struct ScrollVector {
-    offset: usize,  // line offset in Document
-    pos: usize,     // position on screen
+    offset: usize,  // byte offset in Document
     lines: usize,   // number of lines to display
 }
 
@@ -258,14 +256,14 @@ enum Scroll {
 }
 
 impl Scroll {
-    fn down(offset: usize, pos: usize, lines: usize) -> Self {
-        Self::Down( ScrollVector {offset, pos, lines} )
+    fn down(offset: usize, lines: usize) -> Self {
+        Self::Down( ScrollVector {offset, lines} )
     }
-    fn up(offset: usize, pos: usize, lines: usize) -> Self {
-        Self::Up( ScrollVector {offset, pos, lines} )
+    fn up(offset: usize, lines: usize) -> Self {
+        Self::Up( ScrollVector {offset, lines} )
     }
-    fn repaint(offset: usize, pos: usize, lines: usize) -> Self {
-        Self::Repaint( ScrollVector {offset, pos, lines} )
+    fn repaint(offset: usize, lines: usize) -> Self {
+        Self::Repaint( ScrollVector {offset, lines} )
     }
     fn none() -> Self {
         Self::None
@@ -290,43 +288,58 @@ impl Display {
 
         let mut buff = ScreenBuffer::new();
 
-        // Check if scroll is an Up type
-        let (lines, v) = match scroll {
+        let top_of_screen = 0;
+
+        // FIXME: Handle case when lines are shorter than display area
+
+        let (lines, mut row, mut count) = match scroll {
             Scroll::Up(sv) => {
-                // Partial screen scroll backwards
+                // Partial or complete screen scroll backwards
                 let lines: Vec<_> = doc.get_lines_from_rev(sv.offset, sv.lines).into_iter().rev().collect();
-                queue!(buff, terminal::ScrollDown(sv.lines as u16)).unwrap();
-                self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(sv.lines));
+                let rows = lines.len();
+                queue!(buff, terminal::ScrollDown(rows as u16)).unwrap();
+                self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(rows));
                 self.displayed_lines.truncate(self.page_size());
-                (lines, sv)
+                // TODO: add test for whole-screen offsets == self.displayed_lines
+                (lines, 0, rows)
             },
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
-                let lines = doc.get_lines_from(sv.offset, sv.lines);
-                queue!(buff, terminal::ScrollUp(sv.lines as u16)).unwrap();
-                self.displayed_lines = self.displayed_lines[sv.lines as usize..].to_vec();
-                self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(sv.lines));
-                // self.displayed_lines.resize(self.page_size(), 0usize);
-                (lines, sv)
+                // FIXME: We need to be able to get the next n lines after the line at sv.offset, instead of using sv.offset+1
+                let lines = doc.get_lines_from(sv.offset+1, sv.lines);
+                let rows = lines.len();
+                queue!(buff, terminal::ScrollUp(rows as u16)).unwrap();
+                self.displayed_lines = if self.displayed_lines.len() > rows {
+                    self.displayed_lines[rows as usize..].to_vec()
+                } else {
+                    Vec::new()
+                };
+                self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(rows));
+                (lines, self.page_size() - rows, rows)
             },
             Scroll::Repaint(sv) => {
                 // Repainting whole screen, no scrolling
+                // FIXME: Clear to EOL after each line instead of clearing screen
                 let lines = doc.get_lines_from(sv.offset, sv.lines);
+                let rows = lines.len();
                 queue!(buff, terminal::Clear(ClearType::All)).unwrap();
-                self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(sv.lines).collect();
-                (lines, sv)
+                self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
+                (lines, 0, rows)
             },
             Scroll::None => unreachable!("Scroll::None")
         };
 
-        let mut row = v.pos;
         for (pos, line) in lines.iter(){
-            if row == v.pos + v.lines {
-                break;
-            }
+            assert_eq!(self.displayed_lines[row - top_of_screen],  *pos);
             self.draw_line(doc, &mut buff, row, line);
-            // self.displayed_lines[row] = *pos;
             row += 1;
+            count -= 1;
+        }
+
+        while count > 0 {
+            self.draw_line(doc, &mut buff, row, &"~".to_string());
+            row += 1;
+            count -= 1;
         }
 
         Ok(buff)
@@ -337,79 +350,60 @@ impl Display {
 
         let view_height = self.page_size();
 
-        // FIXME: We don't know last page if file isn't fully loaded yet
-        let last_page = 1000; // FIXME: doc.filtered_line_count();
-        self.top = cmp::min(self.top, last_page);
-
-        // What we want to display
+        // Our new display
         let disp = DisplayState {
-            top: self.top,
-            bottom: self.top + view_height,
+            height: self.page_size(),
             width: self.width,
         };
 
-        if disp == self.prev {
-            // No change; nothing to do.
-            return Ok(());
-        }
-
-        log::trace!("New display: {:?}", disp);
-        // FIXME: We never show line 0
-        // FIXME: Startup iterates whole file first
-        // FIXME: Scroll to end doesn't update display; fucks up line position trackers
-        // TODO: We only use displayed_lines.{first,last}.  Do we need to keep the whole array?
-        // TODO: Line wrapping
-
-        let prev_height = self.prev.bottom - self.prev.top;
-        let prev_width = self.prev.width;
         let plan =
             if self.displayed_lines.len() == 0 {
                 // Blank slate; start of file
                 log::trace!("start of file");
-                Scroll::repaint(0, 0, view_height)
-            } else if self.prev.top > disp.bottom || self.prev.bottom < disp.top {
-                // new screen has no overlap with old one
-                if disp.top == 0 {
-                    Scroll::repaint(0, 0, view_height)
-                } else if disp.top == last_page {
-                    // FIXME: Scrolling in last page is broken horribly
-                    Scroll::up(usize::MAX, view_height-1, view_height)
-                } else {
-                    panic!("How did we scroll here? Not start; not end. Get offset from line number? {:?}", disp);
-                    let offset = 0;
-                    Scroll::repaint(offset, self.top, view_height)
-                }
-            } else if self.prev.top > disp.top {
-                // // get 'len' lines after the top line
-                // doc.get_lines_from(start + self.prev.top, len)
-                // FIXME: Backwards iterator isn't working
-                let begin = self.displayed_lines.first().unwrap();
-                Scroll::up(*begin, 0, self.prev.top - disp.top)
-            } else if self.prev.top < disp.top {
-                // get 'len' lines after the last line displayed
-                let begin = self.displayed_lines.last().unwrap();
-                let len = disp.top - self.prev.top;
-                Scroll::down(*begin, view_height - len, len)
+                Scroll::repaint(0, view_height)
+            } else if disp != self.prev {
+                // New screen dimensions; repaint everything
+                // FIXME: No need to repaint if we got smaller
+                // FIXME: Only need to add rows if we only got taller
+                log::trace!("repaint everything");
+                Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
             } else {
-                // No scrolling; check height/width
-                if disp.width <= prev_width {
-                    if view_height <= prev_height {
-                        // Screen is the same or smaller. Nothing to do.
-                        Scroll::none()
-                    } else {
-                        // Terminal got taller; display new rows at bottom
-                        let begin = self.displayed_lines.last().unwrap();
-                        Scroll::down(*begin, self.prev.bottom, view_height - prev_height)
+                match self.scroll {
+                    ScrollAction::StartOfFile => {
+                        // Scroll to top
+                        log::trace!("scroll to top");
+                        // Scroll::repaint(0, 0, view_height)
+                        Scroll::repaint(0, view_height)
                     }
-                } else {
-                    // Screen got wider.  Repaint everything.
-                    Scroll::repaint(0, 0, view_height)
+                    ScrollAction::EndOfFile => {
+                        // Scroll to bottom
+                        log::trace!("scroll to bottom");
+                        // FIXME: iterator isn't returning rows from the end.  Why?
+                        Scroll::up(usize::MAX/2, view_height)
+                    }
+                    ScrollAction::Up(len) => {
+                        // Scroll up 'len' lines before the top line
+                        log::trace!("scroll up {} lines", len);
+                        let begin = self.displayed_lines.first().unwrap();
+                        Scroll::up(*begin, len)
+                    }
+                    ScrollAction::Down(len) => {
+                        // Scroll down 'len' lines after the last line displayed
+                        log::trace!("scroll down {} lines", len);
+                        let begin = self.displayed_lines.last().unwrap();
+                        Scroll::down(*begin, len)
+                    }
+                    ScrollAction::None => Scroll::none()
                 }
             };
+
+        self.scroll = ScrollAction::None;
 
         if plan.is_none() {
             return Ok(());
         }
+
+        log::trace!("screen changed");
 
         let mut buff = self.feed_lines(doc, plan)?;
         self.prev = disp;
