@@ -26,11 +26,15 @@ impl SubLineHelper {
 
     fn get_sub(&self, index: usize, width: usize) -> Option<LogLine> {
         if let Some(buffer) = &self.buffer {
-            assert!(index < buffer.line.len(), "Subline index out of bounds {} >= {}", index, buffer.line.len());
-            let end = (index + width).min(buffer.line.len());
-            // FIXME: get printable width
-            let line = String::from(&buffer.line[index..end]);
-            Some(LogLine::new(line, buffer.offset + index))
+            if buffer.line.is_empty() {
+                None
+            } else {
+                assert!(index < buffer.line.len(), "Subline index out of bounds {} >= {}", index, buffer.line.len());
+                let end = (index + width).min(buffer.line.len());
+                // FIXME: get printable width
+                let line = String::from(&buffer.line[index..end]);
+                Some(LogLine::new(line, buffer.offset + index))
+            }
         } else {
             None
         }
@@ -106,7 +110,7 @@ impl SubLineHelper {
         match mode {
             LineViewMode::Wrap{width} => {
                 if let Some(buffer) = &self.buffer {
-                    self.index = (buffer.line.len() + width - 1) / width * width - width;
+                    self.index = if buffer.line.is_empty() {0} else {(buffer.line.len() + width - 1) / width * width - width};
                 }
             },
             _ => {},
