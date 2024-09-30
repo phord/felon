@@ -306,14 +306,13 @@ mod logfile_data_iterator_tests {
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = Log::from(file);
 
-        // Length + 1 is ok.  Whole file is iterated.  Length + 2 is "out of range".
         let out_of_range = patt_len * lines + 2;
 
         let mut count = 0;
         for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range).rev() {
             count += 1;
         }
-        assert_eq!(count, 0, "No lines iterable before out-of-range");
+        assert_eq!(count, lines, "All lines iterable before out-of-range");
 
         count = 0;
         for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range) {

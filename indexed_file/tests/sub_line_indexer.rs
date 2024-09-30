@@ -445,11 +445,10 @@ mod sub_line_iterator_tests {
     fn test_iterator_from_offset_out_of_range() {
         let (harness, mut file) =  Harness::new_small(100);
 
-        // Length + 1 is ok.  Whole file is iterated.  Length + 2 is "out of range".
         let out_of_range = harness.patt_len * harness.lines + 2;
 
         let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).rev().count();
-        assert_eq!(count, 0, "No lines iterable before out-of-range");
+        assert_eq!(count, harness.lines, "All lines iterable before out-of-range");
 
         let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
@@ -718,12 +717,11 @@ mod sub_line_wrap_tests {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
-        // Length + 1 is ok.  Whole file is iterated.  Length + 2 is "out of range".
         let out_of_range = harness.patt_len * harness.lines + 2;
 
         let it = wrapped_new_from(&mut file, width, out_of_range).rev();
         let count = it.count();
-        assert_eq!(count, 0, "No lines iterable before out-of-range");
+        assert_eq!(count, harness.total_len(width), "All lines iterable before out-of-range");
 
         let it = wrapped_new_from(&mut file, width, out_of_range);
         let count = it.count();
