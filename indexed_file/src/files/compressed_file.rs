@@ -257,7 +257,7 @@ impl<R: Read + Seek> CompressedFile<R> {
     fn end_frame(&mut self) {
         // We may not be on the last frame in the index, but we only update the last frame.  We assume that we are not
         // decoding some earlier frame because we cannot know the logical offset of any frame after the unknown frontier one.
-        let mut frame = self.frames.last_mut().unwrap();
+        let frame = self.frames.last_mut().unwrap();
         if frame.len == 0 {
             let logical_pos = self.pos + self.decoder.can_collect() as u64;
             if logical_pos > frame.logical {

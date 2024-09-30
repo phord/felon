@@ -1,5 +1,4 @@
-// use indexed_file::indexer::line_indexer::LineIndexer;
-// use indexed_file::files::{LogSource, TextLogFile, new_text_file};
+// CursorLogFile is an in-memory file that can be used as a LogFile.  It's used in tests to work on ephemeral files.
 
 use std::io::Cursor;
 use std::io::Seek;

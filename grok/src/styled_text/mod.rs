@@ -2,10 +2,6 @@ use crossterm::style::{Stylize, ContentStyle};
 use std::cmp;
 use crossterm::style::Color;
 
-pub trait Stylable {
-    fn stylize(&mut self, row: &str) -> ();
-}
-
 /// Defines a style for a portion of a line.  Represents the style and the position within the line.
 #[derive(Copy, Clone)]
 pub struct Phrase {

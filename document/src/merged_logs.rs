@@ -3,9 +3,12 @@
 // FIXME: Right now they're sorted by line contents, but they should be sorted by timestamp in the future.
 
 use indexed_file::Log;
-use indexed_file::files::LogBase;
-use indexed_file::indexer::LineIndexer;
 use indexed_file::LogLine;
+
+#[cfg(test)]
+use indexed_file::files::LogBase;
+#[cfg(test)]
+use indexed_file::indexer::LineIndexer;
 
 /* Thinking:
     TODO: Need a timestamp for each log line so we can sort by timestamp and jump to time offsets.

@@ -245,7 +245,7 @@ mod sub_line_iterator_tests {
         let (harness, mut file) = Harness::default();
         let mut it = sub_line_iterator_helper::new(&mut file).rev();
         let line = it.next().unwrap();
-        let (line, prev) = (line.line, line.offset);
+        let (_line, prev) = (line.line, line.offset);
         let mut prev = prev;
 
         assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
@@ -264,7 +264,7 @@ mod sub_line_iterator_tests {
         let (harness, mut file) =  Harness::new_small(3);
         let mut it = sub_line_iterator_helper::new(&mut file).rev();
         let line = it.next().unwrap();
-        let (line, prev) = (line.line, line.offset);
+        let (_line, prev) = (line.line, line.offset);
 
         let mut prev = prev;
 
@@ -460,7 +460,7 @@ mod sub_line_iterator_tests {
 #[cfg(test)]
 mod sub_line_wrap_tests {
     use std::collections::HashSet;
-    use crate::sub_line_iterator_helper::{self, Harness};
+    use crate::sub_line_iterator_helper::Harness;
     use indexed_file::{LineViewMode, SubLineIterator, Log};
 
 

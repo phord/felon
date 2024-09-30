@@ -39,7 +39,7 @@ mod logfile_data_iterator_tests {
         let mut file = Log::from(file);
         let mut it = LineIndexerDataIterator::new(&mut file).rev();
         let line = it.next().unwrap();
-        let (line, prev) = (line.line, line.offset);
+        let (_line, prev) = (line.line, line.offset);
         let mut prev = prev;
 
         assert_eq!(prev, lines * patt_len - patt_len);
@@ -62,7 +62,7 @@ mod logfile_data_iterator_tests {
         let mut file = Log::from(file);
         let mut it = LineIndexerDataIterator::new(&mut file).rev();
         let line = it.next().unwrap();
-        let (line, prev) = (line.line, line.offset);
+        let (_line, prev) = (line.line, line.offset);
 
         let mut prev = prev;
 

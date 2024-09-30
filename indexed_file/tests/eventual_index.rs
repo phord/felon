@@ -195,7 +195,7 @@ fn test_insert_after() {
 
     let cursor = index.locate(TargetOffset::AtOrAfter(170));
     assert_eq!(cursor.offset().unwrap(), 180);
-    let foo = index.next_line_index(cursor);
+    index.next_line_index(cursor);
     assert!(index.next_line_index(cursor).is_gap());
 }
 

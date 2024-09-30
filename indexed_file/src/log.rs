@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use crate::indexer::line_indexer::LineIndexer;
 
 use crate::files::{LogBase, LogSource, new_text_file};
-use log::{debug, error, info, trace, warn};
 
 /**
  * Log is an adapter interface used to instantiate a LineIndexer from different kinds of LogSources.

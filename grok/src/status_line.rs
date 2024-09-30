@@ -1,5 +1,5 @@
-use crossterm::{terminal::ClearType};
-use std::{io::{stdout, Write}};
+use crossterm::terminal::ClearType;
+use std::io::{stdout, Write};
 use crate::config::Config;
 use crossterm::{QueueableCommand, cursor, terminal, style, style::Stylize};
 use crate::document::Document;
@@ -17,7 +17,7 @@ impl StatusLine {
         1
     }
 
-    pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
+    pub fn refresh_screen(&mut self, _doc: &mut Document) -> crossterm::Result<()> {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
 
         let mut stdout = stdout();
