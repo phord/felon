@@ -171,20 +171,14 @@ mod logfile_iterator_tests {
     #[test]
     fn test_iterator_exhaust() {
         let (harness, mut file) = Harness::default();
-        let mut count = 0;
-        for _ in file.iter_offsets() {
-            count += 1;
-        }
+        let count = file.iter_offsets().count();
         assert_eq!(count, harness.lines);
     }
 
     #[test]
     fn test_iterator_exhaust_twice() {
         let (harness, mut file) = Harness::default();
-        let mut count = 0;
-        for _ in file.iter_offsets() {
-            count += 1;
-        }
+        let count = file.iter_offsets().count();
         assert_eq!(count, harness.lines);
 
         let mut it = file.iter_offsets();
@@ -203,10 +197,7 @@ mod logfile_iterator_tests {
     #[test]
     fn test_iterator_exhaust_half_and_twice() {
         let (harness, mut file) = Harness::default();
-        let mut count = 0;
-        for _ in file.iter_offsets().take(harness.lines/2) {
-            count += 1;
-        }
+        let count = file.iter_offsets().take(harness.lines/2).count();
         assert_eq!(count, harness.lines/2);
 
         for _ in 0..2 {
@@ -294,20 +285,14 @@ mod sub_line_iterator_tests {
     #[test]
     fn test_iterator_exhaust() {
         let (harness, mut file) = Harness::default();
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new(&mut file) {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new(&mut file).count();
         assert_eq!(count, harness.lines);
     }
 
     #[test]
     fn test_iterator_exhaust_twice() {
         let (harness, mut file) = Harness::default();
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new(&mut file) {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new(&mut file).count();
         assert_eq!(count, harness.lines);
 
         let mut it = sub_line_iterator_helper::new(&mut file);
@@ -327,10 +312,7 @@ mod sub_line_iterator_tests {
     #[test]
     fn test_iterator_exhaust_half_and_twice() {
         let (harness, mut file) = Harness::default();
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new(&mut file).take(harness.lines/2) {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new(&mut file).take(harness.lines/2).count();
         assert_eq!(count, harness.lines/2);
 
         for _ in 0..2 {
@@ -361,13 +343,10 @@ mod sub_line_iterator_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        let mut count = 1;
         assert_eq!(prev, harness.patt_len * harness.lines / 2);
         assert_eq!(line, harness.patt);
 
-        for _ in it {
-            count += 1;
-        }
+        let count = it.count() + 1;
         assert_eq!(count, harness.lines / 2);
     }
 
@@ -409,10 +388,7 @@ mod sub_line_iterator_tests {
     #[test]
     fn test_iterator_from_offset_indexed() {
         let (harness, mut file) =  Harness::new_small(100);
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new(&mut file) {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new(&mut file).count();
         assert_eq!(count, harness.lines);
 
         // A few bytes before the middle of the file
@@ -426,25 +402,17 @@ mod sub_line_iterator_tests {
         assert_eq!(prev, expected_offset);
         assert_eq!(line, harness.patt);
 
-        count = 1;
-        for _ in it {
-            count += 1;
-        }
+        let count = it.count() + 1;
         assert_eq!(count, harness.lines / 2);
     }
 
     #[test]
     fn test_iterator_from_offset_start() {
         let (harness, mut file) =  Harness::new_small(100);
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new_from(&mut file, 0).rev() {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new_from(&mut file, 0).rev().count();
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        for _ in sub_line_iterator_helper::new_from(&mut file, 1).rev() {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new_from(&mut file, 1).rev().count();
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
         let mut it = sub_line_iterator_helper::new_from(&mut file, 0);
@@ -453,29 +421,22 @@ mod sub_line_iterator_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        count = 1;
         assert_eq!(prev, 0);
         assert_eq!(line, harness.patt);
 
-        for _ in it {
-            count += 1;
-        }
+        let count = it.count() + 1;
         assert_eq!(count, harness.lines);
     }
+
     #[test]
     fn test_iterator_from_offset_end_of_file() {
         let (harness, mut file) =  Harness::new_small(100);
         let out_of_range = harness.patt_len * harness.lines;
 
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new_from(&mut file, out_of_range) {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        for _ in sub_line_iterator_helper::new_from(&mut file, out_of_range).rev() {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).rev().count();
         assert_eq!(count, harness.lines, "Whole file is reached from end");
 
     }
@@ -487,16 +448,10 @@ mod sub_line_iterator_tests {
         // Length + 1 is ok.  Whole file is iterated.  Length + 2 is "out of range".
         let out_of_range = harness.patt_len * harness.lines + 2;
 
-        let mut count = 0;
-        for _ in sub_line_iterator_helper::new_from(&mut file, out_of_range).rev() {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).rev().count();
         assert_eq!(count, 0, "No lines iterable before out-of-range");
 
-        count = 0;
-        for _ in sub_line_iterator_helper::new_from(&mut file, out_of_range) {
-            count += 1;
-        }
+        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
      }
 }
