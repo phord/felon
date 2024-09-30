@@ -1,4 +1,5 @@
-use crossterm::{terminal::ClearType};
+use crossterm::terminal::ClearType;
+use indexed_file::LineViewMode;
 use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, execute, queue, terminal};
 use crate::config::Config;
@@ -112,6 +113,8 @@ pub struct Display {
 
     mouse_wheel_height: u16,
 
+    mode: LineViewMode,
+
 }
 
 impl Drop for Display {
@@ -133,6 +136,7 @@ impl Display {
             prev: DisplayState { height: 0, width: 0},
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
+            mode: LineViewMode::WholeLine,
         };
         s
     }
@@ -170,6 +174,9 @@ impl Display {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
         self.width = width as usize;
         self.height = height as usize;
+
+        // FIXME: Check config for Wrap mode
+        self.mode = LineViewMode::Wrap{width: self.width};
     }
 
     fn page_size(&self) -> usize {
@@ -283,7 +290,7 @@ impl Display {
     // pos is the offset in the file for the first line
     // if size is larger than display height, we may skip unnecessary lines
     // Scroll distance is in screen rows.  If a read line takes multiple rows, they count as multiple lines.
-    fn feed_lines(&mut self, doc: &mut Document, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
+    fn feed_lines(&mut self, doc: &mut Document, mode: LineViewMode, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
         log::trace!("feed_lines: {:?}", scroll);
 
         let mut buff = ScreenBuffer::new();
@@ -295,7 +302,7 @@ impl Display {
         let (lines, mut row, mut count) = match scroll {
             Scroll::Up(sv) => {
                 // Partial or complete screen scroll backwards
-                let lines: Vec<_> = doc.get_lines_from_rev(sv.offset, sv.lines).into_iter().rev().collect();
+                let lines: Vec<_> = doc.get_lines_from_rev(mode, sv.offset, sv.lines).into_iter().rev().collect();
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollDown(rows as u16)).unwrap();
                 self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(rows));
@@ -305,7 +312,7 @@ impl Display {
             },
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
-                let mut lines = doc.get_lines_from(sv.offset, sv.lines + 1);
+                let mut lines = doc.get_lines_from(mode, sv.offset, sv.lines + 1);
                 if !lines.is_empty() {
                     let skipped = lines.remove(0);
                     assert_eq!(skipped.0, sv.offset);
@@ -323,7 +330,7 @@ impl Display {
             Scroll::Repaint(sv) => {
                 // Repainting whole screen, no scrolling
                 // FIXME: Clear to EOL after each line instead of clearing screen
-                let lines = doc.get_lines_from(sv.offset, sv.lines);
+                let lines = doc.get_lines_from(mode, sv.offset, sv.lines);
                 let rows = lines.len();
                 queue!(buff, terminal::Clear(ClearType::All)).unwrap();
                 self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
@@ -408,7 +415,7 @@ impl Display {
 
         log::trace!("screen changed");
 
-        let mut buff = self.feed_lines(doc, plan)?;
+        let mut buff = self.feed_lines(doc, self.mode, plan)?;
         self.prev = disp;
 
         // DEBUG HACK

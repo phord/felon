@@ -3,6 +3,7 @@
 
 use crate::{LineIndexerDataIterator, Log, LogLine};
 
+#[derive(Clone, Copy)]
 pub enum LineViewMode{
     Wrap{width: usize},
     Chop{width: usize, left: usize},

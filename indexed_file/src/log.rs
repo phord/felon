@@ -1,4 +1,4 @@
-use crate::{time_stamper::TimeStamper, LineIndexerIterator, LineIndexerDataIterator, LogLine};
+use crate::{time_stamper::TimeStamper, LineIndexerIterator, SubLineIterator, LineViewMode, LogLine};
 use std::path::PathBuf;
 use crate::indexer::line_indexer::LineIndexer;
 
@@ -77,10 +77,19 @@ impl Log {
     }
 
     pub fn iter_lines<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = LogLine> + 'a {
-        LineIndexerDataIterator::new(self)
+        self.iter_view(LineViewMode::WholeLine)
     }
 
     pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
-        LineIndexerDataIterator::new_from(self, offset)
+        self.iter_view_from(LineViewMode::WholeLine, offset)
     }
+
+    pub fn iter_view<'a>(&'a mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + 'a {
+        SubLineIterator::new(self, mode)
+    }
+
+    pub fn iter_view_from(&mut self, mode: LineViewMode, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
+        SubLineIterator::new_from(self, mode, offset)
+    }
+
 }

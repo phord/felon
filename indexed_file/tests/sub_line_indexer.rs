@@ -65,7 +65,7 @@ mod sub_line_iterator_helper {
     }
 
     pub(crate) fn new_from(log: &mut Log, offset: usize) -> SubLineIterator {
-    let mode = LineViewMode::WholeLine;
+        let mode = LineViewMode::WholeLine;
         SubLineIterator::new_from(log, mode, offset)
     }
 }
