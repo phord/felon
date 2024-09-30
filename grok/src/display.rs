@@ -305,8 +305,11 @@ impl Display {
             },
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
-                // FIXME: We need to be able to get the next n lines after the line at sv.offset, instead of using sv.offset+1
-                let lines = doc.get_lines_from(sv.offset+1, sv.lines);
+                let mut lines = doc.get_lines_from(sv.offset, sv.lines + 1);
+                if !lines.is_empty() {
+                    let skipped = lines.remove(0);
+                    assert_eq!(skipped.0, sv.offset);
+                }
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollUp(rows as u16)).unwrap();
                 self.displayed_lines = if self.displayed_lines.len() > rows {
