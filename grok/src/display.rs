@@ -114,7 +114,6 @@ pub struct Display {
     mouse_wheel_height: u16,
 
     mode: LineViewMode,
-
 }
 
 impl Drop for Display {
@@ -329,10 +328,9 @@ impl Display {
             },
             Scroll::Repaint(sv) => {
                 // Repainting whole screen, no scrolling
-                // FIXME: Clear to EOL after each line instead of clearing screen
                 let lines = doc.get_lines_from(mode, sv.offset, sv.lines);
                 let rows = lines.len();
-                queue!(buff, terminal::Clear(ClearType::All)).unwrap();
+                // queue!(buff, terminal::Clear(ClearType::All)).unwrap();
                 self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
                 (lines, 0, rows)
             },
