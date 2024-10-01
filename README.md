@@ -1,4 +1,4 @@
-### igrok is a work in progress.  It's my development project.  It is not functional yet. 
+### igrok is a work in progress.  It's my development project.  It is not functional yet.
 ### Do not clone this expecting anything useful to happen.
 
 grok - the Log Grokker tool
@@ -7,16 +7,23 @@ grok is an interactive replacement for `zegrep | less`.  It intends to be a repl
 
 ----
 
-Following are some design notes and ideas useful only to me, perhaps.  
+Following are some design notes and ideas useful only to me, perhaps.
 
-Originally grok was intended to be a faster word-based file indexer, capable of know everywhere a word existed in a file all at once. 
+Originally grok was intended to be a faster word-based file indexer, capable of know everywhere a word existed in a file all at once.
 The expectation was that this could be faster than regular expression searching after the fact. The expectation was incorrect, at least in my implementation.
 It's not a new idea; it dates back to the 1940's, and an [intern at Google used it](https://swtch.com/~rsc/regexp/regexp4.html) in some modern tools there for a while.
+Anyway, it turned out to be not terribly fast, in the end, and regex seems plenty fast enough.  Continuing with that for now.
 
 Design:
 
 FileReader - reads lines of text from the file
     Can be adapted to read from compressed files with memoized decompressor states for faster random access
+
+Iterators
+    Index-on-demand
+    Line offsets
+    Line and data
+    Subline and data
 
 TextBuffer - buffer to hold lines of text
     Supports indexed lines so external classes can read subsets by reference
@@ -39,6 +46,27 @@ Features/Ideas:
         - Needs to be smart enough to ignore prefix (timestamp, pid, etc.)
     - Auto-expand grouped lines (with C markers)
 
+
+----
+
+High-level todos:
+    o Remove coloring
+        . Simplify presentation / testing / portability
+        . Reapply semantic coloring in sub-line indexing
+    o Show index status on statusline
+    o Identify weird character widths (unicode, tabs, ctrl-chars)
+        . Expand control chars (<^A>, <^H>, TAB to Spaces, etc.)
+        . Count others for proper display-width matching
+    o Add gzip support
+    o Search
+    o Dynamic Config
+        . Allows runtime modification, like '-S', '-N', etc.
+    o Implement -N (line numbers) with dynamic updating and/or relative indexing (e.g. "end-10000")
+    o Custom line stylers
+    o TUI framework for cleaner painting
+    o Wait for events to settle/resolve before painting
+    o If no alt-screen and lines < display_height, don't fill whole screen?  (see less for something like git pager usage)
+        . Something like -K support to exit when no paging needed, too.
 
 For UI-driven workflow, is this workable?
     Expr                Find lines that contain:
@@ -66,8 +94,6 @@ For UI-driven workflow, is this workable?
             -baz        foo but not bar unless also baz (sketchy!)
 
     foo bar             the exact text "foo bar"
-
-    foo_bar             the exact text "foo_bar" (even though _ is not indexed)
 
 
 Display filters:
