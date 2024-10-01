@@ -296,8 +296,6 @@ impl Display {
 
         let top_of_screen = 0;
 
-        // FIXME: Handle case when lines are shorter than display area
-
         let (lines, mut row, mut count) = match scroll {
             Scroll::Up(sv) => {
                 // Partial or complete screen scroll backwards
@@ -307,7 +305,7 @@ impl Display {
                 self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(rows));
                 self.displayed_lines.truncate(self.page_size());
                 // TODO: add test for whole-screen offsets == self.displayed_lines
-                (lines, 0, rows)
+                (lines, 0, 0)
             },
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
@@ -324,7 +322,7 @@ impl Display {
                     Vec::new()
                 };
                 self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(rows));
-                (lines, self.page_size() - rows, rows)
+                (lines, self.page_size() - rows, 0)
             },
             Scroll::Repaint(sv) => {
                 // Repainting whole screen, no scrolling
@@ -332,7 +330,7 @@ impl Display {
                 let rows = lines.len();
                 // queue!(buff, terminal::Clear(ClearType::All)).unwrap();
                 self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
-                (lines, 0, rows)
+                (lines, 0, self.page_size())
             },
             Scroll::None => unreachable!("Scroll::None")
         };
@@ -341,13 +339,13 @@ impl Display {
             assert_eq!(self.displayed_lines[row - top_of_screen],  *pos);
             self.draw_line(doc, &mut buff, row, line);
             row += 1;
-            count -= 1;
+            count = count.saturating_sub(1);
         }
 
-        while count > 0 {
+        while count > 0 && row < self.page_size() {
             self.draw_line(doc, &mut buff, row, &"~".to_string());
             row += 1;
-            count -= 1;
+            count = count.saturating_sub(1);
         }
 
         Ok(buff)
@@ -371,7 +369,7 @@ impl Display {
                 Scroll::repaint(0, view_height)
             } else if disp != self.prev {
                 // New screen dimensions; repaint everything
-                // FIXME: No need to repaint if we got smaller
+                // FIXME: No need to repaint if we got vertically smaller
                 // FIXME: Only need to add rows if we only got taller
                 log::trace!("repaint everything");
                 Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
@@ -380,14 +378,12 @@ impl Display {
                     ScrollAction::StartOfFile => {
                         // Scroll to top
                         log::trace!("scroll to top");
-                        // Scroll::repaint(0, 0, view_height)
                         Scroll::repaint(0, view_height)
                     }
                     ScrollAction::EndOfFile => {
                         // Scroll to bottom
                         log::trace!("scroll to bottom");
-                        // FIXME: iterator isn't returning rows from the end.  Why?
-                        Scroll::up(usize::MAX/2, view_height)
+                        Scroll::up(usize::MAX, view_height)
                     }
                     ScrollAction::Up(len) => {
                         // Scroll up 'len' lines before the top line
