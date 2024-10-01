@@ -128,9 +128,8 @@ impl<'a> LineIndexerDataIterator<'a> {
 impl<'a>  LineIndexerDataIterator<'a> {
     // Helper function to abstract the wrapping of the inner iterator result
     // If we got a line offset value, read the string and return the Type tuple.
-    // TODO: Reuse Self::Type here instead of respecifying LogLine
     #[inline]
-    fn iterate(&mut self, value: Option<usize>) -> Option<LogLine> {
+    fn iterate(&mut self, value: Option<usize>) -> Option<<LineIndexerDataIterator<'a> as Iterator>::Item> {
         if let Some(bol) = value {
             // FIXME: Return Some<Result<(offset, String)>> similar to ReadBuf::lines()
             let line = self.inner.read_line(bol).expect("TODO: return Result");
