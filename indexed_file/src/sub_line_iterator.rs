@@ -32,8 +32,9 @@ impl SubLineHelper {
             } else {
                 assert!(index < buffer.line.len(), "Subline index out of bounds {} >= {}", index, buffer.line.len());
                 let end = (index + width).min(buffer.line.len());
-                // FIXME: get printable width
-                let line = String::from(&buffer.line[index..end]);
+                // Clip the line portion in unicode chars
+                let line = buffer.line.chars().take(end).skip(index).collect();
+                // FIXME: get printable width by interpreting graphemes? Or punt, because terminals are inconsistent?
                 Some(LogLine::new(line, buffer.offset + index))
             }
         } else {
