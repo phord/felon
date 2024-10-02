@@ -39,6 +39,12 @@ impl ScreenBuffer {
     }
 
     fn push_raw(&mut self, data: &str) {
+        let mut data = data;
+        while data.ends_with('\n') || data.ends_with('\r') {
+            let len = data.len();
+            data = &data[..len-1];
+        }
+
         self.content.push(StyledLine::new(data, PattColor::None))
     }
 }
@@ -245,6 +251,15 @@ impl Display {
         // TODO: Memoize the line_colors along with the lines
         self.draw_styled_line(buff, row, doc.line_colors(line));
     }
+
+    fn draw_plain_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
+        queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
+
+        buff.set_width(self.width);
+        buff.push_raw(line);
+
+        queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
+    }
 }
 
 #[derive(Debug)]
@@ -337,13 +352,13 @@ impl Display {
 
         for (pos, line) in lines.iter(){
             assert_eq!(self.displayed_lines[row - top_of_screen],  *pos);
-            self.draw_line(doc, &mut buff, row, line);
+            self.draw_plain_line(doc, &mut buff, row, line);
             row += 1;
             count = count.saturating_sub(1);
         }
 
         while count > 0 && row < self.page_size() {
-            self.draw_line(doc, &mut buff, row, &"~".to_string());
+            self.draw_plain_line(doc, &mut buff, row, &"~".to_string());
             row += 1;
             count = count.saturating_sub(1);
         }

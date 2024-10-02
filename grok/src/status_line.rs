@@ -31,7 +31,7 @@ impl StatusLine {
         let width = std::cmp::min(width as usize, message.len());
         stdout.queue(cursor::MoveTo(0, height-1 as u16))?;
         stdout.queue(style::PrintStyledContent(message[0..width].reverse()))?;
-        stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
+        // stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
         stdout.queue(terminal::Clear(ClearType::UntilNewLine))?;
 
         stdout.flush()
