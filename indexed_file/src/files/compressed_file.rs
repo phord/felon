@@ -12,33 +12,31 @@ use ruzstd::frame::read_frame_header;
 
 use crate::files::Stream;
 
-/**
- * FrameInfo holds information about individual frames in a compressed file.
- *
- * Frames are useful because they can be decoded independently from each other. This means we can position
- * the input file to the start of any frame and decompress from there. Thus we can treat a compressed file
- * made of multiple frames as one logical decompressed file supporting random-access reads if we know the
- * compressed and decompressed sizes of all the frames.  This structure holds that information for a single
- * frame.
- *
- * In practice this is only useful if we have a file compressed with multiple frames. Ideally each frame
- * also stores its decompressed size in the block headers.  However, this (decomp size) is optional. If it
- * is not available, the only way to find it is to decompress the frames to calculate it, which is slow.
- *
- * By convention here, if the len == 0 it means we have not determined the length of this frame yet. Therefore
- * we won't know the logical position of any frames after this one. Since we currently need to know the logical
- * position of each chunk we process elsewhere, we don't bother recording any frames after an "unknown" frame
- * until the unknown one can be replaced with a known (len) value.
- *
- * scan_frames() will attempt to index the whole file by recording the FrameInfo for every frame in the
- * file. If a frame's uncompressed size is unknown, we stop scanning and leave the rest of the index
- * "unknown". As we decode frames through normal reads, we will learn the length of each frame and we can
- * fill in the missing information (len). We will then push a new unknown frame size into the index
- * representing the new unknown frontier of the logical space in frames.
- *
- * In the future we may represent this unknown space differently to allow for alternate forms of traversal
- * of the file data.
- */
+/// FrameInfo holds information about individual frames in a compressed file.
+///
+/// Frames are useful because they can be decoded independently from each other. This means we can position
+/// the input file to the start of any frame and decompress from there. Thus we can treat a compressed file
+/// made of multiple frames as one logical decompressed file supporting random-access reads if we know the
+/// compressed and decompressed sizes of all the frames.  This structure holds that information for a single
+/// frame.
+///
+/// In practice this is only useful if we have a file compressed with multiple frames. Ideally each frame
+/// also stores its decompressed size in the block headers.  However, this (decomp size) is optional. If it
+/// is not available, the only way to find it is to decompress the frames to calculate it, which is slow.
+///
+/// By convention here, if the len == 0 it means we have not determined the length of this frame yet. Therefore
+/// we won't know the logical position of any frames after this one. Since we currently need to know the logical
+/// position of each chunk we process elsewhere, we don't bother recording any frames after an "unknown" frame
+/// until the unknown one can be replaced with a known (len) value.
+///
+/// scan_frames() will attempt to index the whole file by recording the FrameInfo for every frame in the
+/// file. If a frame's uncompressed size is unknown, we stop scanning and leave the rest of the index
+/// "unknown". As we decode frames through normal reads, we will learn the length of each frame and we can
+/// fill in the missing information (len). We will then push a new unknown frame size into the index
+/// representing the new unknown frontier of the logical space in frames.
+///
+/// In the future we may represent this unknown space differently to allow for alternate forms of traversal
+/// of the file data.
 struct FrameInfo{
     // The offset of the start of the frame in the compressed file
     physical: u64,
@@ -53,51 +51,43 @@ struct FrameInfo{
 mod read_buffer;
 use read_buffer::ReadBuffer;
 
+// TODO: Rename this to something Zstd specific
+// TODO: Refactor a CompressedFile trait to allow for other compression types
+// TODO: Use miniz_oxide for a zlib implementation
+
 pub struct CompressedFile<R> {
+    /// The source (compressed) file reader
     file: R,
+
+    /// The size of the compressed file in bytes
     source_bytes: u64,
+
+    /// The zstd frame reader and decoder
     decoder: ruzstd::FrameDecoder,
 
-    // Sorted logical->physical file offsets
+    /// Sorted logical -> physical file offsets
     frames: Vec<FrameInfo>,
 
-    // The last frame we seeked to
+    /// The last frame we seeked to
     cur_frame: usize,
 
-    // Logical position in file
+    /// Logical position in file (decompressed bytes position)
     pos: u64,
 
-    // Logical position in decode stream
+    /// Logical position in decode stream
     seek_pos: Option<u64>,
 
-    // Buffer for BufRead
+    /// Buffer for BufRead
     read_buffer: ReadBuffer,
 }
 
 impl<R> CompressedFile<R> {
-    // Find a convenient chunk of the file to read around target offset
-    pub fn get_chunk(&self, target: usize) -> (usize, usize) {
-        let index = match self.frames.binary_search_by_key(&(target as u64), |f| f.logical) {
-            Err(n) => n - 1,
-            Ok(n) => n,
-        };
-
-        let frame = &self.frames[index];
-        let end = if frame.len == 0 {
-            let size = (self.get_length() - target) as u64;
-            // let size = 128 * 1024;   <-- Also tried this
-            frame.logical.max(target as u64) + size
-        } else {
-            frame.logical + frame.len
-        };
-        (frame.logical as usize , end as usize)
-    }
-
+    /// Find the indexed frame that holds or is closest to a given uncompressed offset
     fn lookup_frame_index(&self, pos: u64) -> usize {
-        // Avoid binary-search lookup if target frame is at current_frame[-1..+2]
-        // Why +2?  Why not always +1?
-        let start = self.cur_frame.max(1) - 1;
-        let end = (start + 4).min(self.frames.len());
+        // Avoid binary-search lookup if target frame is near the current_frame
+        const NEARBY:usize = 2;
+        let start = if pos < self.pos { self.cur_frame.saturating_sub(NEARBY) } else { self.cur_frame };
+        let end =  if pos > self.pos { (start + NEARBY).min(self.frames.len()) } else { self.cur_frame };
         let mut index = end;
         for ind in start..end {
             let frame = &self.frames[ind];
@@ -107,8 +97,9 @@ impl<R> CompressedFile<R> {
                 break;
             }
         }
+
         if index == end {
-            // Search the slow way
+            // Did not find it. Search the slow way.
 
             index = match self.frames.binary_search_by_key(&pos, |f| f.logical) {
                 Err(n) => n - 1,
@@ -381,7 +372,7 @@ impl<R: Read + Seek> CompressedFile<R> {
         Ok(())
     }
 
-    // Move the stream position to read more bytes at current logical pos
+    // Decode more bytes from the compressed source into our buffer if needed
     fn decode_into_buffer(&mut self) -> Result<(), std::io::Error> {
         const BUFFER_THRESHOLD_EDGE:u64 = 40 * 1024;
         const BUFFER_THRESHOLD_CAPACITY:u64 = 10 * 1024 * 1024;
@@ -415,22 +406,23 @@ impl<R: Read + Seek> CompressedFile<R> {
 
 impl<R: Read + Seek> Seek for CompressedFile<R> {
     fn seek(&mut self, target: SeekFrom) -> Result<u64, std::io::Error> {
-        // Ideally we could SeekFrom::End(-1000) and only decode the last frame even if we don't know
-        // all the frames' decompressed sizes yet. But we wouldn't be able to return the current offset
-        // from Start in that case.
         let (start, offset) = match target {
-            SeekFrom::Start(n) => (0_i64, n as i64),
-            SeekFrom::Current(n) => (self.pos as i64, n),
-            SeekFrom::End(_n) =>
+            SeekFrom::Start(n) => (0, n as i64),
+            SeekFrom::Current(n) => (self.pos, n),
+            SeekFrom::End(n) =>
                 if self.has_file_size() {
-                    (self.source_bytes as i64, _n)
+                    (self.source_bytes, n)
                 } else {
+                    // Ideally we could SeekFrom::End(-1000) and only decode the last frame even if we don't know
+                    // all the frames' decompressed sizes yet. But we wouldn't be able to return the current offset
+                    // from Start in that case, which the API requires.
                     todo!("We don't know if we know the end-of-file pos yet");
                 },
         };
-        let pos = (((start as i64).saturating_add(offset)) as u64).min(self.get_length() as u64);
+        let pos = start.saturating_add_signed(offset).min(self.get_length() as u64);
+
+        // Save the seek position for the future
         self.seek_pos = Some(pos);
-        // TODO: Actually seek to position and validate it's in range
         Ok(pos)
     }
 }

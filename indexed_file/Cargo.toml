@@ -18,6 +18,6 @@ crossbeam-channel = "*"
 rand = "*"
 itertools = "*"
 regex = "*"
-ruzstd = "0.3.1"
+ruzstd = "*"
 
 log = "0.4"

@@ -1,6 +1,6 @@
 // A sliding buffer to cache recently visited data
 
-// TODO: Make this more efficient with a double-buffer
+// TODO: Make this more efficient with a double-buffer (or chain of buffers)
 //       Break the 2nd buffer at EOL to support majority use cases in this project
 //       Use BufferedRead::Buffer or https://crates.io/crates/buffer instead for speed?
 //       Alternative using file-backed mem buffer: https://crates.io/crates/mmap_buffer
@@ -58,6 +58,7 @@ impl ReadBuffer {
             self.consumed = 0;
         } else {
             assert!((self.start()..=self.end()).contains(&pos));
+            // TODO: handle overlap case when pos < self.end()?
             self.buffer.extend(data.into_iter());
         }
     }
@@ -70,6 +71,8 @@ impl ReadBuffer {
         self.consumed = self.consumed.saturating_sub(amt);
     }
 
+    /// Move the read position to the given position if it is within the buffer.
+    /// return false if pos is not in the buffer.
     pub(crate) fn seek_to(&mut self, pos: u64) -> bool {
         if (self.start()..self.end()).contains(&pos) {
             self.consumed = pos - self.start();
