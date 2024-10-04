@@ -16,6 +16,8 @@ fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
     files
 }
 
+// MergedLogs line iterator exits early on slow stdin because it doesn't wait for more data while the file is still open.
+#[allow(dead_code)]
 pub fn cat_cmd() {
     let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
@@ -39,6 +41,63 @@ pub fn tac_cmd() {
         print!("{line}");
     }
 }
+use std::io::{self, Cursor, Read};
+
+struct IteratorAsRead<I>
+where
+    I: Iterator,
+{
+    iter: I,
+    cursor: Option<Cursor<I::Item>>,
+}
+
+impl<I> IteratorAsRead<I>
+where
+    I: Iterator,
+{
+    pub fn new<T>(iter: T) -> Self
+    where
+        T: IntoIterator<IntoIter = I, Item = I::Item>,
+    {
+        let mut iter = iter.into_iter();
+        let cursor = iter.next().map(Cursor::new);
+        IteratorAsRead { iter, cursor }
+    }
+}
+
+impl<I> Read for IteratorAsRead<I>
+where
+    I: Iterator,
+    Cursor<I::Item>: Read,
+{
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        while let Some(ref mut cursor) = self.cursor {
+            let read = cursor.read(buf)?;
+            if read > 0 {
+                return Ok(read);
+            }
+            self.cursor = self.iter.next().map(Cursor::new);
+        }
+        Ok(0)
+    }
+}
+
+
+// Copy from a merged log to stdout using io::copy and IteratorAsRead
+// This also ends early when the stream underflows
+// TEST: for i in {1..100} ; do echo $(for _ in {0..30} ; do printf "%5d" $i ; done); sleep 0.1 ; done | cargo run --release --bin cat
+// Could implement Stream::wait() for MergedLogs to continue streaming while it's still open
+#[allow(dead_code)]
+pub fn copycat_merged_cmd() {
+    let mut logs = MergedLogs::new();
+    for file in get_files_from_cfg() {
+        logs.push(Log::open(file).unwrap());
+    }
+
+    let mut src = IteratorAsRead::new(logs.iter_lines().map(|line| line.line));
+    std::io::copy(&mut src, &mut std::io::stdout()).expect("We don't need error handling");
+}
+
 
 // Copy directly from our file to stdout using io::copy
 #[allow(dead_code)]
