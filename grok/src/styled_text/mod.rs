@@ -41,6 +41,14 @@ impl Phrase {
 
 const TAB_SIZE: usize = 8;
 
+enum AnsiSequences {
+    ESC,    // prev was Esc
+    CSI,    // inside Control Sequence Introducer
+    OSC,    // inside Operating System Command
+    DCS,    // inside Device Control String
+    None,   // not inside any sequence
+}
+
 impl StyledLine {
     pub fn new(line: &str, patt: PattColor) -> Self {
         // Init a line with a start phrase and an end phrase
@@ -81,6 +89,10 @@ impl StyledLine {
         Self {line: out, phrases}
     }
 
+    // Remove ANSI escape sequences from a line of text.
+    fn sanitize_ansi(line: &str) -> String {
+        todo!("Use the ansi_parser crate to pick out offending ANSI sequences and remove them");
+    }
 
     // fn to_str(&self) -> &str {
     //     for p in self.phrases {
