@@ -116,7 +116,7 @@ fn stdin_seek_front_to_back() -> std::io::Result<()>{
     use std::io::{BufRead, BufReader, Seek, SeekFrom};
     let lock = std::io::stdin().lock();
 
-    #[cfg(any(target_family="unix", target_family="wasi"))]
+    #[cfg(any(target_family="unix", target_family="wasm"))]
     let seekable_stdin = unsafe {
         use std::os::unix::io::{AsRawFd, FromRawFd};
         std::fs::File::from_raw_fd(lock.as_raw_fd())

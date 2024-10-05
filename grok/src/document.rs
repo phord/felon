@@ -40,11 +40,9 @@ impl Document {
         let filename = config.filename.get(0).expect("No filename specified").clone();
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
-        let s = Self {
+        Self {
             log,
-        };
-
-        s
+        }
     }
 
     pub fn all_line_count(&self) -> usize {
@@ -56,7 +54,7 @@ impl Document {
         hasher.write(text.as_bytes());
         let hash = hasher.finish();
 
-        let base = 0x80 as u8;
+        let base = 0x80_u8;
         let red = (hash & 0xFF) as u8 | base;
         let green = ((hash >> 8) & 0xFF) as u8 | base;
         let blue = ((hash >> 16) & 0xFF) as u8 | base;
@@ -97,7 +95,7 @@ impl Document {
         let mut pos = 0;
         if let Some(p) = prefix {
             let crumb = p.get(3).unwrap().as_str();
-            let default_style = match crumb.as_ref() {
+            let default_style = match crumb {
                 "E" => PattColor::Error,
                 "A" => PattColor::Fail,
                 _ => PattColor::Info,

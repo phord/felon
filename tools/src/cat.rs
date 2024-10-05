@@ -151,7 +151,7 @@ pub fn bufcat_cmd() {
                 if bytes == 0 {
                     break
                 }
-                out.write(buf.as_slice()).expect("No errors");
+                let _ = out.write(buf.as_slice()).expect("No errors");
             }
         }
     }
@@ -168,8 +168,8 @@ fn test_itercat() {
     let file = files::new_text_file(Some(path)).expect("File failed to open");
     {
         for line in file.lines().map(|x| x.unwrap()).collect::<Vec<_>>().iter().rev() {
-            out.write(line.as_bytes()).expect("No errors");
-            out.write(b"\n").expect("No errors");
+            let _ = out.write(line.as_bytes()).expect("No errors");
+            let _ = out.write(b"\n").expect("No errors");
         }
     }
 }
