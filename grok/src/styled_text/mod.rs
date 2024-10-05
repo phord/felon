@@ -3,7 +3,7 @@ use std::cmp;
 use crossterm::style::Color;
 
 /// Defines a style for a portion of a line.  Represents the style and the position within the line.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Phrase {
     pub start: usize,
     pub patt: PattColor,
@@ -39,14 +39,48 @@ impl Phrase {
     }
 }
 
+const TAB_SIZE: usize = 8;
 
 impl StyledLine {
     pub fn new(line: &str, patt: PattColor) -> Self {
+        // Init a line with a start phrase and an end phrase
         Self {
             line: str::to_owned(line),
             phrases: vec![ Phrase::new(0, patt), Phrase::new(line.len(), patt), ],
         }
     }
+
+    pub fn sanitize_basic(line: &str, patt: PattColor) -> Self {
+        let mut out = String::with_capacity(line.len());
+        let mut phrases = vec![Phrase::new(0, patt)];
+        for ch in line.chars() {
+            match ch {
+                // '\r' | // TODO: allow \r delimited lines? Filter out only \r\n?  For now, show ^M
+                '\n' => { continue },
+                '\t' => {
+                    let stop = TAB_SIZE - out.len() % TAB_SIZE;
+                    out.push_str(&" ".repeat(stop));
+                },
+                '\x00'..='\x1f' | '\u{7f}'..='\u{FF}'=> {
+                    phrases.push(Phrase::new(out.len(), PattColor::Inverse));
+                    match ch {
+                        '\x1b' => out.push_str("ESC"),
+                        '\x00'..='\x1f' => { out.push('^'); out.push((b'@' + ch as u8) as char); },
+                        '\x7f' => out.push_str("^?"),
+                        '\u{80}'..='\u{FF}' => out.push_str(format!("<{:#X}>", ch as u8).as_str()),
+                        _ => unreachable!("Outer pattern mismatch: {:?}", ch),
+                    }
+                    phrases.push(Phrase::new(out.len(), patt));
+                },
+                _ => out.push(ch),
+            }
+        }
+        phrases.push(Phrase::new(out.len(), patt));
+
+        log::trace!("Sanitized: {} {:?}", out, phrases);
+        Self {line: out, phrases}
+    }
+
 
     // fn to_str(&self) -> &str {
     //     for p in self.phrases {
@@ -130,8 +164,11 @@ impl StyledLine {
 pub static RGB_BLACK: Color = Color::Rgb{r:0,g:0,b:0};
 
 #[derive(Copy, Clone)]
+#[derive(Debug)]
 pub enum PattColor {
-    None,
+    None,       // No pattern possible for this line
+
+    Plain,      // Use default terminal colors
     Normal,
     Highlight,
     Inverse,
@@ -153,8 +190,9 @@ pub struct RegionColor {
 fn to_style(patt: PattColor) -> ContentStyle {
     let style = ContentStyle::new();
 
-    let style = match patt {
+    match patt {
         PattColor::None => unreachable!("Tried to style with None pattern"),
+        PattColor::Plain => style,
         PattColor::Normal => style.with(Color::Green).on(RGB_BLACK),
         PattColor::Highlight => style.with(Color::Yellow).on(Color::Blue).bold(),
         PattColor::Inverse => style.negative(),
@@ -166,8 +204,7 @@ fn to_style(patt: PattColor) -> ContentStyle {
         PattColor::Info => style.with(Color::White).on(RGB_BLACK),
         PattColor::NoCrumb => style.with(Color::White).on(RGB_BLACK).italic(),
         PattColor::Module(c) => style.with(c).on(RGB_BLACK).bold(),
-    };
-    style
+    }
 }
 
 impl RegionColor {

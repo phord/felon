@@ -67,13 +67,6 @@ impl Document {
     pub fn line_colors(&self, line: &str) -> StyledLine {
         // FIXME: Doesn't need &self
 
-        // TODO: Generalize this to remove unwanted esc sequences and line endings anywhere in the line
-        let mut line = line;
-        while line.ends_with('\n') || line.ends_with('\r') {
-            let len = line.len();
-            line = &line[..len-1];
-        }
-
         lazy_static! {
             // TODO: Move these regexes to a config file
             // Apr  4 22:21:16.056 E8ABF4F03A6F I      vol.flush.cb ...
@@ -90,6 +83,12 @@ impl Document {
             // TODO: Also match UUIDS and include units when attached, like `123GB`
             static ref NUMBER: Regex = Regex::new(r"[^A-Za-z.0-9_](\b0x[[:xdigit:]]+\b|\b[0-9A-F]{16}\b|(?:[[:digit:]]+\.)*[[:digit:]]+)").unwrap();
         }
+
+        // FIXME: find a way to better separate sanitized line from styles, and merge the styles better
+        // For now, I sanitize and then extract the line for the rest of this function
+        let hold = StyledLine::sanitize_basic(line, PattColor::NoCrumb);
+        let line = hold.line.as_str();
+
         let prefix = TIMESTAMP.captures(line);
 
         let mut styled = StyledLine::new(line, PattColor::NoCrumb);

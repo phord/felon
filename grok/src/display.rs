@@ -39,12 +39,6 @@ impl ScreenBuffer {
     }
 
     fn push_raw(&mut self, data: &str) {
-        let mut data = data;
-        while data.ends_with('\n') || data.ends_with('\r') {
-            let len = data.len();
-            data = &data[..len-1];
-        }
-
         self.content.push(StyledLine::new(data, PattColor::None))
     }
 }
@@ -103,7 +97,11 @@ pub struct Display {
     height: usize,
     width: usize,
     on_alt_screen: bool,
+
     use_alt: bool,
+    color: bool,
+    semantic_color: bool,
+
 
     /// Scroll command from user
     scroll: ScrollAction,
@@ -131,7 +129,7 @@ impl Drop for Display {
 
 impl Display {
     pub fn new(config: Config) -> Self {
-        let s = Self {
+        Self {
             height: 0,
             width: 0,
             on_alt_screen: false,
@@ -142,8 +140,9 @@ impl Display {
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
             mode: LineViewMode::WholeLine,
-        };
-        s
+            color: config.color,
+            semantic_color: config.semantic_color,
+        }
     }
 
     // Begin owning the terminal
@@ -247,16 +246,21 @@ impl Display {
         queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
-    fn draw_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
-        // TODO: Memoize the line_colors along with the lines
-        self.draw_styled_line(buff, row, doc.line_colors(line));
+    fn draw_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &str) {
+        if self.color && self.semantic_color {
+            // TODO: Memoize the line_colors along with the lines
+            self.draw_styled_line(buff, row, doc.line_colors(line));
+        } else {
+            self.draw_plain_line(doc, buff, row, line);
+        }
     }
 
-    fn draw_plain_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &String) {
+    fn draw_plain_line(&self, _doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &str) {
+        // TODO: dedup with draw_styled_line (it only needs to remove the RGB_BLACK background)
         queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
 
         buff.set_width(self.width);
-        buff.push_raw(line);
+        buff.push(StyledLine::sanitize_basic(line, PattColor::Plain));
 
         queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
@@ -352,13 +356,14 @@ impl Display {
 
         for (pos, line) in lines.iter(){
             assert_eq!(self.displayed_lines[row - top_of_screen],  *pos);
-            self.draw_plain_line(doc, &mut buff, row, line);
+            self.draw_line(doc, &mut buff, row, line);
             row += 1;
             count = count.saturating_sub(1);
         }
 
         while count > 0 && row < self.page_size() {
-            self.draw_plain_line(doc, &mut buff, row, &"~".to_string());
+            // TODO: special color for these
+            self.draw_line(doc, &mut buff, row, "~");
             row += 1;
             count = count.saturating_sub(1);
         }

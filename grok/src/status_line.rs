@@ -6,11 +6,14 @@ use crate::document::Document;
 use crate::styled_text::RGB_BLACK;
 
 pub struct StatusLine {
+    color: bool,
 }
 
 impl StatusLine {
-    pub fn new(_config: Config) -> Self {
-        Self { }
+    pub fn new(config: Config) -> Self {
+        Self {
+            color: config.color,
+        }
     }
 
     pub fn get_height(&self) -> u16 {
@@ -29,9 +32,11 @@ impl StatusLine {
 
 
         let width = std::cmp::min(width as usize, message.len());
-        stdout.queue(cursor::MoveTo(0, height-1 as u16))?;
+        stdout.queue(cursor::MoveTo(0, height-1_u16))?;
         stdout.queue(style::PrintStyledContent(message[0..width].reverse()))?;
-        // stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
+        if self.color {
+            stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
+        }
         stdout.queue(terminal::Clear(ClearType::UntilNewLine))?;
 
         stdout.flush()

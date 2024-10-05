@@ -6,6 +6,8 @@ pub struct Config {
     pub filename: Vec<PathBuf>,
     pub chop: bool,
     pub altscreen: bool,
+    pub semantic_color: bool,
+    pub color: bool,
     pub mouse_scroll: u16,      // Number of lines to scroll with mouse-wheel
 }
 
@@ -33,6 +35,8 @@ impl Config {
             filename: Vec::new(),
             chop: false,
             altscreen: true,
+            semantic_color: false,
+            color: false,
             mouse_scroll: 5,
         }
     }
@@ -66,6 +70,8 @@ impl Config {
     fn parse_args(&mut self, mut pargs: Arguments) {
         if pargs.contains(["-S", "--chop-long-lines"]) { self.chop = true; }
         if pargs.contains(["-X", "--no-alternate-screen"]) { self.altscreen = false; }
+        if pargs.contains(["-C", "--semantic-color"]) { self.semantic_color = true; }
+        if pargs.contains(["-C", "--color"]) { self.color = true; }
 
         // Parse remaining args as input filenames
         for ostr in pargs.finish() {
