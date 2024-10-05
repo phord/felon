@@ -69,13 +69,14 @@ pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogSource> 
                 Ok(file.to_src())
             }
         } else {
-            // Must be a stream.  We can't seek in streams.
+            // Must be a stream.  We can't seek in streams; assert that seek fails to make sure.
             let mut file = File::open(&input_file)?;
             assert!(file.seek(SeekFrom::Start(0)).is_err());
             let file = TextLogStream::new(Some(input_file))?;
             Ok(file.to_src())
         }
     } else {
+        // Stream from stdin
         let file = TextLogStream::new(None)?;
         Ok(file.to_src())
     }

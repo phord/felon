@@ -138,6 +138,10 @@ https://github.com/bensadeh/tailspin   https://crates.io/crates/tailspin
 
     Could be useful for matching regex language.
 
+OMG - the RipGrep CLI helper tools crate includes a struct that decompresses any file via shell helpers (a la LESSPIPE).
+https://docs.rs/grep-cli/0.1.2/grep_cli/struct.DecompressionReader.html
+
+
 https://codeberg.org/rini/pomprt
     A readline-like prompt
 

@@ -10,16 +10,20 @@ use std::path::PathBuf;
  * Random seeks are supported by keeping a copy of all the data ever received from stdin in memory. This is possibly
  * wasteful on some systems that already cache the stdin data somewhere, but it can't be helped in any portable way.
  *
- * It is non-blocking because when we try to read past the end of the data, we can read from our buffer instead
- * of from the stdin file handle.
+ * It is non-blocking because, unlike reading from Stdin, when we try to read past the end of the available data, we
+ * do not block waiting for more data to arrive to fulfill the read. Instead, we return a short read (or no bytes) as
+ * if we were reading up to the end of the file. If more data does arrive, we will read it into our buffer on some
+ * subsequent read.
  *
- * Data is spooled into our buffer from a listener thread and results are posted to a mpsc::sync_channel. Data
- * is read using read_line for portability. We could read bytes, but while leaving stdin in blocking mode, we
- * can't reliably read partial lines except by reading a byte at a time.
+ * This means that the caller may receive partial data when they expected contiguous chunks. For example, trying to
+ * read 100 bytes may return with only 60 bytes even though the next call may return 40 more bytes.
  *
- * To prevent runaway source pipes from filling all of RAM needlessly, we use a limit in a bounded channel of
- * lookahead_count lines to read ahead and we only pull from the queue if the caller wants to read near the end
- * of our currently loaded buffered data. Well-behaved apps will respond to this backpressure to avoid sending
+ * Data is spooled into our buffer from a listener thread and results are posted to a mpsc::sync_channel.
+ *
+ * To prevent runaway source pipes from filling all of RAM needlessly, we use a limited size BufReader and we poll for
+ * updates in a bounded channel with a limited queue size. This means that the reader will only read up to
+ * QUEUE_SIZE chunks of READ_THRESHOLD bytes to read ahead and we only pull from the queue if the caller wants to read
+ * near the end of our currently loaded buffered data. Well-behaved apps will respond to this backpressure to avoid sending
  * more data as well, thus throttling the whole pipeline if needed.
  */
 
@@ -75,7 +79,6 @@ impl CachedStreamReader {
     }
 
     pub fn from_reader<LOG: BufRead + Send + 'static>(pipe: LOG) -> std::io::Result<Self> {
-        log::trace!("from_reader");
         let mut stream = Self {
             rx: Some(Self::reader(Some(pipe))),
             buffer: Vec::default(),
@@ -108,7 +111,7 @@ impl CachedStreamReader {
         }
     }
 
-    // Wait on any data at all; returns Some(data) or None
+    // Wait on any data at all; returns Some(data) or None if the stream is closed or there was an error
     fn blocking_wait(&mut self) -> Option<Vec<u8>> {
         if let Some(rx) = &self.rx {
             match rx.recv() {
