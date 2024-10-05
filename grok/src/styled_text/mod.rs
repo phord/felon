@@ -42,10 +42,10 @@ impl Phrase {
 const TAB_SIZE: usize = 8;
 
 enum AnsiSequences {
-    ESC,    // prev was Esc
-    CSI,    // inside Control Sequence Introducer
-    OSC,    // inside Operating System Command
-    DCS,    // inside Device Control String
+    Esc,    // prev was Esc
+    Csi,    // inside Control Sequence Introducer
+    Osc,    // inside Operating System Command
+    Dcs,    // inside Device Control String
     None,   // not inside any sequence
 }
 

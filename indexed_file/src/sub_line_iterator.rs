@@ -109,13 +109,10 @@ impl SubLineHelper {
 
     fn init_back(&mut self, mode: &LineViewMode, line: Option<LogLine>) {
         self.buffer = line;
-        match mode {
-            LineViewMode::Wrap{width} => {
-                if let Some(buffer) = &self.buffer {
-                    self.index = if buffer.line.is_empty() {0} else {(buffer.line.len() + width - 1) / width * width - width};
-                }
-            },
-            _ => {},
+        if let LineViewMode::Wrap{width} = mode {
+            if let Some(buffer) = &self.buffer {
+                self.index = if buffer.line.is_empty() {0} else {(buffer.line.len() + width - 1) / width * width - width};
+            }
         }
     }
 
@@ -217,13 +214,10 @@ impl<'a>  SubLineIterator<'a> {
         if let Some(offset) = self.start {
             assert!(self.rev.buffer.is_none());
             assert!(self.fwd.buffer.is_none());
-            match self.mode {
-                LineViewMode::Wrap{width: _} => {
-                    if let Some(prev) = self.inner.next_back() {
-                        (self.rev, self.fwd) = SubLineHelper::chop_prev(prev, &self.mode, offset);
-                    }
-                },
-                _ => {},
+            if let LineViewMode::Wrap{width: _} = self.mode {
+                if let Some(prev) = self.inner.next_back() {
+                    (self.rev, self.fwd) = SubLineHelper::chop_prev(prev, &self.mode, offset);
+                }
             }
             self.start = None;
         }

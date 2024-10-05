@@ -76,7 +76,7 @@ impl Log {
         self.iter()
     }
 
-    pub fn iter_lines<'a>(&'a mut self) -> impl DoubleEndedIterator<Item = LogLine> + 'a {
+    pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
         self.iter_view(LineViewMode::WholeLine)
     }
 
@@ -84,7 +84,7 @@ impl Log {
         self.iter_view_from(LineViewMode::WholeLine, offset)
     }
 
-    pub fn iter_view<'a>(&'a mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + 'a {
+    pub fn iter_view(&mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
         SubLineIterator::new(self, mode)
     }
 

@@ -31,7 +31,7 @@ impl TimeStamper {
     }
 
     pub fn push(&mut self, matcher: &str) {
-        match Regex::new(&matcher) {
+        match Regex::new(matcher) {
             Ok(re) => {
                 self.patterns.push(re);
                 self.matches.push(0);
@@ -80,11 +80,8 @@ impl TimeStamper {
                 _ => return None,
             };
 
-            if let Some(date) = NaiveDate::from_ymd_opt(2000, month, day) {
-                Some(NaiveDateTime::new(date, clock))
-            } else {
-                None
-            }
+            NaiveDate::from_ymd_opt(2000, month, day)
+                .map(|date| NaiveDateTime::new(date, clock))
         } else {
             None
         }

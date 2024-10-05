@@ -17,7 +17,7 @@ use std::time::Duration;
 use std::io::stdout;
 
 use UserCommand as cmd;
-const KEYMAP: &'static [(&'static str, UserCommand)] = &[
+const KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+W", cmd::Quit),
     ("Q", cmd::Quit),
     ("Esc", cmd::Quit),
@@ -77,12 +77,12 @@ impl Reader {
             .collect();
 
         let keymap: HashMap<_, _> = allmap.iter()
-            .filter(|(event, _)| match event { Event::Key(_) => true, _ => false } )
+            .filter(|(event, _)| matches!(event, Event::Key(_)) )
             .map(|(event, cmd)| match event { Event::Key(key_event) => (*key_event, *cmd), _ => unreachable!() })
             .collect();
 
         let mousemap: HashMap<_, _> = allmap.iter()
-            .filter(|(event, _)| match event { Event::Mouse(_) => true, _ => false } )
+            .filter(|(event, _)| matches!(event, Event::Mouse(_)) )
             .map(|(event, cmd)| match event { Event::Mouse(mouse_event) => (*mouse_event, *cmd), _ => unreachable!() })
             .collect();
 

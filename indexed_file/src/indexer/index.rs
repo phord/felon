@@ -97,7 +97,7 @@ impl Index {
             let bytes =
                 match source.fill_buf() {
                     Ok(buf) => {
-                        if buf.len() == 0 {
+                        if buf.is_empty() {
                             break       // EOF
                         }
                         let len = buf.len().min(end - pos);
@@ -139,17 +139,17 @@ impl Index {
         }
     }
 
-    pub fn iter(self: &Self) -> impl DoubleEndedIterator<Item = &usize> {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &usize> {
         self.line_offsets.iter()
     }
 
     // Find the line with a given offset using a binary_search
     // Should this be a trait?
-    pub fn binary_search(self: &Self, offset: usize) -> Result<usize, usize> {
+    pub fn binary_search(&self, offset: usize) -> Result<usize, usize> {
         self.line_offsets.binary_search(&offset)
     }
 
-    pub fn find(self: &Self, offset: usize) -> Option<usize> {
+    pub fn find(&self, offset: usize) -> Option<usize> {
         if offset < self.start || offset > self.end {
             None
         } else {
@@ -173,10 +173,7 @@ impl Index {
 
     #[inline(always)]
     pub fn contains(&self, offset: &usize) -> bool {
-        match self.contains_offset(offset) {
-            std::cmp::Ordering::Equal => true,
-            _ => false
-        }
+        matches!(self.contains_offset(offset), std::cmp::Ordering::Equal)
     }
 
 

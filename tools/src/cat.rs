@@ -9,7 +9,7 @@ use std::path::PathBuf;
 fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
     let cfg = Config::from_env().expect("Config should not error");
     log::trace!("Init config: {:?}", cfg);
-    let mut files:Vec<Option<_>> = cfg.filename.iter().cloned().map(|file| Some(file)).collect();
+    let mut files:Vec<Option<_>> = cfg.filename.iter().cloned().map(Some).collect();
     if files.is_empty() {
         files.push(None);
     };
@@ -116,8 +116,8 @@ pub fn itercat_cmd() {
         let file = files::new_text_file(file).expect("File failed to open");
         for line in file.lines() {
             let line = line.unwrap();
-            out.write(line.as_bytes()).expect("No errors");
-            out.write(b"\n").expect("No errors");
+            let _ = out.write(line.as_bytes()).expect("No errors");
+            let _ = out.write(b"\n").expect("No errors");
         }
     }
 }
@@ -132,8 +132,8 @@ pub fn rev_itercat_cmd() {
         let lines = file.lines().map(|x| x.unwrap()).collect::<Vec<_>>();
         eprintln!("Read in {} lines", lines.len());
         for line in lines.iter().rev() {
-            out.write(line.as_bytes()).expect("No errors");
-            out.write(b"\n").expect("No errors");
+            let _ = out.write(line.as_bytes()).expect("No errors");
+            let _ = out.write(b"\n").expect("No errors");
         }
     }
 }

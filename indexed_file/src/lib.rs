@@ -35,7 +35,7 @@ mod tests {
     #[test]
     fn file_missing() {
         let file = open_log_file(r"/tmp/does_not_exist");
-        assert_eq!(file.is_err(), true);
+        assert!(file.is_err());
     }
 
     #[test]
@@ -72,9 +72,9 @@ mod tests {
                     _ => unreachable!(),
                 };
                 s.push_str(word);
-                s.push_str(" ");
+                s.push(' ');
             }
-            s.push_str("\n");
+            s.push('\n');
             bytes += s.len();
             file.write_all(s.as_bytes()).unwrap();
         }

@@ -333,7 +333,7 @@ impl Display {
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollUp(rows as u16)).unwrap();
                 self.displayed_lines = if self.displayed_lines.len() > rows {
-                    self.displayed_lines[rows as usize..].to_vec()
+                    self.displayed_lines[rows..].to_vec()
                 } else {
                     Vec::new()
                 };
@@ -380,7 +380,7 @@ impl Display {
         };
 
         let plan =
-            if self.displayed_lines.len() == 0 {
+            if self.displayed_lines.is_empty() {
                 // Blank slate; start of file
                 log::trace!("start of file");
                 Scroll::repaint(0, view_height)

@@ -33,34 +33,22 @@ impl Location {
 
     #[inline]
     pub fn is_gap(&self) -> bool {
-        match self {
-            Location::Gap(_) => true,
-            _ => false,
-        }
+        matches!(self, Location::Gap(_))
     }
 
     #[inline]
     pub fn is_virtual(&self) -> bool {
-        match self {
-            Location::Virtual(_) => true,
-            _ => false,
-        }
+        matches!(self, Location::Virtual(_))
     }
 
     #[inline]
     pub fn is_indexed(&self) -> bool {
-        match self {
-            Location::Indexed(_) => true,
-            _ => false,
-        }
+        matches!(self, Location::Indexed(_))
     }
 
     #[inline]
     pub fn is_invalid(&self) -> bool {
-        match self {
-            Location::Invalid => true,
-            _ => false,
-        }
+        matches!(self, Location::Invalid)
     }
 
     // Get offset in file strictly for comparison in Ord::cmp
@@ -391,26 +379,22 @@ impl EventualIndex {
     // Find the target near the hinted location
     fn find_location(&self, index: usize, line: usize, target: TargetOffset) -> Location {
         let mut pos = self.get_location(index, line);
-        loop {
-            if let Some(p_off) = pos.offset() {
-                match target {
-                    TargetOffset::AtOrAfter(offset) => {
-                        if p_off < offset {
-                            pos = self.next_line_index(pos);
-                        } else {
-                            break
-                        }
-                    },
-                    TargetOffset::AtOrBefore(offset) => {
-                        if p_off > offset {
-                            pos = self.prev_line_index(pos);
-                        } else {
-                            break
-                        }
-                    },
-                }
-            } else {
-                break
+        while let Some(p_off) = pos.offset() {
+            match target {
+                TargetOffset::AtOrAfter(offset) => {
+                    if p_off < offset {
+                        pos = self.next_line_index(pos);
+                    } else {
+                        break
+                    }
+                },
+                TargetOffset::AtOrBefore(offset) => {
+                    if p_off > offset {
+                        pos = self.prev_line_index(pos);
+                    } else {
+                        break
+                    }
+                },
             }
         }
         pos

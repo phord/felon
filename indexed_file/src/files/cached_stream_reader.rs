@@ -92,7 +92,7 @@ impl CachedStreamReader {
     }
 
     pub fn is_eof(&self) -> bool {
-        !self.rx.is_some()
+        self.rx.is_none()
     }
 
     // non-blocking read from stream
@@ -162,7 +162,7 @@ impl CachedStreamReader {
                         break
                     }
 
-                    let buf = buf.iter().cloned().collect::<Vec<u8>>();
+                    let buf = buf.to_vec();
                     if tx.send(buf).is_err() {
                         break  // Broken pipe?
                     }
@@ -221,19 +221,16 @@ impl  Seek for CachedStreamReader {
         // us to at least find the current end of the stream, even if more data is coming later.
         // Code that needs to guarantee the end of the stream should call wait_for_end() first.
 
-        match pos {
-            SeekFrom::End(_) => {
-                let mut end = self.get_length();
-                while self.wait() {
-                    let len = self.get_length();
-                    if end == len {
-                        // End stopped moving
-                        break
-                    }
-                    end = len;
+        if let SeekFrom::End(_) = pos {
+            let mut end = self.get_length();
+            while self.wait() {
+                let len = self.get_length();
+                if end == len {
+                    // End stopped moving
+                    break
                 }
-            },
-            _ => {}
+                end = len;
+            }
         }
 
         let (start, offset) = match pos {
@@ -241,7 +238,7 @@ impl  Seek for CachedStreamReader {
             SeekFrom::Current(n) => (self.pos as i64, n),
             SeekFrom::End(n) => (self.get_length() as i64, n),
         };
-        self.pos = (((start as i64).saturating_add(offset)) as u64).min(self.get_length() as u64);
+        self.pos = ((start.saturating_add(offset)) as u64).min(self.get_length() as u64);
         Ok(self.pos)
     }
 }

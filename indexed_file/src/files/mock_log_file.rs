@@ -79,14 +79,14 @@ impl Seek for MockLogFile {
             SeekFrom::Current(n) => (self.pos as i64, n),
             SeekFrom::End(n) => (self.len() as i64, n),
         };
-        self.pos = (((start as i64).saturating_add(offset)) as u64).min(self.len() as u64);
+        self.pos = ((start.saturating_add(offset)) as u64).min(self.len() as u64);
         Ok(self.pos)
     }
 }
 impl MockLogFile {
 
     pub fn new(fill: String, size: usize, chunk_size: usize) -> MockLogFile {
-        assert!(fill.len() > 0);
+        assert!(!fill.is_empty());
         let copies = 1024 * 1024 * 16 / fill.len() + 1;
         let buffer = (0..copies)
             .map(|_| fill.as_str())
@@ -155,7 +155,7 @@ mod tests {
         let fill = "this is a test\n";
         let mut file = new_mock_file(fill, size, 100);
         let mut ret = fill.to_string();
-        ret.push_str(&fill[..]);
+        ret.push_str(fill);
         let offset = fill.len() * 10;
         let len = ret.len();
 

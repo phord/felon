@@ -42,7 +42,7 @@ impl SearchType {
     fn apply(&self, line: &str) -> bool {
         match self {
             SearchType::SearchRegex(ref regex) => {
-                regex.is_match(&line)
+                regex.is_match(line)
             }
         }
     }

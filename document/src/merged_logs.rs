@@ -74,26 +74,16 @@ impl<'a> LogIter<'a> {
     }
 
     fn advance(&mut self) -> bool {
+        // FIXME: Return offset to construct a Cursor with
         // Pre-load the next line for peek
-        self.next =
-            if let Some(line) = self.iter.next() {
-                // FIXME: Return offset to construct a Cursor with
-                Some(line)
-            } else {
-                None
-            };
+        self.next = self.iter.next();
         self.next.is_some()
     }
 
     fn advance_back(&mut self) -> bool {
+        // FIXME: Return offset to construct a Cursor with
         // Pre-load the prev line for peek
-        self.prev =
-            if let Some(line) = self.iter.next_back() {
-                // FIXME: Return offset to construct a Cursor with
-                Some(line)
-            } else {
-                None
-            };
+        self.prev = self.iter.next_back();
         self.prev.is_some()
     }
 
@@ -144,7 +134,7 @@ impl<'a> MergedLogsIterator<'a> {
         Self {
             iters: doc.files
                     .iter_mut()
-                    .map(|log| LogIter::new(log))
+                    .map(LogIter::new)
                     .collect(),
         }
     }
@@ -229,7 +219,7 @@ mod merged_logs_iterator_tests {
     fn test_doc_basic() {
         let lines = 30000;
         let mut doc = MergedLogs::new();
-        let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
+        let buff = CursorLogFile::from_vec((0..lines).collect()).unwrap();
         doc.push_logbase(buff);
 
         // for line in doc.iter_lines() {
@@ -245,11 +235,11 @@ mod merged_logs_iterator_tests {
         let lines = 10;
         let mut doc = MergedLogs::new();
 
-        let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
+        let odds = (0..lines/2).map(|x| x * 2 + 1).collect();
         let odds = CursorLogFile::from_vec(odds).unwrap();
         doc.push_logbase(odds);
 
-        let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
+        let evens = (0..lines/2).map(|x| x * 2).collect();
         let evens = CursorLogFile::from_vec(evens).unwrap();
         doc.push_logbase(evens);
 
@@ -272,11 +262,11 @@ mod merged_logs_iterator_tests {
         let lines = 10;
         let mut doc = MergedLogs::new();
 
-        let odds = (0..lines/2).into_iter().map(|x| x * 2 + 1).collect();
+        let odds = (0..lines/2).map(|x| x * 2 + 1).collect();
         let odds = CursorLogFile::from_vec(odds).unwrap();
         doc.push_logbase(odds);
 
-        let evens = (0..lines/2).into_iter().map(|x| x * 2).collect();
+        let evens = (0..lines/2).map(|x| x * 2).collect();
         let evens = CursorLogFile::from_vec(evens).unwrap();
         doc.push_logbase(evens);
 
@@ -300,7 +290,7 @@ mod merged_logs_iterator_tests {
         let lines = 10;
         let mut doc = MergedLogs::new();
 
-        let nums = (0..lines).into_iter().map(|x| x ).collect();
+        let nums = (0..lines).collect();
         let nums = CursorLogFile::from_vec(nums).unwrap();
         let nums = CachedStreamReader::from_reader(nums).unwrap();
         doc.push_logbase(nums);
@@ -328,7 +318,7 @@ mod merged_logs_iterator_tests {
         // FIXME: Test is failing on streams.  We can only iterate first element via MergedLogs.
         let lines = 10;
 
-        let nums = (0..lines).into_iter().map(|x| x ).collect();
+        let nums = (0..lines).collect();
         let nums = CursorLogFile::from_vec(nums).unwrap();
         let nums = CachedStreamReader::from_reader(nums).unwrap();
         let mut log = Log::new(LineIndexer::new(nums.to_src()));

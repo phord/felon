@@ -48,7 +48,7 @@ impl CursorUtil for CursorLogFile {
 fn mock_cursor() {
     let lines = 50;
     use crate::Log;
-    let buff = CursorLogFile::from_vec((0..lines).into_iter().collect()).unwrap();
+    let buff = CursorLogFile::from_vec((0..lines).collect()).unwrap();
     let mut index = Log::from(buff);
     for line in index.iter_lines() {
         print!("{}: {line}", line.offset);

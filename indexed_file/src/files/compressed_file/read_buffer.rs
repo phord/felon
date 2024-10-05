@@ -59,7 +59,7 @@ impl ReadBuffer {
         } else {
             assert!((self.start()..=self.end()).contains(&pos));
             // TODO: handle overlap case when pos < self.end()?
-            self.buffer.extend(data.into_iter());
+            self.buffer.extend(data);
         }
     }
 

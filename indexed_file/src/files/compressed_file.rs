@@ -175,7 +175,7 @@ impl<R: Read + Seek> CompressedFile<R> {
                 }
             }
             fpos += frame_bytes;
-            assert_eq!(fpos, self.file.stream_position().unwrap() as u64);
+            assert_eq!(fpos, { self.file.stream_position().unwrap() });
         }
         Ok(())
     }
@@ -218,7 +218,7 @@ impl<R: Read + Seek> CompressedFile<R> {
             },
             Err(other) => {
                 // Some error.  Quit early.
-                return Err(other)
+                Err(other)
             },
         }
     }
@@ -255,7 +255,7 @@ impl<R: Read + Seek> CompressedFile<R> {
                 frame.len = logical_pos - frame.logical;
 
                 // Push a new last-unknown-frame if we're not at EOF yet
-                let fpos = self.file.stream_position().unwrap() as u64;
+                let fpos = self.file.stream_position().unwrap();
                 assert!(fpos > frame.physical);
 
                 if fpos < self.source_bytes {
@@ -488,9 +488,8 @@ fn test_compressed_file() {
     let file = File::open(path).expect("File exists");
 
     let mut comp = CompressedFile::new(&file).unwrap();
-    match std::io::copy(&mut comp, &mut std::io::stdout().lock()) {
-        Err(e) => eprintln!("Error: {:?}", e),
-        Ok(_) => (),
+    if let Err(e) = std::io::copy(&mut comp, &mut std::io::stdout().lock()) {
+        eprintln!("Error: {:?}", e);
     }
 }
 

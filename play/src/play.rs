@@ -9,9 +9,9 @@ fn millis() -> u64 {
     let since_the_epoch = start
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
-    let in_ms = since_the_epoch.as_secs() * 1000 +
-    since_the_epoch.subsec_nanos() as u64 / 1_000_000;
-    in_ms
+
+    since_the_epoch.as_secs() * 1000 +
+    since_the_epoch.subsec_nanos() as u64 / 1_000_000
 }
 
 #[allow(dead_code)]
@@ -105,8 +105,9 @@ fn cat() {
   io::copy(&mut rdr, &mut io::stdout()).unwrap();
 }
 
+#[allow(clippy::seek_from_current)]
 fn is_seekable(file: &mut dyn std::io::Seek) -> bool {
-    use std::io::{SeekFrom::Current};
+    use std::io::SeekFrom::Current;
     file.seek(Current(0)).is_ok()
 }
 

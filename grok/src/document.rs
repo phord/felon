@@ -37,7 +37,7 @@ impl Document {
 
 impl Document {
     pub fn new(config: Config) -> Self {
-        let filename = config.filename.get(0).expect("No filename specified").clone();
+        let filename = config.filename.first().expect("No filename specified").clone();
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         Self {

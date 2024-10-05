@@ -96,6 +96,7 @@ impl LogFileUtil for LogSource {
 
 pub trait LogFileUtil {
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool { self.len() == 0 }
     // Determine the preferred chunk to read to include the target offset
     fn chunk(&self, target: usize) -> (usize, usize) {
         let chunk_size = 1024 * 1024;
@@ -106,6 +107,6 @@ pub trait LogFileUtil {
     }
 
     // Check for more data in file and update state
-    fn quench(&mut self) -> ();
+    fn quench(&mut self);
     fn wait_for_end(&mut self) {}
 }

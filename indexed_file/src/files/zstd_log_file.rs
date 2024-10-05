@@ -13,7 +13,7 @@ impl ZstdLogFile {
     pub fn from_path(filename: &PathBuf) -> std::io::Result<ZstdLogFile> {
         let file = File::open(filename)?;
         if !CompressedFile::is_recognized(&file) {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Unrecognized file type")))
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "Unrecognized file type".to_string()))
         } else {
             let file = BufReader::new(file);
             let zf = CompressedFile::new(file)?;
