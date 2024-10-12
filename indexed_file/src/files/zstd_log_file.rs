@@ -21,5 +21,3 @@ impl ZstdLogFile {
         }
     }
 }
-
-impl LogFile for ZstdLogFile {}

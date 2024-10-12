@@ -32,7 +32,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::{thread, time};
 
-use crate::files::LogFileUtil;
 use crate::files::LogFile;
 
 const QUEUE_SIZE:usize = 100;
@@ -52,7 +51,17 @@ pub struct CachedStreamReader {
     pos:u64,
 }
 
-impl LogFile for CachedStreamReader {}
+impl<T: Stream + BufRead + Seek> LogFile for T {
+    #[inline(always)] fn len(&self) -> usize { self.get_length() }
+    #[inline(always)] fn quench(&mut self) {
+        log::trace!("Stream::quench");
+        self.wait();
+    }
+    fn wait_for_end(&mut self) {
+        log::trace!("wait_for_end");
+        Stream::wait_for_end(self)
+    }
+}
 
 impl CachedStreamReader {
     pub fn new(pipe: Option<PathBuf>) -> std::io::Result<Self> {
@@ -252,18 +261,5 @@ impl std::io::BufRead for CachedStreamReader {
 
     fn consume(&mut self, amt: usize) {
         self.pos += amt as u64;
-    }
-}
-
-// FIXME: Is Stream any different than LogFileUtil?
-impl<T: Stream> LogFileUtil for T {
-    #[inline(always)] fn len(&self) -> usize { self.get_length() }
-    #[inline(always)] fn quench(&mut self) {
-        log::trace!("Stream::quench");
-        self.wait();
-    }
-    fn wait_for_end(&mut self) {
-        log::trace!("wait_for_end");
-        Stream::wait_for_end(self)
     }
 }

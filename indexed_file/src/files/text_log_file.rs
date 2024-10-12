@@ -3,7 +3,6 @@
 use std::fs::File;
 use std::io::BufReader;
 
-use super::LogFile;
 use crate::files::Stream;
 
 pub type TextLogFile = BufReader<File>;
@@ -19,5 +18,3 @@ impl Stream for TextLogFile {
         true
     }
 }
-
-impl LogFile for TextLogFile {}

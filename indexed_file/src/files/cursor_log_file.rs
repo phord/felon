@@ -16,8 +16,6 @@ impl Stream for CursorLogFile {
     fn wait(&mut self) -> bool { false }
 }
 
-impl LogFile for CursorLogFile { }
-
 pub trait CursorUtil {
     // fn truncate(self) -> CursorLogFile;
     fn from_vec<T: std::fmt::Display>(data: Vec<T>) -> std::io::Result<CursorLogFile>;

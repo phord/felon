@@ -1,6 +1,6 @@
 
 use std::{time::{SystemTime, UNIX_EPOCH}, io::Read};
-use indexed_file::files::{CachedStreamReader, LogFileUtil};
+use indexed_file::files::{CachedStreamReader, LogFile};
 use std::thread::sleep;
 
 

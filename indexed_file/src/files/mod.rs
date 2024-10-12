@@ -12,7 +12,6 @@ pub use cursor_log_file::CursorUtil;
 pub use log_file::{LogSource, LogBase};
 pub use log_file::new_text_file;
 pub use log_file::new_mock_file;
-pub use log_file::LogFileUtil;
 pub use log_file::LogFile;
 pub use mock_log_file::MockLogFile;
 pub use text_log_file::TextLogFile;

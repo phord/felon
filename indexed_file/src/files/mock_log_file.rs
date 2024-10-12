@@ -2,7 +2,6 @@
 
 use std::io::BufRead;
 use std::{fmt, io::Read};
-use crate::files::LogFileUtil;
 use crate::files::LogFile;
 
 pub struct MockLogFile {
@@ -22,14 +21,10 @@ impl fmt::Debug for MockLogFile {
     }
 }
 
-impl LogFile for MockLogFile {}
-
-impl LogFileUtil for MockLogFile {
+impl LogFile for MockLogFile {
     fn len(&self) -> usize {
         self.size
     }
-
-    fn quench(&mut self) {}
 
     fn chunk(&self, target: usize) -> (usize, usize) {
         let start = target.saturating_sub(self.chunk_size / 2);
@@ -37,7 +32,6 @@ impl LogFileUtil for MockLogFile {
         let start = end.saturating_sub(self.chunk_size);
         (start, end)
     }
-
 }
 
 impl Read for MockLogFile {
@@ -113,7 +107,6 @@ mod tests {
     use std::io::{Seek, SeekFrom};
 
     use crate::files::LogSource;
-    use crate::files::LogFileUtil;
     use crate::files::new_mock_file;
 
     fn old_read(file: &mut LogSource, offset: usize, len: usize ) -> Option<Vec<u8>> {
