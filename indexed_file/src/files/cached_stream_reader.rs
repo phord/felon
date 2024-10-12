@@ -1,7 +1,3 @@
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::path::PathBuf;
 /**
  * CachedStreamReader is a non-blocking stream reader that implements Read, BufRead and Seek. It
  * supports Stdin from a terminal or a redirect, and pipes. A better name might be UnboundedReadBuffer because that
@@ -27,6 +23,9 @@ use std::path::PathBuf;
  * more data as well, thus throttling the whole pipeline if needed.
  */
 
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, Seek};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
@@ -204,8 +203,7 @@ impl Stream for CachedStreamReader {
     }
 }
 
-use std::io::Read;
-impl  Read for CachedStreamReader {
+impl Read for CachedStreamReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Blocking read
         self.wait();
@@ -221,9 +219,9 @@ impl  Read for CachedStreamReader {
     }
 }
 
-use std::io::{Seek, SeekFrom};
-impl  Seek for CachedStreamReader {
-    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+use std::io::SeekFrom;
+impl Seek for CachedStreamReader {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         // There's a dilemma here for stream readers. If we seek to the end, we can't know if more data is coming.
         // So we can choose to either block until the end of the stream, or return the current end position. We
         // choose the latter, but we also ensure that we have read as far as possible in the moment. This will allow
@@ -253,7 +251,7 @@ impl  Seek for CachedStreamReader {
 }
 
 // BufReader<CachedStreamReader> is unnecessary and results in extra copies. Avoid using it, and just use our impl instead.
-impl std::io::BufRead for CachedStreamReader {
+impl BufRead for CachedStreamReader {
     fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
         self.fill_buffer(self.pos as usize);
         Ok(&self.buffer[self.pos as usize..])

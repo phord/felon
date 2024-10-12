@@ -17,21 +17,10 @@ impl Stream for CursorLogFile {
 }
 
 pub trait CursorUtil {
-    // fn truncate(self) -> CursorLogFile;
     fn from_vec<T: std::fmt::Display>(data: Vec<T>) -> std::io::Result<CursorLogFile>;
 }
 
 impl CursorUtil for CursorLogFile {
-    // // Truncate CursorLogFile at current position
-    //  use std::io::Seek;
-    //  use std::io::SeekFrom;
-    // fn truncate(self) -> CursorLogFile {
-    //     let mut curs = self;
-    //     let pos = curs.seek(SeekFrom::Current(0)).unwrap() as usize;
-    //     let inner:Vec<u8> = curs.into_inner().iter().take(pos).cloned().collect();
-    //     Cursor::new(inner)
-    // }
-
     fn from_vec<T: std::fmt::Display>(data: Vec<T>) -> std::io::Result<CursorLogFile> {
         let mut c = Cursor::new(vec![]);
         for t in data {
