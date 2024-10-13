@@ -126,7 +126,7 @@ https://github.com/arijit79/minus      https://crates.io/crates/minus
 
 
 https://github.com/Avarel/bvr          https://crates.io/crates/bvr
-    Designed to bfast for large files
+    Designed to be fast for large files
     Still under heavy development.
     Kinda buggy.  Uses lots of crates.
 
@@ -137,6 +137,9 @@ https://github.com/bensadeh/tailspin   https://crates.io/crates/tailspin
     A log file highlighter
 
     Could be useful for matching regex language.
+
+https://github.com/Thomasdezeeuw/a10?tab=readme-ov-file
+    An io_uring wrapper that provides file and stdin abstraction, but requires a modern Linux build.  Not portable.
 
 OMG - the RipGrep CLI helper tools crate includes a struct that decompresses any file via shell helpers (a la LESSPIPE).
 https://docs.rs/grep-cli/0.1.2/grep_cli/struct.DecompressionReader.html
