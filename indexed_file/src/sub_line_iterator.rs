@@ -25,6 +25,7 @@ impl SubLineHelper {
         }
     }
 
+    // Returns subbuffer of line with given width if any remains; else None
     fn get_sub(&self, index: usize, width: usize) -> Option<LogLine> {
         if let Some(buffer) = &self.buffer {
             if buffer.line.is_empty() {

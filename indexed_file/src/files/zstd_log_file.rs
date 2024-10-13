@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::io::BufReader;
 use crate::files::CompressedFile;
 use std::fs::File;
-use crate::files::LogFile;
 
 
 pub type ZstdLogFile = CompressedFile<BufReader<File>>;
