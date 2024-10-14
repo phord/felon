@@ -2,6 +2,8 @@ use crossterm::terminal::ClearType;
 use indexed_file::LineViewMode;
 use std::{io, io::{stdout, Write}, cmp};
 use crossterm::{cursor, execute, queue, terminal};
+use regex::Regex;
+
 use crate::config::Config;
 use crate::keyboard::UserCommand;
 use crate::styled_text::{PattColor, RegionColor, StyledLine};
@@ -88,6 +90,8 @@ enum ScrollAction {
     None,   // Nothing to do
     StartOfFile,
     EndOfFile,
+    SearchForward,
+    SearchBackward,
     Up(usize),
     Down(usize),
 }
@@ -118,6 +122,8 @@ pub struct Display {
     mouse_wheel_height: u16,
 
     mode: LineViewMode,
+
+    search: Option<Regex>,
 }
 
 impl Drop for Display {
@@ -142,6 +148,7 @@ impl Display {
             mode: LineViewMode::WholeLine,
             color: config.color,
             semantic_color: config.semantic_color,
+            search: None,
         }
     }
 
@@ -193,6 +200,17 @@ impl Display {
         // self.action = Action::Message;
     }
 
+    pub fn set_search(&mut self, search: &str) -> bool {
+        match Regex::new(search) {
+            Ok(re) => { self.search = Some(re); true }
+            Err(e) => {
+                log::error!("Invalid search expression: {}", e);
+                self.set_status_msg(format!("Invalid search expression: {}", e));
+                false
+            }
+        }
+    }
+
     pub fn handle_command(&mut self, cmd: UserCommand) {
         match cmd {
             UserCommand::ScrollDown => {
@@ -232,6 +250,12 @@ impl Display {
             UserCommand::MouseScrollDown => {
                 self.scroll = ScrollAction::Down(self.mouse_wheel_height as usize);
                 self.set_status_msg(format!("{:?}", cmd));
+            }
+            UserCommand::SearchNext => {
+                self.scroll = ScrollAction::SearchForward;
+            }
+            UserCommand::SearchPrev => {
+                self.scroll = ScrollAction::SearchBackward;
             }
             _ => {}
         }
@@ -413,6 +437,23 @@ impl Display {
                         log::trace!("scroll down {} lines", len);
                         let begin = self.displayed_lines.last().unwrap();
                         Scroll::down(*begin, len)
+                    }
+                    ScrollAction::SearchBackward => {
+                        // Search backwards from the first line displayed
+                        log::trace!("search backward");
+                        // todo!("Tell doc to search backwards");
+                        // Need to search backwards through the document until we find a match.
+                        // If no match, need to cancel the action.
+                        // If user cancels, need to cancel the action.
+                        // Create a FilterIndex(doc) to build the search index.
+                        let begin = self.displayed_lines.first().unwrap();
+                        Scroll::up(*begin, view_height)
+                    }
+                    ScrollAction::SearchForward => {
+                        // Search forwards from the last line displayed
+                        log::trace!("search forward");
+                        let begin = self.displayed_lines.last().unwrap();
+                        Scroll::down(*begin, view_height)
                     }
                     ScrollAction::None => Scroll::none()
                 }

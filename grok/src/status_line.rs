@@ -10,7 +10,7 @@ pub struct StatusLine {
 }
 
 impl StatusLine {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: &Config) -> Self {
         Self {
             color: config.color,
         }

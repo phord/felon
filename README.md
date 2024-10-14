@@ -147,6 +147,11 @@ https://docs.rs/grep-cli/0.1.2/grep_cli/struct.DecompressionReader.html
 
 https://codeberg.org/rini/pomprt
     A readline-like prompt
+https://github.com/kkawakam/rustyline
+    Another readline prompt. supports command history.
+https://docs.rs/r3bl_terminal_async/latest/r3bl_terminal_async/
+    Another one, derived from RustyLine-async, but evolved greatly
+    Overkill?
 
 https://github.com/unicode-rs/unicode-width
 https://github.com/Aetf/unicode-truncate

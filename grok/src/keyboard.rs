@@ -27,7 +27,10 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("PageDown", cmd::PageDown),
     ("Home", cmd::ScrollToTop),
     ("End", cmd::ScrollToBottom),
-    ("/", cmd::SearchPrompt),
+    ("/", cmd::ForwardSearchPrompt),
+    ("?", cmd::BackwardSearchPrompt),
+    ("n", cmd::SearchNext),
+    ("N", cmd::SearchPrev),
 
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
@@ -58,7 +61,10 @@ pub enum UserCommand {
     ScrollToTop,
     ScrollToBottom,
     TerminalResize,
-    SearchPrompt,
+    ForwardSearchPrompt,
+    BackwardSearchPrompt,
+    SearchNext,
+    SearchPrev,
     SelectWordAt(u16, u16),
     SelectWordDrag(u16, u16),
 }

@@ -6,6 +6,7 @@ mod keyboard;
 mod styled_text;
 mod document;
 mod status_line;
+mod search_prompt;
 use flexi_logger::{Logger, FileSpec};
 
 use config::Config;
