@@ -39,6 +39,7 @@ impl Log {
         }
     }
 
+    // unused?
     pub fn from_source(file: LogSource) -> Self {
         log::trace!("Instantiate log from LogSource");
         let src = LineIndexer::new(file);

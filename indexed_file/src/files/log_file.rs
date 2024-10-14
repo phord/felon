@@ -41,10 +41,14 @@ pub trait LogFile: BufRead + Seek {
     fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
         self.seek(SeekFrom::Start(start as u64))?;
 
+        // We could return this, except it will not handle invalid utf-8 data (and it strips \n)
+        // return self.lines().next().unwrap()
+
         // FIXME: We strip invalid utf-8 data from the file here. But we should probably do this higher up the chain.
-        // Not this from_utf8_lossy means we can't pass binary files through our toy cat tool. Not a goal, but worth knowing.
+        // Note this from_utf8_lossy means we can't pass binary files through our toy cat tool. Not a goal, but worth knowing.
 
         let mut buf = vec![];
+        // FIXME: Does this end early when some utf-8 code sequence inludes 0x10?
         match self.read_until(b'\n', &mut buf) {
             Ok(_) => Ok(String::from_utf8_lossy(&buf).into_owned()),
             Err(e) => Err(e),
