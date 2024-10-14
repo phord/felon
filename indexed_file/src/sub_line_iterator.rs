@@ -1,7 +1,7 @@
 
 // Params that control how we will iterate across the log file
 
-use crate::{LineIndexerDataIterator, Log, LogLine};
+use crate::{indexer::line_indexer::IndexedLog, LineIndexerDataIterator, LogLine};
 
 #[derive(Clone, Copy)]
 pub enum LineViewMode{
@@ -167,8 +167,8 @@ impl SubLineHelper {
 
 // Iterate over line subsections as position, offset, string
 // This iterator handles breaking lines into substrings for wrapping, right-scrolling, and/or chopping
-pub struct SubLineIterator<'a> {
-    inner: LineIndexerDataIterator<'a>,
+pub struct SubLineIterator<'a, LOG: IndexedLog> {
+    inner: LineIndexerDataIterator<'a, LOG>,
     mode: LineViewMode,
     fwd: SubLineHelper,
     rev: SubLineHelper,
@@ -177,8 +177,8 @@ pub struct SubLineIterator<'a> {
     start: Option<usize>,
 }
 
-impl<'a> SubLineIterator<'a> {
-    pub fn new(log: &'a mut Log, mode: LineViewMode) -> Self {
+impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
+    pub fn new(log: &'a mut LOG, mode: LineViewMode) -> Self {
         let inner = LineIndexerDataIterator::new(log);
         // TODO: handle rev() getting last subsection of last line somewhere
         Self {
@@ -190,7 +190,7 @@ impl<'a> SubLineIterator<'a> {
         }
     }
 
-    pub fn new_from(log: &'a mut Log, mode: LineViewMode, offset: usize) -> Self {
+    pub fn new_from(log: &'a mut LOG, mode: LineViewMode, offset: usize) -> Self {
         let inner = LineIndexerDataIterator::new_from(log, offset);
 
         Self {
@@ -203,7 +203,7 @@ impl<'a> SubLineIterator<'a> {
     }
 }
 
-impl<'a>  SubLineIterator<'a> {
+impl<'a, LOG: IndexedLog>  SubLineIterator<'a, LOG> {
     // Usually when an offset is given we can count on the lineindexer to correctly load the previous line and next line correctly.
     // But if we are wrapping lines, the "next" and "prev" chunks may come from the same line in the file. We handle this here.
     // When we load the first line of this iterator, if an offset was given, we may need to split the line into two chunks.
@@ -225,7 +225,7 @@ impl<'a>  SubLineIterator<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for SubLineIterator<'a> {
+impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         self.adjust_first_helpers();
@@ -238,7 +238,7 @@ impl<'a> DoubleEndedIterator for SubLineIterator<'a> {
     }
 }
 
-impl<'a> Iterator for SubLineIterator<'a> {
+impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
     type Item = LogLine;
 
     #[inline]

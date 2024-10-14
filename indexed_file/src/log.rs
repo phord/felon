@@ -1,6 +1,7 @@
+use crate::indexer::eventual_index::Location;
 use crate::{time_stamper::TimeStamper, LineIndexerIterator, SubLineIterator, LineViewMode, LogLine};
 use std::path::PathBuf;
-use crate::indexer::line_indexer::LineIndexer;
+use crate::indexer::line_indexer::{LineIndexer, IndexedLog};
 
 use crate::files::{LogBase, LogSource, new_text_file};
 
@@ -31,6 +32,7 @@ impl From<LogSource> for Log {
     }
 }
 
+// Constructors
 impl Log {
     pub fn new(src: LineIndexer<LogSource>) -> Self {
         Self {
@@ -58,7 +60,40 @@ impl Log {
         };
         Ok(log)
     }
+}
 
+// Navigation
+impl IndexedLog for Log {
+    #[inline]
+    fn resolve_location(&mut self, pos: Location) -> Location {
+        self.file.resolve_location(pos)
+    }
+
+    #[inline]
+    fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
+        self.file.read_line_at(start)
+    }
+
+    // Step to the next indexed line or gap
+    #[inline]
+    fn next_line_index(&self, find: Location) -> Location {
+        self.file.next_line_index(find)
+    }
+
+    // Step to the previous indexed line or gap
+    #[inline]
+    fn prev_line_index(&self, find: Location) -> Location {
+        self.file.prev_line_index(find)
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.file.len()
+    }
+}
+
+// Miscellaneous
+impl Log {
     #[inline]
     pub fn wait_for_end(&mut self) {
         log::trace!("Wait for end of file");
@@ -68,7 +103,10 @@ impl Log {
     pub fn count_lines(&self) -> usize {
         self.file.count_lines()
     }
+}
 
+// Iterators
+impl Log {
     fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
         LineIndexerIterator::new(self)
     }

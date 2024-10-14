@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{LogLine, Log, indexer::eventual_index::{Location, VirtualLocation}};
+use crate::{indexer::{eventual_index::{Location, VirtualLocation}, line_indexer::IndexedLog}, Log, LogLine};
 
 
 /**

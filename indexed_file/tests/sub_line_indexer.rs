@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod sub_line_iterator_helper {
-    use indexed_file::{LineViewMode, SubLineIterator, Log};
+    use indexed_file::{LineViewMode, SubLineIterator, IndexedLog, Log};
     use indexed_file::files::new_mock_file;
 
     pub(crate) struct Harness {
@@ -59,12 +59,12 @@ mod sub_line_iterator_helper {
         }
     }
 
-    pub(crate) fn new(log: &mut Log) -> SubLineIterator {
+    pub(crate) fn new<LOG: IndexedLog>(log: &mut LOG) -> SubLineIterator<LOG> {
         let mode = LineViewMode::WholeLine;
         SubLineIterator::new(log, mode)
     }
 
-    pub(crate) fn new_from(log: &mut Log, offset: usize) -> SubLineIterator {
+    pub(crate) fn new_from<LOG: IndexedLog>(log: &mut LOG, offset: usize) -> SubLineIterator<LOG> {
         let mode = LineViewMode::WholeLine;
         SubLineIterator::new_from(log, mode, offset)
     }
@@ -464,12 +464,12 @@ mod sub_line_wrap_tests {
     use indexed_file::{LineViewMode, SubLineIterator, Log};
 
 
-    fn wrapped_new(log: &mut Log, width: usize) -> SubLineIterator {
+    fn wrapped_new(log: &mut Log, width: usize) -> SubLineIterator<Log> {
         let mode = LineViewMode::Wrap{width};
         SubLineIterator::new(log, mode)
     }
 
-    fn wrapped_new_from(log: &mut Log, width: usize, offset: usize) -> SubLineIterator {
+    fn wrapped_new_from(log: &mut Log, width: usize, offset: usize) -> SubLineIterator<Log> {
         let mode = LineViewMode::Wrap{width};
         SubLineIterator::new_from(log, mode, offset)
     }

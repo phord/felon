@@ -6,6 +6,23 @@ use crate::files::LogFile;
 use crate::indexer::index::Index;
 use crate::indexer::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
 
+pub trait IndexedLog {
+    fn resolve_location(&mut self, pos: Location) -> Location;
+
+    fn read_line_at(&mut self, start: usize) -> std::io::Result<String>;
+
+    fn next_line_index(&self, find: Location) -> Location;
+
+    fn prev_line_index(&self, find: Location) -> Location;
+
+    fn len(&self) -> usize;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+
 pub struct LineIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
@@ -29,11 +46,6 @@ impl<LOG: LogFile> LineIndexer<LOG> {
     }
 
     #[inline]
-    pub fn len(&self) -> usize {
-        self.source.len()
-    }
-
-    #[inline]
     pub fn wait_for_end(&mut self) {
         self.source.wait_for_end()
     }
@@ -43,27 +55,35 @@ impl<LOG: LogFile> LineIndexer<LOG> {
     fn resolve(&self, find: Location) -> Location {
         self.index.resolve(find, self.len())
     }
+}
+
+impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.source.len()
+    }
 
     // Read a line at a given offset in the file
     #[inline]
-    pub(crate) fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
+    fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
         self.source.read_line_at(start)
     }
 
     // Step to the next indexed line or gap
     #[inline]
-    pub(crate) fn next_line_index(&self, find: Location) -> Location {
+    fn next_line_index(&self, find: Location) -> Location {
         self.index.next_line_index(find)
     }
 
     // Step to the previous indexed line or gap
     #[inline]
-    pub(crate) fn prev_line_index(&self, find: Location) -> Location {
+    fn prev_line_index(&self, find: Location) -> Location {
         self.index.prev_line_index(find)
     }
 
     // fill in any gaps by parsing data from the file when needed
-    pub(crate) fn resolve_location(&mut self, pos: Location) -> Location {
+    #[inline]
+    fn resolve_location(&mut self, pos: Location) -> Location {
         // Resolve any virtuals into gaps or indexed
         let mut pos = self.resolve(pos);
 
@@ -74,7 +94,9 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
         pos
     }
+}
 
+impl<LOG: LogFile> LineIndexer<LOG> {
     // Index a chunk of file at some gap location. May index only part of the gap.
     fn index_chunk(&mut self, gap: Location) -> Location {
         // Quench the file in case new data has arrived
