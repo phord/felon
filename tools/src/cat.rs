@@ -41,6 +41,30 @@ pub fn tac_cmd() {
         print!("{line}");
     }
 }
+
+// Print last 10 lines from each file
+pub fn tail_cmd() {
+    // TODO: get from config
+    let count = 10;
+
+    for file in get_files_from_cfg() {
+        let file = files::new_text_file(file).expect("File failed to open");
+        let mut log = Log::from(file);
+
+        let first_line = log
+            .iter_lines_from(usize::MAX)
+            .rev()
+            .take(count)
+            .last()
+            .unwrap();
+
+        for line in log.iter_lines_from(first_line.offset) {
+            print!("{line}");
+        }
+    }
+}
+
+
 use std::io::{self, Cursor, Read};
 
 struct IteratorAsRead<I>
