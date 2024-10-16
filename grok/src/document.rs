@@ -41,7 +41,7 @@ impl Document {
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         Self {
-            log: FilteredLog::new(log),
+            log: FilteredLog::new(Box::new(log)),
         }
     }
 

@@ -1,13 +1,13 @@
-use crate::{index_filter::IndexFilter, indexer::{eventual_index::Location, line_indexer::IndexedLog}, LineIndexerIterator, LineViewMode, Log, LogLine, SubLineIterator};
+use crate::{index_filter::IndexFilter, indexer::{eventual_index::Location, line_indexer::IndexedLog}};
 
 
 pub struct FilteredLog {
     filters: Vec<IndexFilter>,
-    log: Log,
+    log: Box<dyn IndexedLog>,
 }
 
 impl FilteredLog {
-    pub fn new(log: Log) -> Self {
+    pub fn new(log: Box<dyn IndexedLog>) -> Self {
         Self {
             filters: Vec::new(),
             log,
