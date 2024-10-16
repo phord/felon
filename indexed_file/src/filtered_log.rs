@@ -1,4 +1,4 @@
-use crate::{index_filter::IndexFilter, indexer::{eventual_index::Location, line_indexer::IndexedLog}, Log};
+use crate::{index_filter::IndexFilter, indexer::{eventual_index::Location, line_indexer::IndexedLog}, LineIndexerIterator, LineViewMode, Log, LogLine, SubLineIterator};
 
 
 pub struct FilteredLog {
@@ -54,6 +54,10 @@ impl IndexedLog for FilteredLog {
     #[inline]
     fn len(&self) -> usize {
         self.log.len()
+    }
+
+    fn count_lines(&self) -> usize {
+        self.log.count_lines()
     }
 }
 

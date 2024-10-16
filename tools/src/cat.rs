@@ -1,6 +1,6 @@
 use crate::config::Config;
 use document::MergedLogs;
-use indexed_file::{files, Log};
+use indexed_file::{files, IndexedLog, Log};
 use indexed_file::files::ZstdLogFile;
 use std::io::{BufRead, Write};
 use std::path::PathBuf;

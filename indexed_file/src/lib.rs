@@ -12,6 +12,7 @@ pub(crate) mod time_stamper;
 
 pub use iterator::LogLine;
 pub use crate::log::Log;
+pub use crate::filtered_log::FilteredLog;
 
 pub use indexer::line_indexer::IndexedLog;
 pub use iterator::{LineIndexerDataIterator, LineIndexerIterator};
@@ -20,7 +21,7 @@ pub use sub_line_iterator::{SubLineIterator, LineViewMode};
 
 #[cfg(test)]
 mod tests {
-    use crate::Log;
+    use crate::{IndexedLog, Log};
     use crate::files::{LogSource, new_text_file};
     use std::path::PathBuf;
 

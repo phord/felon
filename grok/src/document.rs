@@ -7,11 +7,11 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{files, LineViewMode, Log};
+use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
-    log: Log,
+    log: FilteredLog,
 }
 
 impl Document {
@@ -41,7 +41,7 @@ impl Document {
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         Self {
-            log,
+            log: FilteredLog::new(log),
         }
     }
 

@@ -3,6 +3,8 @@
 use std::io::Cursor;
 use std::io::Seek;
 use std::io::Write;
+use crate::IndexedLog;
+
 use super::Stream;
 
 pub type CursorLogFile = std::io::Cursor<Vec<u8>>;

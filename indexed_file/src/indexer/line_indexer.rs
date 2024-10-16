@@ -5,6 +5,7 @@ use std::io::SeekFrom;
 use crate::files::LogFile;
 use crate::indexer::index::Index;
 use crate::indexer::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
+use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
 pub trait IndexedLog {
     fn resolve_location(&mut self, pos: Location) -> Location;
@@ -20,6 +21,42 @@ pub trait IndexedLog {
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    fn count_lines(&self) -> usize ;
+
+    // Iterators
+
+    fn iter_offsets(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_
+        where Self: Sized {
+        self.iter()
+    }
+
+    fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where Self: Sized {
+        self.iter_view(LineViewMode::WholeLine)
+    }
+
+    fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where Self: Sized {
+        self.iter_view_from(LineViewMode::WholeLine, offset)
+    }
+
+    fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_
+    where Self: Sized {
+
+        LineIndexerIterator::new(self)
+    }
+
+    fn iter_view(&mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where Self: Sized {
+        SubLineIterator::new(self, mode)
+    }
+
+    fn iter_view_from(&mut self, mode: LineViewMode, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where Self: Sized {
+        SubLineIterator::new_from(self, mode, offset)
+    }
+
 }
 
 
@@ -36,7 +73,7 @@ impl<LOG: LogFile> fmt::Debug for LineIndexer<LOG> {
     }
 }
 
-impl<LOG: LogFile> LineIndexer<LOG> {
+impl<LOG> LineIndexer<LOG> {
 
     pub fn new(file: LOG) -> LineIndexer<LOG> {
         Self {
@@ -44,7 +81,9 @@ impl<LOG: LogFile> LineIndexer<LOG> {
             index: EventualIndex::new(),
         }
     }
+}
 
+impl<LOG: LogFile> LineIndexer<LOG> {
     #[inline]
     pub fn wait_for_end(&mut self) {
         self.source.wait_for_end()
@@ -93,6 +132,10 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
         }
 
         pos
+    }
+
+    fn count_lines(&self) -> usize {
+        todo!("self.index.count_lines()");
     }
 }
 

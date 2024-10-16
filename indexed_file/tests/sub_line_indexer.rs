@@ -73,6 +73,8 @@ mod sub_line_iterator_helper {
 // Tests for LineIndexerIterator
 #[cfg(test)]
 mod logfile_iterator_tests {
+    use indexed_file::IndexedLog;
+
     use crate::sub_line_iterator_helper::Harness;
 
     #[test]

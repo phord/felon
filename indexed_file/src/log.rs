@@ -1,5 +1,5 @@
 use crate::indexer::eventual_index::Location;
-use crate::{time_stamper::TimeStamper, LineIndexerIterator, SubLineIterator, LineViewMode, LogLine};
+use crate::time_stamper::TimeStamper;
 use std::path::PathBuf;
 use crate::indexer::line_indexer::{LineIndexer, IndexedLog};
 
@@ -90,6 +90,11 @@ impl IndexedLog for Log {
     fn len(&self) -> usize {
         self.file.len()
     }
+
+    fn count_lines(&self) -> usize {
+        self.file.count_lines()
+    }
+
 }
 
 // Miscellaneous
@@ -99,36 +104,4 @@ impl Log {
         log::trace!("Wait for end of file");
         self.file.wait_for_end()
     }
-
-    pub fn count_lines(&self) -> usize {
-        self.file.count_lines()
-    }
-}
-
-// Iterators
-impl Log {
-    fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
-        LineIndexerIterator::new(self)
-    }
-
-    pub fn iter_offsets(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_ {
-        self.iter()
-    }
-
-    pub fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
-        self.iter_view(LineViewMode::WholeLine)
-    }
-
-    pub fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
-        self.iter_view_from(LineViewMode::WholeLine, offset)
-    }
-
-    pub fn iter_view(&mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
-        SubLineIterator::new(self, mode)
-    }
-
-    pub fn iter_view_from(&mut self, mode: LineViewMode, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_ {
-        SubLineIterator::new_from(self, mode, offset)
-    }
-
 }
