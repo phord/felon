@@ -114,7 +114,7 @@ impl<'a> FilteredIterator<'a> {
 impl<'a> FilteredIterator<'a> {
     pub(crate) fn new_from(log: &'a mut Log, offset: usize) -> Self {
         let rev_pos = Location::Virtual(VirtualLocation::Before(offset));
-        let pos = Location::Virtual(VirtualLocation::After(offset));
+        let pos = Location::Virtual(VirtualLocation::AtOrAfter(offset));
         Self {
             log,
             pos,

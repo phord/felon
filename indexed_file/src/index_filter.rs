@@ -38,7 +38,7 @@ impl IndexFilter {
     // Returns true if the line matches the filter
     // TODO: Plumb LogLine through here instead?
     pub fn eval(&mut self, line: &str, offset: usize, eof: usize)  {
-        let pos = self.index.resolve(Location::Virtual(VirtualLocation::After(offset)), eof);
+        let pos = self.index.resolve(Location::Virtual(VirtualLocation::AtOrAfter(offset)), eof);
         if pos.is_gap() {
             let found = if is_match_type(line, &self.f) {
                 Some(offset)

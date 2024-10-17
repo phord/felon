@@ -44,7 +44,7 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     pub fn new_from(log: &'a mut LOG, offset: usize) -> Self {
         let rev_pos = Location::Virtual(VirtualLocation::Before(offset));
-        let pos = Location::Virtual(VirtualLocation::After(offset));
+        let pos = Location::Virtual(VirtualLocation::AtOrAfter(offset));
         Self {
             log,
             pos,

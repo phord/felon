@@ -59,7 +59,7 @@ impl Location {
             Virtual(Start) => 0,
             Virtual(End) => usize::MAX,
             Virtual(Before(off)) => off.saturating_sub(1),
-            Virtual(After(off)) => off.saturating_add(1),
+            Virtual(AtOrAfter(off)) => *off,
             Indexed(iref) => iref.offset,
             Gap(GapRange{target: off, ..}) => off.value(),
 
@@ -112,7 +112,7 @@ pub enum VirtualLocation {
     Start,
     End,
     Before(usize),
-    After(usize),
+    AtOrAfter(usize),
 }
 
 // The target offset we wanted to reach when filling a gap
@@ -334,7 +334,7 @@ impl EventualIndex {
             Location::Virtual(loc) => match loc {
                 VirtualLocation::Before(0) => Location::Invalid,
                 VirtualLocation::Before(offset) => self.locate(TargetOffset::AtOrBefore(offset.min(end_of_file)-1)),
-                VirtualLocation::After(offset) => self.locate(TargetOffset::AtOrAfter(offset.min(end_of_file))),
+                VirtualLocation::AtOrAfter(offset) => self.locate(TargetOffset::AtOrAfter(offset.min(end_of_file))),
                 VirtualLocation::Start => {
                     if let Some(gap) = self.try_gap_at(0, TargetOffset::AtOrBefore(0)) {    // FIXME: Assumes there will always be offset @ zero
                         gap
