@@ -168,8 +168,7 @@ impl EventualIndex {
 
     // Insert an explored range into the eventualIndex and optionally add a found line offset.
     // Location must be a gap.
-    // Returns location of the inserted offset, or the next location after the range if no offset given.
-    pub fn insert(&mut self, pos: Location, range: std::ops::Range<usize>, offset: Option<usize>) -> Location {
+    pub fn insert(&mut self, pos: Location, range: std::ops::Range<usize>, offset: Option<usize>) {
         let ix = match pos {
             Location::Gap(range) => range.index,
             Location::Virtual(_) => panic!("Location not resolved"),
@@ -184,24 +183,13 @@ impl EventualIndex {
             // Prepend to next index if it's adjacent
             ix
         } else {
-            // No adjacent index exists.  Insert a new one.
+            // No adjacent index exists.  Insert a new zero-sized one. This allows it to be adjascent to our added range.
             self.indexes.insert(ix, Index::new());
             self.indexes[ix].start = range.start;
             self.indexes[ix].end = range.start;
             ix
         };
-        let end = range.end;
-        let line = self.indexes[index].insert(range, offset);
-
-        if let Some(offset) = offset {
-            // Will always find 'offset'
-            self.find_location(index, line, TargetOffset::AtOrBefore(offset))
-            // TODO: assert we found our offset
-        } else {
-            // Returns some line that is not in our range, or a gap.
-            self.find_location(index, line, TargetOffset::AtOrAfter(end))
-            // FIXME: Support TargetOffset::AtOrBefore(...) for reverse-walking
-        }
+        self.indexes[index].insert(range, offset);
     }
 
 
