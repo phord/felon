@@ -111,7 +111,7 @@ impl Eq for IndexRef {}
 pub enum VirtualLocation {
     Start,
     End,
-    Before(usize),
+    Before(usize),      // actually Before, not AtOrBefore.  Why is it different?  :concerned:
     AtOrAfter(usize),
 }
 
@@ -301,7 +301,7 @@ impl EventualIndex {
         // TODO: Trace this fallback finder and ensure it's not being overused.
 
         let offset = target.value();
-        match self.indexes.binary_search_by(|i| i.contains_offset(&offset)) {
+        let pos = match self.indexes.binary_search_by(|i| i.contains_offset(&offset)) {
             Ok(found) => {
                 let i = &self.indexes[found];
                 let line = i.find(offset).unwrap();
@@ -313,7 +313,9 @@ impl EventualIndex {
                 // No index holds our offset; it needs to be loaded
                 self.gap_at(after, target)
             }
-        }
+        };
+        assert!(!pos.is_virtual());
+        pos
     }
 
     // Resolve virtual locations to real indexed or gap locations
@@ -355,7 +357,8 @@ impl EventualIndex {
         assert!(index < self.indexes.len());
         let j = &self.indexes[index];
 
-        // FIXME: Handle indexes with zero entries
+        assert!(!j.is_empty());
+
         let line = line.min(j.len() - 1);
 
         let offset = j.get(line);
@@ -364,7 +367,7 @@ impl EventualIndex {
         Location::Indexed(IndexRef{ index, line , offset })
     }
 
-    // Find the target near the hinted location
+    // Find the target near the hinted location, which must already exist
     fn find_location(&self, index: usize, line: usize, target: TargetOffset) -> Location {
         let mut pos = self.get_location(index, line);
         while let Some(p_off) = pos.offset() {
@@ -422,7 +425,7 @@ impl EventualIndex {
             } else if line > 0 {
                 // prev line is in the same index
                 self.get_location(index, line - 1)
-            } else if let Some(gap) = self.try_gap_at(index, TargetOffset::AtOrBefore(self.indexes[index].start)) {
+            } else if let Some(gap) = self.try_gap_at(index, TargetOffset::AtOrBefore(i.start)) {
                 // prev line is not parsed yet
                 gap
             } else if index > 0 {

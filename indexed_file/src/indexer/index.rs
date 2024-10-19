@@ -12,7 +12,7 @@ pub struct Index {
     //   Offset of byte after buffer we indexed (exclusive)
     //   Last line offset included in our range (inclusive)
     pub end: usize,
-    // Byte offset of the end of each line
+    // Byte offset of the start of each line in the range, and possibly one byte past the end
     line_offsets: Vec<usize>,
 }
 
@@ -149,6 +149,8 @@ impl Index {
         self.line_offsets.binary_search(&offset)
     }
 
+    // Find the index to the line_offset element for a given offset, or where it would belong.
+    // May include the line_offset for the end of the buffer.
     pub fn find(&self, offset: usize) -> Option<usize> {
         if offset < self.start || offset > self.end {
             None
