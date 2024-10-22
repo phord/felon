@@ -151,7 +151,8 @@ impl<LOG: LogFile> LineIndexer<LOG> {
             _ => panic!("Tried to index something which is not a gap: {:?}", gap),
         };
 
-        let offset = target.value().min(self.len());
+        // Offset near where we think we want to read; snapped to gap.
+        let offset = target.value().max(start).min(end);
         assert!(start <= offset);
         assert!(end <= self.len());
 
