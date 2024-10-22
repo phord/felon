@@ -39,6 +39,14 @@ impl Index {
         self.line_offsets.is_empty()
     }
 
+    pub fn last(&self) -> Option<&usize> {
+        self.line_offsets.last()
+    }
+
+    pub fn first(&self) -> Option<&usize> {
+        self.line_offsets.first()
+    }
+
     pub fn get(&self, line_number: usize) -> usize {
         assert!(line_number < self.len());
         self.line_offsets[line_number]
@@ -115,27 +123,46 @@ impl Index {
     }
 
     pub fn adjacent(&self, range: &std::ops::Range<usize>) -> bool {
-        self.start == range.end + 1 || self.end == range.start
+        self.start == range.end || self.end == range.start
+    }
+
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.start..self.end
+    }
+
+    pub fn merge(&mut self, other: &Index) {
+        assert!(self.adjacent(&other.range()));
+        self.end = other.end;
+        self.line_offsets.extend(other.line_offsets.iter().cloned());
     }
 
     // Insert a value into index at start or end; return index to where new value would go
-    // range must be adjacent to this index
+    // range must be adjacent to or touch this index
     pub fn insert(&mut self, range: std::ops::Range<usize>, offset: Option<usize>) -> usize {
-        if self.start == range.end + 1 {
+        if self.start <= range.end && self.start >= range.start {
+            // New range overlaps our start
             self.start = range.start;
+            self.end = self.end.max(range.end);
+
             if let Some(offset) = offset {
+                // New values must be inserted in order
+                assert!(self.line_offsets.is_empty() || &offset < self.line_offsets.first().unwrap());
                 self.line_offsets.insert(0, offset);
             }
             0
-        } else if self.end == range.start {
+        } else if self.end >= range.start && self.end <= range.end {
+            // New range overlaps our end
             self.end = range.end;
+            self.start = self.start.min(range.start);
+
             let ret = self.line_offsets.len();
             if let Some(offset) = offset {
+                assert!(self.line_offsets.is_empty() || &offset > self.line_offsets.last().unwrap());
                 self.line_offsets.push(offset);
             }
             ret
         } else {
-            panic!("Range {:?} is not adjacent to index {}..{}", range, self.start, self.end);
+            panic!("Range {:?} is discontiguous with index {}..{}", range, self.start, self.end);
         }
     }
 
@@ -174,10 +201,16 @@ impl Index {
     }
 
     #[inline(always)]
-    pub fn contains(&self, offset: &usize) -> bool {
-        matches!(self.contains_offset(offset), std::cmp::Ordering::Equal)
+    // true if given offset is within our actual indexed lines
+    pub fn indexes(&self, offset: &usize) -> bool {
+        !self.is_empty() && self.line_offsets.first().unwrap() <= offset && self.line_offsets.last().unwrap() >= offset
     }
 
+    #[inline(always)]
+    // true if offset is within or adjacent-to this index
+    pub fn touches(&self, offset: &usize) -> bool {
+        offset + 1 >= self.start && offset <= &self.end
+    }
 
 }
 
