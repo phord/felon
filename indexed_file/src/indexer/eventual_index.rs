@@ -206,7 +206,22 @@ impl EventualIndex {
             prev = index.end;
         }
 
-        // FIXME: Merge adjacent indexes if one of them is empty
+        // Use a fold iterator to concatenate adjacent indexes
+        self.indexes = self.indexes
+            .drain(..)
+            .filter(|index| !index.is_empty())
+            .fold(Vec::new(), |mut acc, index| {
+                if let Some(last) = acc.last_mut() {
+                    if last.adjacent(&index.range()) {
+                        last.merge(&index);
+                    } else {
+                        acc.push(index);
+                    }
+                } else {
+                    acc.push(index);
+                }
+                acc
+            });
     }
 
     // #[cfg(test)]
