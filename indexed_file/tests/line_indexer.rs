@@ -24,6 +24,7 @@ mod logfile_data_iterator_tests {
         assert_eq!(line, patt);
         for i in it.take(lines - 1) {
             let (line, bol) = (i.line, i.offset);
+            // println!("{prev} -> {bol}: {}", bol-prev);
             assert_eq!(bol - prev, patt_len);
             assert_eq!(line, patt);
             prev = bol;
@@ -71,7 +72,7 @@ mod logfile_data_iterator_tests {
         let mut count = 1;
         for i in it {
             let (line, bol) = (i.line, i.offset);
-            println!("{bol} {prev}");
+            // println!("{bol} {prev}");
             assert_eq!(prev - bol, patt_len);
             assert_eq!(line, patt);
             prev = bol;

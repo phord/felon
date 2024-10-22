@@ -170,7 +170,7 @@ impl EventualIndex {
     // Location must be a gap.
     pub fn insert(&mut self, pos: Location, range: std::ops::Range<usize>, offset: Option<usize>) {
         let ix = match pos {
-            Location::Gap(range) => range.index,
+            Location::Gap(gap_range) => gap_range.index,
             Location::Virtual(_) => panic!("Location not resolved"),
             Location::Indexed(_) => panic!("Location not a gap"),
             Location::Invalid => panic!("Location invalid"),
@@ -183,9 +183,9 @@ impl EventualIndex {
             // Prepend to next index if it's adjacent
             ix
         } else {
-            // No adjacent index exists.  Insert a new zero-sized one. This allows it to be adjascent to our added range.
+            // No adjacent index exists.  Insert a new zero-sized one. This allows it to be adjacent to our added range.
             self.indexes.insert(ix, Index::new());
-            self.indexes[ix].start = range.start;
+            self.indexes[ix].start = range.start;   // Empty range; insert will expand it
             self.indexes[ix].end = range.start;
             ix
         };

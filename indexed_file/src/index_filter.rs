@@ -1,12 +1,13 @@
 use regex::Regex;
 
-use crate::indexer::eventual_index::{EventualIndex, Location, VirtualLocation};
+use crate::indexer::eventual_index::{EventualIndex, Location};
 
 
 /**
  * Basic EventualIndex that accumulates matching line offsets. Can be used for search or filter, despite the name.
  */
 
+ #[derive(Debug)]
 pub enum SearchType {
     Regex(Regex),
     Bookmark,
@@ -22,7 +23,8 @@ pub struct IndexFilter {
 fn is_match_type(line: &str, typ: &SearchType) -> bool {
     match typ {
         SearchType::Regex(re) => re.is_match(line),
-        _ => false,
+        SearchType::None => true,
+        _ => { todo!("Unimplemented search type"); false},
     }
 }
 

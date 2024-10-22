@@ -1,6 +1,6 @@
 use crate::indexer::{eventual_index::{Location, VirtualLocation}, line_indexer::IndexedLog};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct LogLine {
     pub line: String,
     pub offset: usize,
