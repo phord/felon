@@ -66,6 +66,31 @@ impl Location {
             Invalid => unreachable!(),
         }
     }
+
+    // Take make a portable location we can use with another EventualIndex
+    pub fn make_portable(&self) -> Location {
+        use Location::*;
+        use VirtualLocation::*;
+        match self {
+            Virtual(_) => *self,
+            Invalid => *self,
+
+            // TODO: This is inefficient if we're going backwards.  Need something else to reflect this?
+            Indexed(iref) => Virtual(AtOrAfter(iref.offset)),
+
+            Gap(GapRange{target, gap, ..}) => {
+                let (start, end) = match gap {
+                    Missing::Bounded(start, end) => (*start, *end),
+                    Missing::Unbounded(start) => (*start, usize::MAX - 1),
+                };
+                // dbg!(target);
+                match target {
+                    TargetOffset::AtOrBefore(off) => Virtual(Before(end.min(*off) + 1)),
+                    TargetOffset::AtOrAfter(off) => Virtual(AtOrAfter(start.max(*off))),
+                }
+            },
+        }
+    }
 }
 
 impl Ord for Location {
@@ -423,6 +448,7 @@ impl EventualIndex {
             let i = &self.indexes[index];
             if line >= i.lines() || i.get(line) != offset {
                 // Target location invalidated by changes to self.indexes. Fall back to slow search for line after this offset.
+                // panic!("Does this ever happen?");
                 self.locate(TargetOffset::AtOrAfter(offset+1))
             } else if line + 1 < i.len() {
                 // next line is in the same index
@@ -446,6 +472,7 @@ impl EventualIndex {
             let i = &self.indexes[index];
             if line >= i.lines() || i.get(line) != offset {
                 // Target location invalidated by changes to self.indexes. Fall back to slow search for line before this offset.
+                // panic!("Does this ever happen?");
                 self.locate(TargetOffset::AtOrBefore(offset-1))
             } else if line > 0 {
                 // prev line is in the same index
