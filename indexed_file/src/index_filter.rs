@@ -1,3 +1,4 @@
+use log::trace;
 use regex::Regex;
 
 use crate::indexer::eventual_index::{EventualIndex, Location};
@@ -30,6 +31,12 @@ fn is_match_type(line: &str, typ: &SearchType) -> bool {
     }
 }
 
+// Standalone helpers
+fn trim_newline(line: &str) -> &str {
+    // FIXME: Also remove \r?
+    line.strip_suffix("\n").unwrap_or(line)
+}
+
 impl IndexFilter {
     pub fn new(f: SearchType) -> Self {
         IndexFilter {
@@ -41,7 +48,7 @@ impl IndexFilter {
     // Evaluate a new line for inclusion in the index
     // TODO: Plumb LogLine through here instead?
     pub fn eval(&mut self, gap: Location, range: std::ops::Range<usize>, line: &str, offset: usize)  {
-        let found = if is_match_type(line, &self.f) {
+        let found = if is_match_type(trim_newline(line), &self.f) {
             Some(offset)
         } else { None };
 

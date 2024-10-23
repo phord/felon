@@ -67,28 +67,24 @@ impl Location {
         }
     }
 
-    // Take make a portable location we can use with another EventualIndex
-    pub fn make_portable(&self) -> Location {
+    // make a portable location we can use with another EventualIndex
+    pub fn gap_to_target(&self) -> Location {
         use Location::*;
         use VirtualLocation::*;
+        assert!(self.is_gap());
         match self {
-            Virtual(_) => *self,
-            Invalid => *self,
-
-            // TODO: This is inefficient if we're going backwards.  Need something else to reflect this?
-            Indexed(iref) => Virtual(AtOrAfter(iref.offset)),
-
             Gap(GapRange{target, gap, ..}) => {
                 let (start, end) = match gap {
                     Missing::Bounded(start, end) => (*start, *end),
                     Missing::Unbounded(start) => (*start, usize::MAX - 1),
                 };
-                // dbg!(target);
                 match target {
-                    TargetOffset::AtOrBefore(off) => Virtual(Before(end.min(*off) + 1)),
-                    TargetOffset::AtOrAfter(off) => Virtual(AtOrAfter(start.max(*off))),
+                    // return a target from the start or the end of the gap, as needed.
+                    TargetOffset::AtOrBefore(off) => Virtual(Before(end.min(off + 1))),
+                    TargetOffset::AtOrAfter(off) => Virtual(AtOrAfter(start.max(*off))), // FIXME: Why does forward iter need use the offset?
                 }
             },
+            _ => panic!("Not a gap"),
         }
     }
 }
@@ -414,7 +410,7 @@ impl EventualIndex {
                     self.try_gap_at(index + 1, target).unwrap()
                 },
                 TargetOffset::AtOrBefore(_) => {
-                    self.try_gap_at(index.saturating_sub(1), target).unwrap()
+                    self.try_gap_at(index, target).unwrap()
                 },
             }
         } else {
