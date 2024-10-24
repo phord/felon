@@ -11,7 +11,7 @@ use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
-    log: FilteredLog,
+    log: FilteredLog<Log>,
 }
 
 impl Document {
@@ -41,7 +41,7 @@ impl Document {
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         Self {
-            log: FilteredLog::new(Box::new(log)),
+            log: FilteredLog::new(log),
         }
     }
 

@@ -68,7 +68,7 @@ impl Location {
     }
 
     // make a portable location we can use with another EventualIndex
-    pub fn gap_to_target(&self) -> Location {
+    pub fn gap_to_target(&self) -> VirtualLocation {
         use Location::*;
         use VirtualLocation::*;
         assert!(self.is_gap());
@@ -80,8 +80,8 @@ impl Location {
                 };
                 match target {
                     // return a target from the start or the end of the gap, as needed.
-                    TargetOffset::AtOrBefore(off) => Virtual(Before(end.min(off + 1))),
-                    TargetOffset::AtOrAfter(off) => Virtual(AtOrAfter(start.max(*off))), // FIXME: Why does forward iter need use the offset?
+                    TargetOffset::AtOrBefore(off) => Before(end.min(off + 1)),
+                    TargetOffset::AtOrAfter(off) => AtOrAfter(start.max(*off)),
                 }
             },
             _ => panic!("Not a gap"),
@@ -136,6 +136,25 @@ pub enum VirtualLocation {
     AtOrAfter(usize),
 }
 
+impl VirtualLocation {
+    pub fn is_before(&self) -> bool {
+        matches!(self, VirtualLocation::Before(_))
+    }
+
+    pub fn is_after(&self) -> bool {
+        matches!(self, VirtualLocation::AtOrAfter(_))
+    }
+
+    pub fn offset(&self) -> usize {
+        match self {
+            VirtualLocation::Before(x) => *x,
+            VirtualLocation::AtOrAfter(x) => *x,
+            VirtualLocation::Start => 0,
+            VirtualLocation::End => usize::MAX,
+        }
+    }
+}
+
 // The target offset we wanted to reach when filling a gap
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TargetOffset {
@@ -187,20 +206,22 @@ impl EventualIndex {
         self.indexes.push(other);
     }
 
-    // Insert an explored range into the eventualIndex and optionally add a found line offset.
-    // Location must be a gap.
-    pub fn insert(&mut self, pos: Location, range: std::ops::Range<usize>, offset: Option<usize>) {
-        let ix = match pos {
-            Location::Gap(gap_range) => gap_range.index,
-            Location::Virtual(_) => panic!("Location not resolved"),
-            Location::Indexed(_) => panic!("Location not a gap"),
-            Location::Invalid => panic!("Location invalid"),
+    /// Insert an explored range into the eventualIndex and optionally add a found line offset.
+    /// Location must be a gap.
+    /// Returns the indexed Location where the entry was stored, or a gap if no entry provided
+    pub fn insert(&mut self, pos: Location, range: std::ops::Range<usize>, offset: Option<usize>) -> Location {
+
+        let gap_range = match pos {
+            Location::Gap(gap_range) => gap_range,
+            _ => panic!("Location not a gap"),
         };
+        let ix = gap_range.index;
 
         let index = if ix > 0 && self.indexes[ix - 1].touches(&range.start.saturating_sub(1)) {
             // Append to previous index if it's adjacent (this is the most efficient option)
             ix - 1
-        } else if ix < self.indexes.len() && self.indexes[ix].touches(&range.end) {
+        } else if ix < self.indexes.len() &&
+            (self.indexes[ix].touches(&range.start) || self.indexes[ix].touches(&range.end)) {
             // Prepend to next index if it's adjacent
             ix
         } else {
@@ -210,7 +231,21 @@ impl EventualIndex {
             self.indexes[ix].end = range.start;
             ix
         };
-        self.indexes[index].insert(range, offset);
+
+        let line = self.indexes[index].insert(range, offset);
+        if let Some(offset) = offset {
+            Location::Indexed(IndexRef{ index, line, offset })
+        } else {
+            // Close the gap:
+
+            // TODO: Can we finesse this better to be more efficient?
+            // Location::Gap(GapRange{ target: gap_range.target, index, gap: Missing::Bounded(range.start, range.end) })
+            if let Some(gap) = self.try_gap_at(index+1, gap_range.target) {
+                gap
+            } else {
+                self.get_location(index, line)
+            }
+        }
     }
 
 

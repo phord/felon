@@ -11,12 +11,12 @@ mod filtered_log_iterator_helper {
     }
 
     impl Harness {
-        pub(crate) fn new(lines: usize) -> (Self, FilteredLog) {
+        pub(crate) fn new(lines: usize) -> (Self, FilteredLog<Log>) {
             let patt_len = 9usize;
             let base = 10usize.pow(patt_len as u32 - 2);
             let buff = CursorLogFile::from_vec((base..base+lines).collect()).unwrap();
             let file = Log::from(buff);
-            let file: FilteredLog = FilteredLog::new(Box::new(file));
+            let file = FilteredLog::new(file);
             let s = Self {
                 patt_len,
                 lines,
@@ -32,11 +32,11 @@ mod filtered_log_iterator_helper {
         //     &self.patt[ofs..ofs + width]
         // }
 
-        pub(crate) fn default() -> (Self, FilteredLog) {
+        pub(crate) fn default() -> (Self, FilteredLog<Log>) {
             Self::new(6000)
         }
 
-        pub(crate) fn new_small(lines: usize) -> (Self, FilteredLog) {
+        pub(crate) fn new_small(lines: usize) -> (Self, FilteredLog<Log>) {
             Self::new(lines)
         }
     }

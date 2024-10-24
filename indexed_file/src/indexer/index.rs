@@ -161,6 +161,15 @@ impl Index {
                 self.line_offsets.push(offset);
             }
             ret
+        } else if self.end > range.end && self.start < range.start {
+            // New range is already mapped
+            if let Some(offset) = offset {
+                // find the offset
+                self.binary_search(offset).unwrap()
+            } else {
+                0 // Ignored.  We should return None instead, probably.
+            }
+
         } else {
             panic!("Range {:?} is discontiguous with index {}..{}", range, self.start, self.end);
         }

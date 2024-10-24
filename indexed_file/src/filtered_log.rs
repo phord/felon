@@ -3,13 +3,13 @@ use regex::Regex;
 use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::{GapRange, Location, TargetOffset, VirtualLocation}, line_indexer::IndexedLog}};
 
 
-pub struct FilteredLog {
+pub struct FilteredLog<LOG> {
     filter: IndexFilter,
-    log: Box<dyn IndexedLog>,
+    log: LOG,
 }
 
-impl FilteredLog {
-    pub fn new(log: Box<dyn IndexedLog>) -> Self {
+impl<LOG: IndexedLog> FilteredLog<LOG> {
+    pub fn new(log: LOG) -> Self {
         Self {
             filter: IndexFilter::new(SearchType::None),
             log,
@@ -32,52 +32,48 @@ impl FilteredLog {
     // We must resolve the gap in the log if it exists. Then our pos will resolve to a non-gap.
     fn index_chunk(&mut self, gap: Location) -> Location {
         use Location::*;
-        use VirtualLocation::*;
         assert!(gap.is_gap());
         let seek = gap.gap_to_target();
-        let pos = self.log.resolve_location(seek);
-        assert!(!pos.is_gap(), "resolve_location should not return a gap, right?");
-        assert!(pos.is_indexed());
+        let offset = seek.offset();
 
-        let offset = pos.offset().unwrap();
-
-        match self.log.read_line_at(offset) {
-            Ok(line) => {
-                // FIXME: This seems overly complicated.
-                //  - Why do we treat Before/After differently?
-                //  - Why isn't it just start = offset.min(off)?
-                // When seeking backwards, target >= found
-                // When seeking forwards, target <= found
-                // In both cases, the start of the covered gap is the minimum of the two.
-                let (start, end) = match seek {
-                    Virtual(Before(_)) => (offset, offset + line.len()),
-                    Virtual(AtOrAfter(off)) => (off, offset + line.len()),
-                    _ => panic!("Unexpected virtual seek type: {:?}", seek),
-                };
-
-                assert!(start <= offset);
-                assert!(end >= offset);
-                assert!(end <= self.log.len());
-
+        // TODO: Dedup the code...
+        let it = self.log.iter_lines_from(offset);
+        if seek.is_after() {
+            // FIXME: is 'offset' really the beginning of our gap?
+            let mut start = offset;
+            for line in it {
+                let end = line.offset + line.line.len();
                 let range = std::ops::Range {start, end};
-
-                self.filter.eval(gap, range, &line, offset);
-
-                if start >= end {
-                    // End of file
-                    return Location::Invalid
+                let gap = self.filter.eval(gap, range, &line.line, line.offset);
+                start = end;
+                if !gap.is_gap() {
+                    return gap;
                 }
-            },
-            Err(e) => {
-                panic!("Error reading line at offset {}: {}", offset, e);
-            },
+            }
+        } else {
+            let mut end = offset;
+            for line in it.rev() {
+                let start = line.offset;
+                let range = std::ops::Range {start, end: end.max(start + line.line.len())};
+                let gap = self.filter.eval(gap, range, &line.line, line.offset);
+                end = start;
+                if !gap.is_gap() {
+                    return gap;
+                }
+            }
         }
-        self.filter.resolve(seek, self.log.len())
+        if offset < self.log.len() {
+            dbg!(offset, self.log.len());
+            self.filter.resolve(Virtual(seek), self.log.len())
+        } else {
+            // FIXME: Does this work in reverse?
+            Location::Invalid
+        }
     }
 }
 
 // Navigation
-impl IndexedLog for FilteredLog {
+impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
     // fill in any gaps by parsing data from the file when needed
     fn resolve_location(&mut self, pos: Location) -> Location {

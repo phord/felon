@@ -47,12 +47,12 @@ impl IndexFilter {
 
     // Evaluate a new line for inclusion in the index
     // TODO: Plumb LogLine through here instead?
-    pub fn eval(&mut self, gap: Location, range: std::ops::Range<usize>, line: &str, offset: usize)  {
+    pub fn eval(&mut self, gap: Location, range: std::ops::Range<usize>, line: &str, offset: usize) -> Location {
         let found = if is_match_type(trim_newline(line), &self.f) {
             Some(offset)
         } else { None };
 
-        self.index.insert(gap, range, found);
+        self.index.insert(gap, range, found)
     }
 
     // Resolve any virtuals into gaps or indexed
