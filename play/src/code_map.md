@@ -1,14 +1,14 @@
 Code map: indexed_file
 
-LogFile:
-    Helper trait that augments BufRead + Seek
-    Common helper functions to navigate a BufRead + Seek for line reading
+LogSource:
+    Polymorphic wrapper of LogFile (literally just a type = Box<LogFile>)
 
-    LogSource:
-        Polymorphic wrapper of LogFile
+    LogFile:
+        Helper trait that augments BufRead + Seek
+        Common helper functions to navigate a BufRead + Seek for line reading
 
     LogBase:
-        Combines LogSource and LogFile (I don't remember why)
+        A trait to facilitate conversion from LogFile -> LogSource and vice versa
 
     Stream:
         Helper trait for async streams
@@ -58,7 +58,7 @@ LineViewMode:
     Describes how a line should be displayed: whole, wrapped, or partial
 
 Log:
-    Combines LogFile + EventualIndex
+    Combines LogSource + EventualIndex
     Supports iterators that memoize the line locations as they're used.
 
 LineIndexerIterator:
@@ -78,3 +78,29 @@ SubLineIterator:
 LogLine:
     Information about a log line from a log file.
     Includes the line text and offset in the file.
+
+
+Rust std::lib ideas:
+    So we have a source of log lines which is already a BufReader.  And we have some filters
+    we would like to apply to this collection of lines.  Cool.
+
+    let doc = file.lines().filter(my_filter).take(screen_size).collect();
+
+    This would be nice and portable for everyone, but it lacks many features I need.
+
+    1. lines() returns an Iterator, but doesn't support DoubleEndedIterator::rev().
+    2. filter() doesn't understand that my_filter has memoized line offsets for efficiency.
+       There's no way to ask lines() to return only the lines already found in my_filter,
+       except by moving my_filter into the iterator producer in the first place.
+    3. It doesn't support background updating, either. But maybe that needs a separate
+       interface anyway. The idea here is to allow iterate to return "checkpoints"
+       periodically when there is no line found for some period of time. For example,
+       imagine we open a large file and then search for "foo". It takes 20 seconds to
+       search the huge file and find the one instance of "foo". We don't want to block
+       while we're searching, so we'd like to say "file.search(200);" to force the search
+       to return after 200ms if it hasn't found the target yet. If it takes too long, the
+       user can try a different search (maybe) or quit altogether.
+
+    Another option is to use async and run the searches in threads.  The UI would always be
+    listening to lines on the channel, maybe.  But it still wouldn't make it easy to interrupt
+    an active operation.
