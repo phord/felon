@@ -164,13 +164,13 @@ impl TargetOffset {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 // Position at `target` is not indexed; need to index region from `gap`
 pub struct GapRange {
-    // The approximate offset we wanted to reach
+    /// The approximate offset we wanted to reach
     pub target: TargetOffset,
 
-    // The index after our gap, or indexes.len() if none after
+    /// The index after our gap, or indexes.len() if none after
     pub index: usize,
 
-    // The type and size of the gap
+    /// The type and size of the gap
     pub gap: Missing,
 }
 
