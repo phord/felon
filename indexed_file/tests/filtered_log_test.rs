@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod filtered_log_iterator_helper {
-    use indexed_file::{FilteredLog, IndexedLog, LineIndexerDataIterator, Log};
+    use indexed_file::{FilteredLog, IndexedLogOld, LineIndexerDataIterator, Log};
     use indexed_file::files::{CursorLogFile, CursorUtil};
 
     pub(crate) struct Harness {
@@ -41,11 +41,11 @@ mod filtered_log_iterator_helper {
         }
     }
 
-    pub(crate) fn new<LOG: IndexedLog>(log: &mut LOG) -> LineIndexerDataIterator<LOG> {
+    pub(crate) fn new<LOG: IndexedLogOld>(log: &mut LOG) -> LineIndexerDataIterator<LOG> {
         LineIndexerDataIterator::new(log)
     }
 
-    pub(crate) fn new_from<LOG: IndexedLog>(log: &mut LOG, offset: usize) -> LineIndexerDataIterator<LOG> {
+    pub(crate) fn new_from<LOG: IndexedLogOld>(log: &mut LOG, offset: usize) -> LineIndexerDataIterator<LOG> {
         LineIndexerDataIterator::new_from(log, offset)
     }
 }

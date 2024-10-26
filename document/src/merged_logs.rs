@@ -2,6 +2,7 @@
 
 // FIXME: Right now they're sorted by line contents, but they should be sorted by timestamp in the future.
 
+use indexed_file::IndexedLogOld;
 use indexed_file::IndexedLog;
 use indexed_file::Log;
 use indexed_file::LogLine;
@@ -213,7 +214,7 @@ impl MergedLogs {
 #[cfg(test)]
 mod merged_logs_iterator_tests {
 
-    use indexed_file::{files::{CachedStreamReader, CursorLogFile, CursorUtil, LogBase}, indexer::LineIndexer, IndexedLog, Log};
+    use indexed_file::{files::{CachedStreamReader, CursorLogFile, CursorUtil, LogBase}, indexer::LineIndexer, IndexedLogOld, Log};
     use super::MergedLogs;
 
     #[test]

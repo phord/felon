@@ -2,12 +2,44 @@
 
 use std::fmt;
 use std::io::SeekFrom;
+use std::ops::Range;
 use crate::files::LogFile;
 use crate::indexer::index::Index;
 use crate::indexer::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
 use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
+use super::eventual_index::VirtualLocation;
+
+type LogRange = Range<usize>;
+
+#[derive(Debug)]
+pub struct LogLocation {
+    pub range: LogRange,
+    pub tracker: Option<Location>,
+}
 
 pub trait IndexedLog {
+    /// Generate a cursor to use for reading lines from the file
+    fn seek(&self, pos: usize) -> LogLocation {
+        LogLocation {
+            range: pos..pos,
+            tracker: None,
+        }
+    }
+
+    /// Read the next line from the file
+    /// returns search results and the new cursor
+    /// If line is None and pos.tracker is Some(Invalid), we're at the start of the file
+    /// If line is None and tracker is anything else, there may be more to read
+    fn next(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation);
+
+    /// Read the previous line from the file
+    /// returns search results and the new cursor
+    /// If line is None and pos.tracker is Some(Invalid), we're at the start of the file
+    /// If line is None and tracker is anything else, there may be more to read
+    fn next_back(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation);
+}
+
+pub trait IndexedLogOld {
     fn resolve_location(&mut self, pos: Location) -> Location;
 
     fn read_line_at(&mut self, start: usize) -> std::io::Result<String>;
@@ -26,32 +58,38 @@ pub trait IndexedLog {
 
     // Iterators
 
+    // TEST ONLY
     fn iter_offsets(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_
         where Self: Sized {
         self.iter()
     }
 
-    fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_
-    where Self: Sized {
-        self.iter_view(LineViewMode::WholeLine)
-    }
-
-    fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
-    where Self: Sized {
-        self.iter_view_from(LineViewMode::WholeLine, offset)
-    }
-
+    // TEST ONLY - Called from iter_offsets
     fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_
     where Self: Sized {
 
         LineIndexerIterator::new(self)
     }
 
+    // TEST and MergedLog
+    fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where Self: Sized {
+        self.iter_view(LineViewMode::WholeLine)
+    }
+
+    // Used in FilteredLog to stream from inner
+    fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where Self: Sized {
+        self.iter_view_from(LineViewMode::WholeLine, offset)
+    }
+
+    // TEST and MergedLog
     fn iter_view(&mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + '_
     where Self: Sized {
         SubLineIterator::new(self, mode)
     }
 
+    // Used in FilteredLog and Document (grok)
     fn iter_view_from(&mut self, mode: LineViewMode, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
     where Self: Sized {
         SubLineIterator::new_from(self, mode, offset)
@@ -97,6 +135,84 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 }
 
 impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
+
+    fn next(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation) {
+        // next line is after the range of the current one
+        let start = pos.range.end;
+        let find = {
+            if let Some(p) = pos.tracker {
+                assert!(p.is_gap() || p.is_indexed());
+                p
+            } else {
+                Location::Virtual(VirtualLocation::AtOrAfter(start))
+            }
+        };
+        let next = self.index.next_line_index(find);
+
+        match next {
+            Location::Indexed(pos) => {
+                let line = self.source.read_line_at(pos.offset).unwrap(); // FIXME: return Result<...>
+                let len = line.len();
+                // let line = line.trim_end_matches('\n').to_string();
+                let line = LogLine::new(line, pos.offset);
+                let loc = LogLocation {
+                    range: start..pos.offset + len,
+                    tracker: Some(next),
+                };
+                (Some(line), loc)
+            },
+
+            _ => {
+                let loc = LogLocation {
+                    tracker: Some(next),
+                    ..pos
+                };
+                (None, loc)
+            },
+        }
+    }
+
+    fn next_back(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation) {
+        // next line is after the range of the current one
+        let end = pos.range.start;
+        let find = {
+            if let Some(p) = pos.tracker {
+                assert!(p.is_gap() || p.is_indexed());
+                p
+            } else {
+                Location::Virtual(VirtualLocation::Before(end))
+            }
+        };
+        let next = self.index.prev_line_index(find);
+
+        // FIXME: dedup with next
+        match next {
+            Location::Indexed(pos) => {
+                let line = self.source.read_line_at(pos.offset).unwrap(); // FIXME: return Result<...>
+                let len = line.len();
+                // let line = line.trim_end_matches('\n').to_string();
+                let line = LogLine::new(line, pos.offset);
+                let loc = LogLocation {
+                    range: pos.offset..end.max(pos.offset + len),
+                    tracker: Some(next),
+                };
+                (Some(line), loc)
+            },
+
+            _ => {
+                let loc = LogLocation {
+                    tracker: Some(next),
+                    ..pos
+                };
+                (None, loc)
+            },
+        }
+    }
+
+
+}
+
+impl<LOG: LogFile> IndexedLogOld for LineIndexer<LOG> {
     #[inline]
     fn len(&self) -> usize {
         self.source.len()

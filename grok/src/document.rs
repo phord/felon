@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log};
+use indexed_file::{files, FilteredLog, IndexedLogOld, LineViewMode, Log};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents

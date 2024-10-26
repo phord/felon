@@ -1,4 +1,4 @@
-use crate::indexer::{eventual_index::{Location, VirtualLocation}, line_indexer::IndexedLog};
+use crate::indexer::{eventual_index::{Location, VirtualLocation}, line_indexer::IndexedLogOld};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct LogLine {
@@ -31,7 +31,7 @@ pub struct LineIndexerIterator<'a, LOG> {
     rev_pos: Location,
 }
 
-impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> LineIndexerIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
         Self {
             log,
@@ -41,7 +41,7 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> LineIndexerIterator<'a, LOG> {
     pub fn new_from(log: &'a mut LOG, offset: usize) -> Self {
         let rev_pos = Location::Virtual(VirtualLocation::Before(offset));
         let pos = Location::Virtual(VirtualLocation::AtOrAfter(offset));
@@ -75,7 +75,7 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -89,7 +89,7 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         let (pos, ret) = self.iterate(self.rev_pos);
@@ -99,11 +99,11 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
 }
 
 // Iterate over lines as position, string
-pub struct LineIndexerDataIterator<'a, LOG: IndexedLog> {
+pub struct LineIndexerDataIterator<'a, LOG: IndexedLogOld> {
     inner: LineIndexerIterator<'a, LOG>,
 }
 
-impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> LineIndexerDataIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
         let inner = LineIndexerIterator::new(log);
         Self {
@@ -125,7 +125,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
  * TODO: Can we make a filtered iterator that tests the line in the file buffer and only copy to String if it matches?
  */
 
-impl<'a, LOG: IndexedLog>  LineIndexerDataIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld>  LineIndexerDataIterator<'a, LOG> {
     // Helper function to abstract the wrapping of the inner iterator result
     // If we got a line offset value, read the string and return the Type tuple.
     #[inline]
@@ -158,7 +158,7 @@ impl<'a, LOG: IndexedLog>  LineIndexerDataIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let ret = self.inner.next_back();
@@ -172,7 +172,7 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LO
     }
 }
 
-impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
+impl<'a, LOG: IndexedLogOld> Iterator for LineIndexerDataIterator<'a, LOG> {
     type Item = LogLine;
 
     #[inline]
