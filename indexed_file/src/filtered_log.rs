@@ -8,7 +8,7 @@ pub struct FilteredLog<LOG> {
     log: LOG,
 }
 
-impl<LOG: IndexedLogOld> FilteredLog<LOG> {
+impl<LOG: IndexedLog> FilteredLog<LOG> {
     pub fn new(log: LOG) -> Self {
         Self {
             filter: IndexFilter::new(SearchType::None),
@@ -75,17 +75,24 @@ impl<LOG: IndexedLogOld> FilteredLog<LOG> {
 // Navigation
 impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
-    fn next(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation) {
+    fn next(&mut self, pos: &LogLocation) -> (Option<LogLine>, LogLocation) {
         self.log.next(pos)
     }
 
     #[inline]
-    fn next_back(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation) {
+    fn next_back(&mut self, pos: &LogLocation) -> (Option<LogLine>, LogLocation) {
         self.log.next_back(pos)
     }
-}
 
-impl<LOG: IndexedLogOld> IndexedLogOld for FilteredLog<LOG> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.log.len()
+    }
+
+    fn count_lines(&self) -> usize {
+        self.filter.count_lines()
+    }
+
     #[inline]
     // fill in any gaps by parsing data from the file when needed
     fn resolve_location(&mut self, pos: Location) -> Location {
@@ -104,6 +111,9 @@ impl<LOG: IndexedLogOld> IndexedLogOld for FilteredLog<LOG> {
         }
         pos
     }
+}
+
+impl<LOG: IndexedLogOld + IndexedLog> IndexedLogOld for FilteredLog<LOG> {
 
     #[inline]
     fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
@@ -120,15 +130,6 @@ impl<LOG: IndexedLogOld> IndexedLogOld for FilteredLog<LOG> {
     #[inline]
     fn prev_line_index(&self, find: Location) -> Location {
         self.filter.prev_line_index(find)
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.log.len()
-    }
-
-    fn count_lines(&self) -> usize {
-        self.filter.count_lines()
     }
 }
 

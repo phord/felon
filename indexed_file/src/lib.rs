@@ -22,7 +22,7 @@ pub use sub_line_iterator::{SubLineIterator, LineViewMode};
 
 #[cfg(test)]
 mod tests {
-    use crate::{IndexedLogOld, Log};
+    use crate::{IndexedLog, Log};
     use crate::files::{LogSource, new_text_file};
     use std::path::PathBuf;
 

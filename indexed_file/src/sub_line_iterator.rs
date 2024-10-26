@@ -1,7 +1,7 @@
 
 // Params that control how we will iterate across the log file
 
-use crate::{indexer::line_indexer::IndexedLogOld, LineIndexerDataIterator, LogLine};
+use crate::{indexer::line_indexer::IndexedLog, LineIndexerDataIterator, LogLine};
 
 #[derive(Clone, Copy)]
 pub enum LineViewMode{
@@ -167,7 +167,7 @@ impl SubLineHelper {
 
 // Iterate over line subsections as position, offset, string
 // This iterator handles breaking lines into substrings for wrapping, right-scrolling, and/or chopping
-pub struct SubLineIterator<'a, LOG: IndexedLogOld> {
+pub struct SubLineIterator<'a, LOG: IndexedLog> {
     inner: LineIndexerDataIterator<'a, LOG>,
     mode: LineViewMode,
     fwd: SubLineHelper,
@@ -177,7 +177,7 @@ pub struct SubLineIterator<'a, LOG: IndexedLogOld> {
     start: Option<usize>,
 }
 
-impl<'a, LOG: IndexedLogOld> SubLineIterator<'a, LOG> {
+impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG, mode: LineViewMode) -> Self {
         let inner = LineIndexerDataIterator::new(log);
         // TODO: handle rev() getting last subsection of last line somewhere
@@ -203,7 +203,7 @@ impl<'a, LOG: IndexedLogOld> SubLineIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLogOld>  SubLineIterator<'a, LOG> {
+impl<'a, LOG: IndexedLog>  SubLineIterator<'a, LOG> {
     // Usually when an offset is given we can count on the lineindexer to correctly load the previous line and next line correctly.
     // But if we are wrapping lines, the "next" and "prev" chunks may come from the same line in the file. We handle this here.
     // When we load the first line of this iterator, if an offset was given, we may need to split the line into two chunks.
@@ -225,7 +225,7 @@ impl<'a, LOG: IndexedLogOld>  SubLineIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLogOld> DoubleEndedIterator for SubLineIterator<'a, LOG> {
+impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         self.adjust_first_helpers();
@@ -238,7 +238,7 @@ impl<'a, LOG: IndexedLogOld> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLogOld> Iterator for SubLineIterator<'a, LOG> {
+impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
     type Item = LogLine;
 
     #[inline]

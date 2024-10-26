@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod sub_line_iterator_helper {
-    use indexed_file::{LineViewMode, SubLineIterator, IndexedLogOld, Log};
+    use indexed_file::{LineViewMode, SubLineIterator, IndexedLog, Log};
     use indexed_file::files::new_mock_file;
 
     pub(crate) struct Harness {
@@ -59,12 +59,12 @@ mod sub_line_iterator_helper {
         }
     }
 
-    pub(crate) fn new<LOG: IndexedLogOld>(log: &mut LOG) -> SubLineIterator<LOG> {
+    pub(crate) fn new<LOG: IndexedLog>(log: &mut LOG) -> SubLineIterator<LOG> {
         let mode = LineViewMode::WholeLine;
         SubLineIterator::new(log, mode)
     }
 
-    pub(crate) fn new_from<LOG: IndexedLogOld>(log: &mut LOG, offset: usize) -> SubLineIterator<LOG> {
+    pub(crate) fn new_from<LOG: IndexedLog>(log: &mut LOG, offset: usize) -> SubLineIterator<LOG> {
         let mode = LineViewMode::WholeLine;
         SubLineIterator::new_from(log, mode, offset)
     }
@@ -73,7 +73,7 @@ mod sub_line_iterator_helper {
 // Tests for LineIndexerIterator
 #[cfg(test)]
 mod logfile_iterator_tests {
-    use indexed_file::IndexedLogOld;
+    use indexed_file::IndexedLog;
 
     use crate::sub_line_iterator_helper::Harness;
 

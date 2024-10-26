@@ -3,7 +3,7 @@
 use std::io::Cursor;
 use std::io::Seek;
 use std::io::Write;
-use crate::IndexedLogOld;
+use crate::IndexedLog;
 
 use super::Stream;
 

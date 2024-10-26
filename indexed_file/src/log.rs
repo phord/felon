@@ -67,23 +67,32 @@ impl Log {
 impl IndexedLog for Log {
 
     #[inline]
-    fn next(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation) {
+    fn next(&mut self, pos: &LogLocation) -> (Option<LogLine>, LogLocation) {
         self.file.next(pos)
     }
 
     #[inline]
-    fn next_back(&mut self, pos: LogLocation) -> (Option<LogLine>, LogLocation) {
+    fn next_back(&mut self, pos: &LogLocation) -> (Option<LogLine>, LogLocation) {
         self.file.next_back(pos)
     }
 
-}
+    #[inline]
+    fn len(&self) -> usize {
+        self.file.len()
+    }
 
-// Navigation
-impl IndexedLogOld for Log {
+    fn count_lines(&self) -> usize {
+        self.file.count_lines()
+    }
+
     #[inline]
     fn resolve_location(&mut self, pos: Location) -> Location {
         self.file.resolve_location(pos)
     }
+}
+
+// Navigation
+impl IndexedLogOld for Log {
 
     #[inline]
     fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
@@ -101,16 +110,6 @@ impl IndexedLogOld for Log {
     fn prev_line_index(&self, find: Location) -> Location {
         self.file.prev_line_index(find)
     }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.file.len()
-    }
-
-    fn count_lines(&self) -> usize {
-        self.file.count_lines()
-    }
-
 }
 
 // Miscellaneous
