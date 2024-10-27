@@ -1,6 +1,4 @@
 pub mod files;
-pub mod filter;
-pub mod filters;
 pub mod index_filter;
 pub mod filtered_log;
 pub mod indexer;
@@ -14,7 +12,6 @@ pub use iterator::LogLine;
 pub use crate::log::Log;
 pub use crate::filtered_log::FilteredLog;
 
-pub use indexer::line_indexer::IndexedLogOld;
 pub use indexer::line_indexer::IndexedLog;
 pub use iterator::{LineIndexerDataIterator, LineIndexerIterator};
 pub use sub_line_iterator::{SubLineIterator, LineViewMode};

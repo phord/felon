@@ -2,7 +2,7 @@ use crate::indexer::eventual_index::Location;
 use crate::time_stamper::TimeStamper;
 use crate::LogLine;
 use std::path::PathBuf;
-use crate::indexer::line_indexer::{IndexedLogOld, IndexedLog, LineIndexer, LogLocation};
+use crate::indexer::line_indexer::{IndexedLog, LineIndexer, LogLocation};
 
 use crate::files::{LogBase, LogSource, new_text_file};
 
@@ -88,27 +88,6 @@ impl IndexedLog for Log {
     #[inline]
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
         self.file.read_line(pos, next_pos)
-    }
-}
-
-// Navigation
-impl IndexedLogOld for Log {
-
-    #[inline]
-    fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
-        self.file.read_line_at(start)
-    }
-
-    // Step to the next indexed line or gap
-    #[inline]
-    fn next_line_index(&self, find: Location) -> Location {
-        self.file.next_line_index(find)
-    }
-
-    // Step to the previous indexed line or gap
-    #[inline]
-    fn prev_line_index(&self, find: Location) -> Location {
-        self.file.prev_line_index(find)
     }
 }
 

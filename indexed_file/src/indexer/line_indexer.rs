@@ -102,16 +102,6 @@ pub trait IndexedLog {
 
 }
 
-pub trait IndexedLogOld {
-
-    fn read_line_at(&mut self, start: usize) -> std::io::Result<String>;
-
-    fn next_line_index(&self, find: Location) -> Location;
-
-    fn prev_line_index(&self, find: Location) -> Location;
-}
-
-
 pub struct LineIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
@@ -217,26 +207,6 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
 
 }
 
-impl<LOG: LogFile> IndexedLogOld for LineIndexer<LOG> {
-    // Read a line at a given offset in the file
-    #[inline]
-    fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
-        self.source.read_line_at(start)
-    }
-
-    // Step to the next indexed line or gap
-    #[inline]
-    fn next_line_index(&self, find: Location) -> Location {
-        self.index.next(find)
-    }
-
-    // Step to the previous indexed line or gap
-    #[inline]
-    fn prev_line_index(&self, find: Location) -> Location {
-        self.index.next(find)
-    }
-
-}
 
 impl<LOG: LogFile> LineIndexer<LOG> {
     // Index a chunk of file at some gap location. May index only part of the gap.

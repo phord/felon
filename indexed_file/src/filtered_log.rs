@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::{GapRange, Location, TargetOffset, VirtualLocation}, line_indexer::{IndexedLogOld, IndexedLog, LogLocation}}, LogLine};
+use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::{GapRange, Location, TargetOffset, VirtualLocation}, line_indexer::{IndexedLog, LogLocation}}, LogLine};
 
 
 pub struct FilteredLog<LOG> {
@@ -125,26 +125,6 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
 
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
         self.log.read_line(pos, next_pos)
-    }
-}
-
-impl<LOG: IndexedLogOld + IndexedLog> IndexedLogOld for FilteredLog<LOG> {
-
-    #[inline]
-    fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
-        self.log.read_line_at(start)
-    }
-
-    // Step to the next indexed line or gap
-    #[inline]
-    fn next_line_index(&self, find: Location) -> Location {
-        unreachable!();
-    }
-
-    // Step to the previous indexed line or gap
-    #[inline]
-    fn prev_line_index(&self, find: Location) -> Location {
-        unreachable!();
     }
 }
 

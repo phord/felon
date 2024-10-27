@@ -2,7 +2,6 @@
 
 // FIXME: Right now they're sorted by line contents, but they should be sorted by timestamp in the future.
 
-use indexed_file::IndexedLogOld;
 use indexed_file::IndexedLog;
 use indexed_file::Log;
 use indexed_file::LogLine;
