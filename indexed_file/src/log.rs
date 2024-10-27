@@ -72,11 +72,6 @@ impl IndexedLog for Log {
     }
 
     #[inline]
-    fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
-        self.file.next_back(pos)
-    }
-
-    #[inline]
     fn len(&self) -> usize {
         self.file.len()
     }

@@ -81,7 +81,7 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
         for i in 0..5 {
             // We should have resolved it by now
             assert!(i<4);
-            if let Some(line) = self.log.next_back(&mut self.rev_pos) {
+            if let Some(line) = self.log.next(&mut self.rev_pos) {
                 if line.offset == self.pos.tracker.offset() {
                     // End of iterator when fwd and rev meet
                     self.rev_pos.tracker = Location::Invalid;
@@ -130,7 +130,7 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LO
         for i in 0..5 {
             // We should have resolved it by now
             assert!(i<4);
-            let line = self.log.next_back(&mut self.rev_pos);
+            let line = self.log.next(&mut self.rev_pos);
             if let Some(line) = line {
                 return Some(line)
             } else if self.rev_pos.tracker.is_invalid() {

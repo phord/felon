@@ -46,12 +46,6 @@ pub trait IndexedLog {
     /// If line is None and tracker is anything else, there may be more to read
     fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine>;
 
-    /// Read the previous line from the file
-    /// returns search results and the new cursor
-    /// If line is None and pos.tracker is Some(Invalid), we're at the start of the file
-    /// If line is None and tracker is anything else, there may be more to read
-    fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine>;
-
 
     // Iterators
 
@@ -188,12 +182,6 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
         let next = self.index.next(pos.tracker);
         let ret = self.read_line(pos, next);
         ret
-    }
-
-    fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
-        pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.index.next(pos.tracker);
-        self.read_line(pos, next)
     }
 
     #[inline]

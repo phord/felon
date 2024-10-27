@@ -108,13 +108,6 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     }
 
     #[inline]
-    fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
-        pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.filter.next(pos.tracker);
-        self.read_line(pos, next)
-    }
-
-    #[inline]
     fn len(&self) -> usize {
         self.log.len()
     }
