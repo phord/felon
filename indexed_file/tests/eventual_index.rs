@@ -97,7 +97,7 @@ fn test_cursor_forward() {
         }
         count += 1;
         println!("Line {}  Cursor: {}", count, cursor.found_offset().unwrap());
-        cursor = index.next_line_index(cursor);
+        cursor = index.next(cursor);
     }
     assert_eq!(count, index.lines());
 }
@@ -119,7 +119,7 @@ fn test_cursor_reverse() {
         println!("Line {}  Cursor: {}", count, start);
         assert!(start <= prev);
         prev = start;
-        cursor = index.prev_line_index(cursor);
+        cursor = index.next(cursor);
     }
     assert_eq!(count, index.lines());
 }
@@ -136,7 +136,7 @@ fn test_cursor_reverse_gap() {
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
         count += 1;
-        cursor = index.prev_line_index(cursor);
+        cursor = index.next(cursor);
     }
     assert_eq!(count, index.lines());
 }
@@ -151,7 +151,7 @@ fn test_insert_basic() {
 
     let cursor = index.locate(TargetOffset::AtOrAfter(0));
     assert_eq!(cursor.found_offset().unwrap(), 0);
-    assert!(index.next_line_index(cursor).is_gap());
+    assert!(index.next(cursor).is_gap());
 }
 
 
@@ -167,7 +167,7 @@ fn test_insert_basic_nz() {
     assert!(cursor.found_offset().is_none());
     let cursor = index.locate(TargetOffset::AtOrAfter(0));
     assert_eq!(cursor.found_offset().unwrap(), 10);
-    assert!(index.next_line_index(cursor).is_gap());
+    assert!(index.next(cursor).is_gap());
 }
 
 
@@ -182,7 +182,7 @@ fn test_insert_before() {
     assert!(cursor.found_offset().is_none());
     let cursor = index.locate(TargetOffset::AtOrAfter(0));
     assert_eq!(cursor.found_offset().unwrap(), 10);
-    assert!(index.next_line_index(cursor).found_offset().unwrap() >= 50);
+    assert!(index.next(cursor).found_offset().unwrap() >= 50);
 }
 
 
@@ -195,8 +195,8 @@ fn test_insert_after() {
 
     let cursor = index.locate(TargetOffset::AtOrAfter(170));
     assert_eq!(cursor.found_offset().unwrap(), 180);
-    index.next_line_index(cursor);
-    assert!(index.next_line_index(cursor).is_gap());
+    index.next(cursor);
+    assert!(index.next(cursor).is_gap());
 }
 
 // TODO: test_insert_between()

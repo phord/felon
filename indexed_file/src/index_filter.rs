@@ -63,14 +63,8 @@ impl IndexFilter {
 
     // Step to the next indexed line or gap
     #[inline]
-    pub fn next_line_index(&self, find: Location) -> Location {
-        self.index.next_line_index(find)
-    }
-
-    // Step to the previous indexed line or gap
-    #[inline]
-    pub fn prev_line_index(&self, find: Location) -> Location {
-        self.index.prev_line_index(find)
+    pub fn next(&self, find: Location) -> Location {
+        self.index.next(find)
     }
 
     #[inline]

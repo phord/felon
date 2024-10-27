@@ -514,14 +514,4 @@ impl EventualIndex {
             find
         }
     }
-
-    // Find index to next line after given index
-    pub fn next_line_index(&self, find: Location) -> Location {
-        self.next(find)
-    }
-
-    // Find index to prev line before given index
-    pub fn prev_line_index(&self, find: Location) -> Location {
-        self.next(find)
-    }
 }

@@ -103,14 +103,14 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
         // FIXME: Get rid of read_line and use log.next instead
         // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.filter.next_line_index(pos.tracker);
+        let next = self.filter.next(pos.tracker);
         self.read_line(pos, next)
     }
 
     #[inline]
     fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
         pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.filter.prev_line_index(pos.tracker);
+        let next = self.filter.next(pos.tracker);
         self.read_line(pos, next)
     }
 
@@ -138,13 +138,13 @@ impl<LOG: IndexedLogOld + IndexedLog> IndexedLogOld for FilteredLog<LOG> {
     // Step to the next indexed line or gap
     #[inline]
     fn next_line_index(&self, find: Location) -> Location {
-        self.filter.next_line_index(find)
+        unreachable!();
     }
 
     // Step to the previous indexed line or gap
     #[inline]
     fn prev_line_index(&self, find: Location) -> Location {
-        self.filter.prev_line_index(find)
+        unreachable!();
     }
 }
 

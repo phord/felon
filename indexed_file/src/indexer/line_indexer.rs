@@ -195,14 +195,14 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
     fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
         // FIXME: Find a way to defer resolve_location until we're in read_line
         pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.index.next_line_index(pos.tracker);
+        let next = self.index.next(pos.tracker);
         let ret = self.read_line(pos, next);
         ret
     }
 
     fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
         pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.index.prev_line_index(pos.tracker);
+        let next = self.index.next(pos.tracker);
         self.read_line(pos, next)
     }
 
@@ -227,13 +227,13 @@ impl<LOG: LogFile> IndexedLogOld for LineIndexer<LOG> {
     // Step to the next indexed line or gap
     #[inline]
     fn next_line_index(&self, find: Location) -> Location {
-        self.index.next_line_index(find)
+        self.index.next(find)
     }
 
     // Step to the previous indexed line or gap
     #[inline]
     fn prev_line_index(&self, find: Location) -> Location {
-        self.index.prev_line_index(find)
+        self.index.next(find)
     }
 
 }
