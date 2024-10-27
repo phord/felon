@@ -48,7 +48,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             for line in it {
                 let end = line.offset + line.line.len();
                 let range = std::ops::Range {start, end};
-                let gap = self.filter.eval(gap, range, &line.line, line.offset);
+                let gap = self.filter.eval(gap, &range, &line.line, line.offset);
                 start = end;
                 if !gap.is_gap() {
                     return gap;
@@ -59,7 +59,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             for line in it.rev() {
                 let start = line.offset;
                 let range = std::ops::Range {start, end: end.max(start + line.line.len())};
-                let gap = self.filter.eval(gap, range, &line.line, line.offset);
+                let gap = self.filter.eval(gap, &range, &line.line, line.offset);
                 end = start;
                 if !gap.is_gap() {
                     return gap;

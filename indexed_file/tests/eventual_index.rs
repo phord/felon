@@ -145,7 +145,7 @@ fn test_cursor_reverse_gap() {
 fn test_insert_basic() {
     let mut index = EventualIndex::new();
     let loc = index.locate(TargetOffset::AtOrBefore(0));
-    index.insert(loc, 0..20, Some(0));
+    index.insert(loc, &(0..20), Some(0));
     assert_eq!(index.bytes(), 20);
     assert_eq!(index.end(), 20);
 
@@ -159,7 +159,7 @@ fn test_insert_basic() {
 fn test_insert_basic_nz() {
     let mut index = EventualIndex::new();
     let loc = index.locate(TargetOffset::AtOrBefore(0));
-    index.insert(loc, 0..20, Some(10));
+    index.insert(loc, &(0..20), Some(10));
     assert_eq!(index.bytes(), 20);
     assert_eq!(index.end(), 20);
 
@@ -176,7 +176,7 @@ fn test_insert_before() {
     let mut index = get_partial_eventual_index(50, 100);
     let loc = index.locate(TargetOffset::AtOrAfter(0));
     assert!(loc.is_gap());
-    index.insert(loc, 0..50, Some(10));
+    index.insert(loc, &(0..50), Some(10));
 
     let cursor = index.locate(TargetOffset::AtOrBefore(0));
     assert!(cursor.found_offset().is_none());
@@ -191,7 +191,7 @@ fn test_insert_after() {
     let mut index = get_partial_eventual_index(50, 100);
     let loc = index.locate(TargetOffset::AtOrAfter(170));
     assert!(loc.is_gap());
-    index.insert(loc, 170..200, Some(180));
+    index.insert(loc, &(170..200), Some(180));
 
     let cursor = index.locate(TargetOffset::AtOrAfter(170));
     assert_eq!(cursor.found_offset().unwrap(), 180);

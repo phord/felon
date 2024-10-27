@@ -138,7 +138,7 @@ impl Index {
 
     /// Insert a value into index at start or end; return index to where new value would go
     /// range must be adjacent to or touch this index
-    pub fn insert(&mut self, range: std::ops::Range<usize>, offset: Option<usize>) -> usize {
+    pub fn insert(&mut self, range: &std::ops::Range<usize>, offset: Option<usize>) -> usize {
         if self.start <= range.end && self.start >= range.start {
             // New range overlaps our start
             self.start = range.start;
