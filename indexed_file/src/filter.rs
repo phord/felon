@@ -125,7 +125,7 @@ impl<'a> FilteredIterator<'a> {
     fn iterate(&mut self, pos: Location) -> (Location, Option<usize>) {
         let pos = self.log.file.resolve_location(pos);
 
-        let ret = pos.offset();
+        let ret = pos.found_offset();
         if self.rev_pos == self.pos {
             // End of iterator when fwd and rev meet
             self.rev_pos = Location::Invalid;

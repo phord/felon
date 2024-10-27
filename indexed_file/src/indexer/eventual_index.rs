@@ -24,7 +24,8 @@ pub enum Location {
 }
 
 impl Location {
-    pub fn offset(&self) -> Option<usize> {
+    /// Find the offset of the located line, or None if no line located yet
+    pub fn found_offset(&self) -> Option<usize> {
         match self {
             Location::Indexed(r) => Some(r.offset),
             _ => None,
@@ -51,8 +52,8 @@ impl Location {
         matches!(self, Location::Invalid)
     }
 
-    // Get offset in file strictly for comparison in Ord::cmp
-    fn relative_offset(&self) -> usize {
+    // Get offset in file of next byte we will scan
+    pub fn offset(&self) -> usize {
         use Location::*;
         use VirtualLocation::*;
         match self {
@@ -63,7 +64,7 @@ impl Location {
             Indexed(iref) => iref.offset,
             Gap(GapRange{target: off, ..}) => off.value(),
 
-            Invalid => unreachable!(),
+            Invalid => panic!("No offset available for invalid location"),
         }
     }
 
@@ -91,7 +92,7 @@ impl Location {
 
 impl Ord for Location {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.relative_offset().cmp(&other.relative_offset())
+        self.offset().cmp(&other.offset())
     }
 }
 
@@ -410,7 +411,7 @@ impl EventualIndex {
                         let line = self.indexes.last().unwrap().len()-1;
                         let mut pos = self.get_location(index, line);
                         // Skip index at very end of file
-                        if pos.offset().unwrap() == end_of_file {
+                        if pos.found_offset().unwrap() == end_of_file {
                             pos = self.prev_line_index(pos);
                         }
                         pos
@@ -450,7 +451,7 @@ impl EventualIndex {
             }
         } else {
             let mut pos = self.get_location(index, line);
-            while let Some(p_off) = pos.offset() {
+            while let Some(p_off) = pos.found_offset() {
                 match target {
                     TargetOffset::AtOrAfter(offset) => {
                         if p_off < offset {

@@ -96,7 +96,7 @@ fn test_cursor_forward() {
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
         count += 1;
-        println!("Line {}  Cursor: {}", count, cursor.offset().unwrap());
+        println!("Line {}  Cursor: {}", count, cursor.found_offset().unwrap());
         cursor = index.next_line_index(cursor);
     }
     assert_eq!(count, index.lines());
@@ -115,7 +115,7 @@ fn test_cursor_reverse() {
             _ => panic!("Expected IndexOffset; got something else: {:?}", cursor),
         }
         count += 1;
-        let start = cursor.offset().unwrap();
+        let start = cursor.found_offset().unwrap();
         println!("Line {}  Cursor: {}", count, start);
         assert!(start <= prev);
         prev = start;
@@ -150,7 +150,7 @@ fn test_insert_basic() {
     assert_eq!(index.end(), 20);
 
     let cursor = index.locate(TargetOffset::AtOrBefore(0));
-    assert_eq!(cursor.offset().unwrap(), 0);
+    assert_eq!(cursor.found_offset().unwrap(), 0);
     assert!(index.next_line_index(cursor).is_gap());
 }
 
@@ -164,9 +164,9 @@ fn test_insert_basic_nz() {
     assert_eq!(index.end(), 20);
 
     let cursor = index.locate(TargetOffset::AtOrBefore(0));
-    assert!(cursor.offset().is_none());
+    assert!(cursor.found_offset().is_none());
     let cursor = index.locate(TargetOffset::AtOrAfter(0));
-    assert_eq!(cursor.offset().unwrap(), 10);
+    assert_eq!(cursor.found_offset().unwrap(), 10);
     assert!(index.next_line_index(cursor).is_gap());
 }
 
@@ -179,10 +179,10 @@ fn test_insert_before() {
     index.insert(loc, 0..50, Some(10));
 
     let cursor = index.locate(TargetOffset::AtOrBefore(0));
-    assert!(cursor.offset().is_none());
+    assert!(cursor.found_offset().is_none());
     let cursor = index.locate(TargetOffset::AtOrAfter(0));
-    assert_eq!(cursor.offset().unwrap(), 10);
-    assert!(index.next_line_index(cursor).offset().unwrap() >= 50);
+    assert_eq!(cursor.found_offset().unwrap(), 10);
+    assert!(index.next_line_index(cursor).found_offset().unwrap() >= 50);
 }
 
 
@@ -194,7 +194,7 @@ fn test_insert_after() {
     index.insert(loc, 170..200, Some(180));
 
     let cursor = index.locate(TargetOffset::AtOrAfter(170));
-    assert_eq!(cursor.offset().unwrap(), 180);
+    assert_eq!(cursor.found_offset().unwrap(), 180);
     index.next_line_index(cursor);
     assert!(index.next_line_index(cursor).is_gap());
 }
