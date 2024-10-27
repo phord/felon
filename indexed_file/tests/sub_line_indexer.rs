@@ -1,5 +1,7 @@
 // Wrapper to discover and iterate log lines from a LogFile while memoizing parsed line offsets
 
+// FIXME: All the tests here that run without wrapping need to enable wrapping and test both modes.
+
 #[cfg(test)]
 mod sub_line_iterator_helper {
     use indexed_file::{LineViewMode, SubLineIterator, IndexedLog, Log};
