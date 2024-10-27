@@ -74,30 +74,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             Location::Invalid
         }
     }
-}
 
-// Navigation
-impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
-    #[inline]
-    fn next(&mut self, pos: &LogLocation) -> (Option<LogLine>, LogLocation) {
-        self.log.next(pos)
-    }
-
-    #[inline]
-    fn next_back(&mut self, pos: &LogLocation) -> (Option<LogLine>, LogLocation) {
-        self.log.next_back(pos)
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.log.len()
-    }
-
-    fn count_lines(&self) -> usize {
-        self.filter.count_lines()
-    }
-
-    #[inline]
     // fill in any gaps by parsing data from the file when needed
     fn resolve_location(&mut self, pos: Location) -> Location {
         // Resolve the location in our filtered index, first. If it's still a gap, we need to resolve it by reading
@@ -114,6 +91,40 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
             pos = self.filter.resolve(pos, self.log.len());
         }
         pos
+    }
+}
+
+// Navigation
+impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
+    #[inline]
+    fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+        // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        // FIXME: Figure out how to reimplement this in terms of IndexedLog::next
+        // FIXME: Get rid of read_line and use log.next instead
+        // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        pos.tracker = self.resolve_location(pos.tracker);
+        let next = self.filter.next_line_index(pos.tracker);
+        self.read_line(pos, next)
+    }
+
+    #[inline]
+    fn next_back(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+        pos.tracker = self.resolve_location(pos.tracker);
+        let next = self.filter.prev_line_index(pos.tracker);
+        self.read_line(pos, next)
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.log.len()
+    }
+
+    fn count_lines(&self) -> usize {
+        self.filter.count_lines()
+    }
+
+    fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
+        self.log.read_line(pos, next_pos)
     }
 }
 
