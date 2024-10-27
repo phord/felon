@@ -434,7 +434,7 @@ impl EventualIndex {
                         let mut pos = self.get_location(index, line, TargetOffset::AtOrBefore(end_of_file));
                         // Skip index at very end of file
                         if pos.found_offset().unwrap() == end_of_file {
-                            pos = self.prev_line_index(pos);
+                            pos = self.next(pos);
                         }
                         pos
                     }
@@ -474,67 +474,54 @@ impl EventualIndex {
         } else {
             let mut pos = self.get_location(index, line, target);
             while pos.is_indexed() && !pos.reached() {
-                // FIXME: DEDUP!
-                pos = match target {
-                    TargetOffset::AtOrAfter(_) => self.next_line_index(pos),
-                    TargetOffset::AtOrBefore(_) => self.prev_line_index(pos),
-                };
+                pos = self.next(pos);
             }
             pos
         }
     }
 
-    // Find index to next line after given index
-    pub fn next_line_index(&self, find: Location) -> Location {
+    // Find index to next/prev line
+    pub fn next(&self, find: Location) -> Location {
         if let Location::Indexed(IndexRef{ index, line, offset, next }) = find {
             assert!(index < self.indexes.len());
-            assert!(matches!(next, TargetOffset::AtOrAfter(_)));
             let i = &self.indexes[index];
             if line >= i.lines() || i.get(line) != offset {
                 // Target location invalidated by changes to self.indexes. Fall back to slow search for line after this offset.
                 // panic!("Does this ever happen?");
                 self.locate(next.next_exclusive(offset))
-            } else if line + 1 < i.len() {
-                // next line is in the same index
-                self.get_location(index, line + 1 , next.next_exclusive(offset))
-            } else if let Some(gap) = self.try_gap_at(index + 1, next.next_exclusive(offset)) {
-                // next line is not parsed yet
-                gap
             } else {
-                // next line is in the next index
-                self.get_location( index + 1, 0 , next.next_exclusive(offset))
+                let (next_line, gap_index, next_index) = match next {
+                    TargetOffset::AtOrAfter(_) => (line + 1, index + 1, index + 1),
+                    TargetOffset::AtOrBefore(_) => (line.saturating_sub(1), index, index.saturating_sub(1)),
+                };
+                if next_line != line && next_line < i.len() {
+                    // next line is in the same index
+                    self.get_location(index, next_line , next.next_exclusive(offset))
+                } else if let Some(gap) = self.try_gap_at(gap_index, next.next_exclusive(offset)) {
+                    // next line is not parsed yet
+                    gap
+                } else if next_index != index {
+                    // next line is in the next index
+                    self.get_location( next_index, 0 , next.next_exclusive(offset))
+                }
+                else {
+                    // There's no gap before this index, and no lines before it either.  We must be at StartOfFile.
+                    assert!(next_index == 0);
+                    Location::Invalid
+                }
             }
         } else {
             find
         }
     }
 
+    // Find index to next line after given index
+    pub fn next_line_index(&self, find: Location) -> Location {
+        self.next(find)
+    }
+
     // Find index to prev line before given index
     pub fn prev_line_index(&self, find: Location) -> Location {
-        if let Location::Indexed(IndexRef{ index, line, offset, next }) = find {
-            assert!(index < self.indexes.len());
-            assert!(matches!(next, TargetOffset::AtOrBefore(_)));
-            let i = &self.indexes[index];
-            if line >= i.lines() || i.get(line) != offset {
-                // Target location invalidated by changes to self.indexes. Fall back to slow search for line before this offset.
-                // panic!("Does this ever happen?");
-                self.locate(next.next_exclusive(offset))
-            } else if line > 0 {
-                // prev line is in the same index
-                self.get_location(index, line - 1, next.next_exclusive(offset))
-            } else if let Some(gap) = self.try_gap_at(index, next.next_exclusive(offset)) {
-                // prev line is not parsed yet
-                gap
-            } else if index > 0 {
-                // prev line is in the prev index
-                let j = &self.indexes[index - 1];
-                self.get_location(index - 1, j.len() - 1, next.next_exclusive(offset))
-            } else {
-                // There's no gap before this index, and no lines before it either.  We must be at StartOfFile.
-                Location::Invalid
-            }
-        } else {
-            find
-        }
+        self.next(find)
     }
 }
