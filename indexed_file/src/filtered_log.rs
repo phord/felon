@@ -16,11 +16,15 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         }
     }
 
+    /// Apply a new search to the filter
+    /// Invalidates old results
     pub fn search(&mut self, search: SearchType) {
         // TODO: if search != self.filter.f {
         self.filter = IndexFilter::new(search);
     }
 
+    /// Apply a new regex search expression to the filter
+    /// Invalidates old results
     pub fn search_regex(&mut self, re: &str) -> Result<(), regex::Error> {
         self.search(SearchType::Regex(Regex::new(re)?));
         Ok(())

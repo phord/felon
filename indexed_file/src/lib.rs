@@ -144,6 +144,11 @@ mod tests {
         // Walk the file and compare each line offset to the expected offset
         let mut offset = 0;
         let mut linecount = 0;
+
+        let scan = File::open(&test_file).unwrap();
+        assert_eq!(lines, io::BufReader::new(scan).lines().count());
+        assert_eq!(lines, file.iter_offsets().count());
+
         let scan = File::open(test_file).unwrap();
         let mut scanlines = io::BufReader::new(scan).lines();
         for start in file.iter_offsets() {

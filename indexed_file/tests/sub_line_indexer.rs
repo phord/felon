@@ -120,7 +120,7 @@ mod logfile_iterator_tests {
         let mut count = 1;
         for i in it {
             let bol = i;
-            println!("{bol} {prev}");
+            // println!("{bol} {prev}");
             assert_eq!(prev - bol, harness.patt_len);
             prev = bol;
             count += 1;
