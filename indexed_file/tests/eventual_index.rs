@@ -42,10 +42,10 @@ fn test_eventual_index_basic() {
 #[test]
 fn test_cursor_start() {
     let index = get_eventual_index(100);
-    let cursor = index.locate(TargetOffset::AtOrBefore(0));
+    let cursor = index.locate(TargetOffset::AtOrAfter(0));
     dbg!(cursor);
     match cursor {
-        Location::Indexed(IndexRef{index: 0, line: 0, offset: 0}) => {},
+        Location::Indexed(IndexRef{index: 0, line: 0, offset: 0, next:TargetOffset::AtOrAfter(0)}) => {},
         _ => {
             dbg!(cursor);
             panic!("Expected StartOfFile; got something else");
@@ -58,7 +58,7 @@ fn test_cursor_mid_start() {
     let index = get_partial_eventual_index(50, 100);
     let cursor = index.locate(TargetOffset::AtOrAfter(50));
     match cursor {
-        Location::Indexed(IndexRef{index: 0, line: 0, offset: 52}) => {},
+        Location::Indexed(IndexRef{index: 0, line: 0, offset: 52, next:TargetOffset::AtOrAfter(50)}) => {},
         _ => panic!("Expected Index(0, 0); got something else: {:?}", cursor),
     }
     let fault = index.locate(TargetOffset::AtOrBefore(10));
@@ -86,7 +86,7 @@ fn test_cursor_last() {
 #[test]
 fn test_cursor_forward() {
     let index = get_eventual_index(100);
-    let mut cursor = index.locate(TargetOffset::AtOrBefore(0));
+    let mut cursor = index.locate(TargetOffset::AtOrAfter(0));
     let mut count = 0;
     loop {
         // dbg!(&cursor);
@@ -149,7 +149,7 @@ fn test_insert_basic() {
     assert_eq!(index.bytes(), 20);
     assert_eq!(index.end(), 20);
 
-    let cursor = index.locate(TargetOffset::AtOrBefore(0));
+    let cursor = index.locate(TargetOffset::AtOrAfter(0));
     assert_eq!(cursor.found_offset().unwrap(), 0);
     assert!(index.next_line_index(cursor).is_gap());
 }

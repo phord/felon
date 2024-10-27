@@ -32,6 +32,14 @@ impl Location {
         }
     }
 
+    pub fn reached(&self) -> bool {
+        match self {
+            Location::Indexed(r) => r.next.reached(r.offset),
+            _ => false,
+        }
+    }
+
+
     #[inline]
     pub fn is_gap(&self) -> bool {
         matches!(self, Location::Gap(_))
@@ -119,6 +127,7 @@ pub struct IndexRef {
     pub index: usize,
     pub line: usize,
     pub offset: usize,
+    pub next: TargetOffset,
 }
 
 impl PartialEq for IndexRef {
@@ -178,6 +187,19 @@ impl TargetOffset {
         }
     }
 
+    pub fn next_exclusive(&self, offset: usize) -> TargetOffset {
+        match self {
+            TargetOffset::AtOrAfter(_) => TargetOffset::AtOrAfter(offset + 1),
+            TargetOffset::AtOrBefore(_) => TargetOffset::AtOrBefore(offset.saturating_sub(1)),
+        }
+    }
+
+    pub fn reached(&self, offset: usize) -> bool {
+        match self {
+            TargetOffset::AtOrAfter(x) => offset >= *x,
+            TargetOffset::AtOrBefore(x) => offset <= *x,
+        }
+    }
 }
 
 // A cursor to some gap in the indexed coverage
@@ -235,7 +257,7 @@ impl EventualIndex {
 
         let line = self.indexes[index].insert(range, offset);
         if let Some(offset) = offset {
-            Location::Indexed(IndexRef{ index, line, offset })
+            Location::Indexed(IndexRef{ index, line, offset, next: gap_range.target })
         } else {
             // Close the gap:
 
@@ -244,7 +266,7 @@ impl EventualIndex {
             if let Some(gap) = self.try_gap_at(index+1, gap_range.target) {
                 gap
             } else {
-                self.get_location(index, line)
+                self.get_location(index, line, gap_range.target)
             }
         }
     }
@@ -399,7 +421,7 @@ impl EventualIndex {
                     if let Some(gap) = self.try_gap_at(0, TargetOffset::AtOrAfter(0)) {
                         gap
                     } else {
-                        self.get_location(0, 0)
+                        self.get_location(0, 0, TargetOffset::AtOrAfter(0))
                     }
                 },
                 VirtualLocation::End => {
@@ -409,7 +431,7 @@ impl EventualIndex {
                         assert!(!self.indexes.is_empty(), "If it's empty, we should have found a gap");
                         let index = self.indexes.len()-1;
                         let line = self.indexes.last().unwrap().len()-1;
-                        let mut pos = self.get_location(index, line);
+                        let mut pos = self.get_location(index, line, TargetOffset::AtOrBefore(end_of_file));
                         // Skip index at very end of file
                         if pos.found_offset().unwrap() == end_of_file {
                             pos = self.prev_line_index(pos);
@@ -423,7 +445,7 @@ impl EventualIndex {
     }
 
     // Resolve the target indexed location, which must already exist
-    fn get_location(&self, index: usize, line: usize) -> Location {
+    fn get_location(&self, index: usize, line: usize, target: TargetOffset) -> Location {
         assert!(index < self.indexes.len());
         let j = &self.indexes[index];
 
@@ -434,7 +456,7 @@ impl EventualIndex {
         let offset = j.get(line);
         assert!(offset >= j.start);
         assert!(offset <= j.end);
-        Location::Indexed(IndexRef{ index, line , offset })
+        Location::Indexed(IndexRef{ index, line , offset, next: target})
     }
 
     // Find the target near the hinted location
@@ -450,24 +472,13 @@ impl EventualIndex {
                 },
             }
         } else {
-            let mut pos = self.get_location(index, line);
-            while let Some(p_off) = pos.found_offset() {
-                match target {
-                    TargetOffset::AtOrAfter(offset) => {
-                        if p_off < offset {
-                            pos = self.next_line_index(pos);
-                        } else {
-                            break
-                        }
-                    },
-                    TargetOffset::AtOrBefore(offset) => {
-                        if p_off > offset {
-                            pos = self.prev_line_index(pos);
-                        } else {
-                            break
-                        }
-                    },
-                }
+            let mut pos = self.get_location(index, line, target);
+            while pos.is_indexed() && !pos.reached() {
+                // FIXME: DEDUP!
+                pos = match target {
+                    TargetOffset::AtOrAfter(_) => self.next_line_index(pos),
+                    TargetOffset::AtOrBefore(_) => self.prev_line_index(pos),
+                };
             }
             pos
         }
@@ -475,22 +486,23 @@ impl EventualIndex {
 
     // Find index to next line after given index
     pub fn next_line_index(&self, find: Location) -> Location {
-        if let Location::Indexed(IndexRef{ index, line, offset}) = find {
+        if let Location::Indexed(IndexRef{ index, line, offset, next }) = find {
             assert!(index < self.indexes.len());
+            assert!(matches!(next, TargetOffset::AtOrAfter(_)));
             let i = &self.indexes[index];
             if line >= i.lines() || i.get(line) != offset {
                 // Target location invalidated by changes to self.indexes. Fall back to slow search for line after this offset.
                 // panic!("Does this ever happen?");
-                self.locate(TargetOffset::AtOrAfter(offset+1))
+                self.locate(next.next_exclusive(offset))
             } else if line + 1 < i.len() {
                 // next line is in the same index
-                self.get_location( index, line + 1 )
-            } else if let Some(gap) = self.try_gap_at(index + 1, TargetOffset::AtOrAfter(offset + 1)) {
+                self.get_location(index, line + 1 , next.next_exclusive(offset))
+            } else if let Some(gap) = self.try_gap_at(index + 1, next.next_exclusive(offset)) {
                 // next line is not parsed yet
                 gap
             } else {
                 // next line is in the next index
-                self.get_location( index + 1, 0 )
+                self.get_location( index + 1, 0 , next.next_exclusive(offset))
             }
         } else {
             find
@@ -499,23 +511,24 @@ impl EventualIndex {
 
     // Find index to prev line before given index
     pub fn prev_line_index(&self, find: Location) -> Location {
-        if let Location::Indexed(IndexRef{ index, line, offset}) = find {
+        if let Location::Indexed(IndexRef{ index, line, offset, next }) = find {
             assert!(index < self.indexes.len());
+            assert!(matches!(next, TargetOffset::AtOrBefore(_)));
             let i = &self.indexes[index];
             if line >= i.lines() || i.get(line) != offset {
                 // Target location invalidated by changes to self.indexes. Fall back to slow search for line before this offset.
                 // panic!("Does this ever happen?");
-                self.locate(TargetOffset::AtOrBefore(offset-1))
+                self.locate(next.next_exclusive(offset))
             } else if line > 0 {
                 // prev line is in the same index
-                self.get_location(index, line - 1)
-            } else if let Some(gap) = self.try_gap_at(index, TargetOffset::AtOrBefore(offset.saturating_sub(1))) {
+                self.get_location(index, line - 1, next.next_exclusive(offset))
+            } else if let Some(gap) = self.try_gap_at(index, next.next_exclusive(offset)) {
                 // prev line is not parsed yet
                 gap
             } else if index > 0 {
                 // prev line is in the prev index
                 let j = &self.indexes[index - 1];
-                self.get_location(index - 1, j.len() - 1)
+                self.get_location(index - 1, j.len() - 1, next.next_exclusive(offset))
             } else {
                 // There's no gap before this index, and no lines before it either.  We must be at StartOfFile.
                 Location::Invalid
