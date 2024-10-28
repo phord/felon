@@ -232,7 +232,7 @@ impl EventualIndex {
     /// Insert an explored range into the eventualIndex and optionally add a found line offset.
     /// Location must be a gap.
     /// Returns the indexed Location where the entry was stored, or a gap if no entry provided
-    pub fn insert(&mut self, pos: Location, range: &std::ops::Range<usize>, offset: Option<usize>) -> Location {
+    pub fn insert(&mut self, pos: &Location, range: &std::ops::Range<usize>, offset: Option<usize>) -> Location {
 
         let gap_range = match pos {
             Location::Gap(gap_range) => gap_range,
