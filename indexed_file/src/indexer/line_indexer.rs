@@ -41,8 +41,8 @@ pub trait IndexedLog {
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine>;
 
     /// Read the next line from the file
-    /// returns search results and the new cursor
-    /// If line is None and pos.tracker is Some(Invalid), we're at the start of the file
+    /// returns search results and modifies the cursor with updated info
+    /// If line is None and pos.tracker is Some(Invalid), we're at the start/end of the file
     /// If line is None and tracker is anything else, there may be more to read
     fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine>;
 
