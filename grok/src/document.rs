@@ -33,6 +33,10 @@ impl Document {
             .collect()
     }
 
+    pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {
+        self.log.search_regex(filter)
+    }
+
 }
 
 impl Document {

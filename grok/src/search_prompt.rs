@@ -41,6 +41,12 @@ impl Search {
         }
     }
 
+    pub fn prompt_filter_start(&mut self) -> crossterm::Result<()> {
+        self.forward = true;    // FIXME
+        self.active = true;
+        self.prompt.start("&/")
+    }
+
     pub fn prompt_forward_start(&mut self) -> crossterm::Result<()> {
         self.forward = true;
         self.active = true;
@@ -64,7 +70,7 @@ impl Search {
             if let Some(input) = input {
                 self.active = false;
                 // Empty input means repeat previous search
-                let input = input.trim();
+                let input = input.trim_end_matches('\r');
                 if input.is_empty() {
                     return !self.expr.is_empty()
                 }

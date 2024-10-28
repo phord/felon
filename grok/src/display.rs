@@ -94,6 +94,7 @@ enum ScrollAction {
     SearchBackward,
     Up(usize),
     Down(usize),
+    Repaint,
 }
 
 pub struct Display {
@@ -211,7 +212,20 @@ impl Display {
         }
     }
 
+    pub fn set_filter(&mut self, doc: &mut Document, filter: &str) -> bool {
+        match doc.set_filter(filter) {
+            Ok(_) => true,
+            Err(e) => {
+                log::error!("Invalid filter expression: {}", e);
+                self.set_status_msg(format!("Invalid filter expression: {}", e));
+                false
+            }
+        }
+    }
+
     pub fn handle_command(&mut self, cmd: UserCommand) {
+        // FIXME: commands should be queued so we don't lose any. For example, search prompt needs us to refresh and search-next. So it
+        //        calls us twice in a row.  I suppose we also need a way to cancel queued commands, then.  ^C?
         match cmd {
             UserCommand::ScrollDown => {
                 self.scroll = ScrollAction::Down(1);
@@ -230,6 +244,9 @@ impl Display {
             }
             UserCommand::ScrollToBottom => {
                 self.scroll = ScrollAction::EndOfFile;
+            }
+            UserCommand::RefreshDisplay => {
+                self.scroll = ScrollAction::Repaint;
             }
             UserCommand::TerminalResize => {
                 self.update_size();
@@ -416,6 +433,10 @@ impl Display {
                 Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
             } else {
                 match self.scroll {
+                    ScrollAction::Repaint => {
+                        log::trace!("repaint everything");
+                        Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+                    }
                     ScrollAction::StartOfFile => {
                         // Scroll to top
                         log::trace!("scroll to top");

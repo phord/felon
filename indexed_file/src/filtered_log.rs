@@ -26,7 +26,11 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     /// Apply a new regex search expression to the filter
     /// Invalidates old results
     pub fn search_regex(&mut self, re: &str) -> Result<(), regex::Error> {
-        self.search(SearchType::Regex(Regex::new(re)?));
+        if re.is_empty() {
+            self.search(SearchType::None);
+        } else {
+            self.search(SearchType::Regex(Regex::new(re)?));
+        }
         Ok(())
     }
 
