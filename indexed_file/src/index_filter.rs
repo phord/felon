@@ -1,7 +1,7 @@
 use log::trace;
 use regex::Regex;
 
-use crate::indexer::eventual_index::{EventualIndex, Location};
+use crate::{indexer::eventual_index::{EventualIndex, Location}, LogLine};
 
 /**
  * Basic EventualIndex that accumulates matching line offsets. Can be used for search or filter, despite the name.
@@ -46,10 +46,10 @@ impl IndexFilter {
     }
 
     // Evaluate a new line for inclusion in the index
-    // TODO: Plumb LogLine through here instead?
-    pub fn eval(&mut self, gap: Location, range: &std::ops::Range<usize>, line: &str, offset: usize) -> Location {
-        let found = if is_match_type(trim_newline(line), &self.f) {
-            Some(offset)
+    // returns the next gap or the indexed line, if it matched
+    pub fn eval(&mut self, gap: &Location, range: &std::ops::Range<usize>, line: &LogLine) -> Location {
+        let found = if is_match_type(trim_newline(line.line.as_str()), &self.f) {
+            Some(line.offset)
         } else { None };
 
         self.index.insert(gap, range, found)

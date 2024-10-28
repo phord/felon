@@ -77,20 +77,20 @@ impl Location {
     }
 
     // make a portable location we can use with another EventualIndex
-    pub fn gap_to_target(&self) -> VirtualLocation {
+    pub fn gap_to_target(self) -> VirtualLocation {
         use Location::*;
         use VirtualLocation::*;
         assert!(self.is_gap());
         match self {
             Gap(GapRange{target, gap, ..}) => {
                 let (start, end) = match gap {
-                    Missing::Bounded(start, end) => (*start, *end),
-                    Missing::Unbounded(start) => (*start, usize::MAX - 1),
+                    Missing::Bounded(start, end) => (start, end),
+                    Missing::Unbounded(start) => (start, usize::MAX - 1),
                 };
                 match target {
                     // return a target from the start or the end of the gap, as needed.
                     TargetOffset::AtOrBefore(off) => Before(end.min(off + 1)),
-                    TargetOffset::AtOrAfter(off) => AtOrAfter(start.max(*off)),
+                    TargetOffset::AtOrAfter(off) => AtOrAfter(start.max(off)),
                 }
             },
             _ => panic!("Not a gap"),
@@ -240,7 +240,8 @@ impl EventualIndex {
         };
         let ix = gap_range.index;
 
-        let index = if ix > 0 && self.indexes[ix - 1].touches(&range.start.saturating_sub(1)) {
+        let index = if ix > 0 && (self.indexes[ix - 1].touches(&range.start) ||
+                                        self.indexes[ix - 1].touches(&range.end)) {
             // Append to previous index if it's adjacent (this is the most efficient option)
             ix - 1
         } else if ix < self.indexes.len() &&
@@ -256,6 +257,10 @@ impl EventualIndex {
         };
 
         let line = self.indexes[index].insert(range, offset);
+
+        if index > 0 {
+            assert!(self.indexes[index - 1].end <= self.indexes[index].start, "Expected indexes to be in order");
+        }
         if let Some(offset) = offset {
             Location::Indexed(IndexRef{ index, line, offset, next: gap_range.target })
         } else {

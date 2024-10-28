@@ -34,47 +34,51 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     //  The log has no lines between here and the next gap
     //  The log has at least one line covering this location
     // We must resolve the gap in the log if it exists. Then our pos will resolve to a non-gap.
-    fn index_chunk(&mut self, gap: Location) -> Location {
+    fn index_chunk(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
         use Location::*;
-        assert!(gap.is_gap());
-        let seek = gap.gap_to_target();
+        assert!(pos.tracker.is_gap());
+        let seek = pos.tracker.gap_to_target();
         let offset = seek.offset();
 
         let mut cursor = LogLocation { range: offset..offset, tracker: Virtual(seek) };
-        while !cursor.tracker.is_invalid() {
+        loop {
             if let Some(line) = self.log.next(&mut cursor) {
-                let gap = self.filter.eval(gap, &cursor.range, &line.line, line.offset);
-                if !gap.is_gap() {
-                    return gap;
+                pos.tracker = self.filter.eval(&pos.tracker, &cursor.range, &line);
+                if !pos.tracker.is_gap() {
+                    return Some(line);
                 }
             } else {
-                break
+                // End of file
+                pos.tracker = Location::Invalid;
+                return None;
             }
-        }
-        if offset < self.log.len() {
-            dbg!(offset, self.log.len());
-            self.filter.resolve(Virtual(seek), self.log.len())
-        } else {
-            Location::Invalid
         }
     }
 
     // fill in any gaps by parsing data from the file when needed
-    fn resolve_location_filtered(&mut self, pos: Location) -> Location {
+    fn resolve_location_filtered(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
         // Resolve the location in our filtered index, first. If it's still a gap, we need to resolve it by reading
         // the log and applying the filter there until we get a hit.  This could take a while.
         // Does this need to be cancellable?
 
-        let mut pos = self.filter.resolve(pos, self.log.len());
+        pos.tracker = self.filter.resolve(pos.tracker, self.log.len());
         // TODO: Make callers accept a gap return value. They can handle it by passing a CheckPoint up for the iterator response.
         // Then only try once to resolve the gaps here.
 
         // Resolve gaps
-        while pos.is_gap() {
-            pos = self.index_chunk(pos);
-            pos = self.filter.resolve(pos, self.log.len());
+        while pos.tracker.is_gap() {
+            let ret = self.index_chunk(pos);
+            pos.tracker = self.filter.resolve(pos.tracker, self.log.len());
+            if ret.is_some() {
+                pos.tracker = self.filter.next(pos.tracker);
+                return ret;
+            }
         }
-        pos
+
+        // We found a region we've seen before.  Read the log line and return it.
+        let next = self.filter.next(pos.tracker);
+        self.log.read_line(pos, next)
+        // FIXME: Could it be an empty index?  In that case, we'll return None here.  Will that confuse the caller into thinking this is the end?
     }
 }
 
@@ -82,13 +86,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
 impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
     fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
-        // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        // FIXME: Figure out how to reimplement this in terms of IndexedLog::next
-        // FIXME: Get rid of read_line and use log.next instead
-        // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        pos.tracker = self.resolve_location_filtered(pos.tracker);
-        let next = self.filter.next(pos.tracker);
-        self.log.read_line(pos, next)
+        self.resolve_location_filtered(pos)
     }
 
     #[inline]
