@@ -40,43 +40,27 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         let seek = gap.gap_to_target();
         let offset = seek.offset();
 
-        // TODO: Dedup the code...
-        let it = self.log.iter_lines_from(offset);
-        if seek.is_after() {
-            // FIXME: is 'offset' really the beginning of our gap?
-            let mut start = offset;
-            for line in it {
-                let end = line.offset + line.line.len();
-                let range = std::ops::Range {start, end};
-                let gap = self.filter.eval(gap, &range, &line.line, line.offset);
-                start = end;
+        let mut cursor = LogLocation { range: offset..offset, tracker: Virtual(seek) };
+        while !cursor.tracker.is_invalid() {
+            if let Some(line) = self.log.next(&mut cursor) {
+                let gap = self.filter.eval(gap, &cursor.range, &line.line, line.offset);
                 if !gap.is_gap() {
                     return gap;
                 }
-            }
-        } else {
-            let mut end = offset;
-            for line in it.rev() {
-                let start = line.offset;
-                let range = std::ops::Range {start, end: end.max(start + line.line.len())};
-                let gap = self.filter.eval(gap, &range, &line.line, line.offset);
-                end = start;
-                if !gap.is_gap() {
-                    return gap;
-                }
+            } else {
+                break
             }
         }
         if offset < self.log.len() {
             dbg!(offset, self.log.len());
             self.filter.resolve(Virtual(seek), self.log.len())
         } else {
-            // FIXME: Does this work in reverse?
             Location::Invalid
         }
     }
 
     // fill in any gaps by parsing data from the file when needed
-    fn resolve_location(&mut self, pos: Location) -> Location {
+    fn resolve_location_filtered(&mut self, pos: Location) -> Location {
         // Resolve the location in our filtered index, first. If it's still a gap, we need to resolve it by reading
         // the log and applying the filter there until we get a hit.  This could take a while.
         // Does this need to be cancellable?
@@ -102,9 +86,9 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
         // FIXME: Figure out how to reimplement this in terms of IndexedLog::next
         // FIXME: Get rid of read_line and use log.next instead
         // %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        pos.tracker = self.resolve_location(pos.tracker);
+        pos.tracker = self.resolve_location_filtered(pos.tracker);
         let next = self.filter.next(pos.tracker);
-        self.read_line(pos, next)
+        self.log.read_line(pos, next)
     }
 
     #[inline]
