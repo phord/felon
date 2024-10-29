@@ -68,32 +68,11 @@ High-level todos:
     o If no alt-screen and lines < display_height, don't fill whole screen?  (see less for something like git pager usage)
         . Something like -K support to exit when no paging needed, too.
 
-For UI-driven workflow, is this workable?
-    Expr                Find lines that contain:
-    ================    ==================================
-    foo
-        bar             foo and bar
+Commands I need:
+    Toggle filters / colors temporarily
+    Change search highlight colors
+    Toggle highlights
 
-    foo
-    bar                 foo or bar
-
-    foo
-        bar
-        -baz            both foo and bar, but not baz
-
-    -baz
-        foo
-        bar             foo or bar but not baz
-
-    foo
-    bar
-        -baz            foo or (bar but not baz)
-
-    foo
-        -bar
-            -baz        foo but not bar unless also baz (sketchy!)
-
-    foo bar             the exact text "foo bar"
 
 
 Display filters:

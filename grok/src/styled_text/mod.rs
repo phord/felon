@@ -85,7 +85,7 @@ impl StyledLine {
         }
         phrases.push(Phrase::new(out.len(), patt));
 
-        log::trace!("Sanitized: {} {:?}", out, phrases);
+        // log::trace!("Sanitized: {} {:?}", out, phrases);
         Self {line: out, phrases}
     }
 
