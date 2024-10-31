@@ -139,8 +139,7 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
     // fill in any gaps by parsing data from the file when needed
     #[inline]
-    // FIXME: Make this private
-    pub fn resolve_location(&mut self, pos: Location) -> Location {
+    fn resolve_location(&mut self, pos: Location) -> Location {
         // Resolve any virtuals into gaps or indexed
         let mut pos = self.index.resolve(pos, self.len());
 
@@ -189,11 +188,9 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
     }
 
     fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
-        // FIXME: Find a way to defer resolve_location until we're in read_line
         pos.tracker = self.resolve_location(pos.tracker);
         let next = self.index.next(pos.tracker);
-        let ret = self.read_line(pos, next);
-        ret
+        self.read_line(pos, next)
     }
 
     #[inline]
