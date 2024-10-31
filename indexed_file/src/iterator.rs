@@ -57,42 +57,33 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for i in 0..5 {
-            // We should have resolved it by now
-            assert!(i<4);
-            if let Some(line) = self.log.next(&mut self.pos) {
-                if line.offset == self.rev_pos.tracker.offset() {
-                    // End of iterator when fwd and rev meet
-                    self.rev_pos.tracker = Location::Invalid;
-                    self.pos.tracker = Location::Invalid;
-                }
-                return Some(line.offset)
-            } else if self.pos.tracker.is_invalid() {
-                return None
+        if let Some(line) = self.log.iter_next(&mut self.pos) {
+            if line.offset == self.rev_pos.tracker.offset() {
+                // FIXME: dedup this code with next_back
+                // End of iterator when fwd and rev meet
+                self.rev_pos.tracker = Location::Invalid;
+                self.pos.tracker = Location::Invalid;
             }
+            Some(line.offset)
+        } else {
+            None
         }
-        None
     }
 }
 
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
-        for i in 0..5 {
-            // We should have resolved it by now
-            assert!(i<4);
-            if let Some(line) = self.log.next(&mut self.rev_pos) {
-                if line.offset == self.pos.tracker.offset() {
-                    // End of iterator when fwd and rev meet
-                    self.rev_pos.tracker = Location::Invalid;
-                    self.pos.tracker = Location::Invalid;
-                }
-                return Some(line.offset)
-            } else if self.pos.tracker.is_invalid() {
-                return None
+        if let Some(line) = self.log.iter_next(&mut self.rev_pos) {
+            if line.offset == self.pos.tracker.offset() {
+                // End of iterator when fwd and rev meet
+                self.rev_pos.tracker = Location::Invalid;
+                self.pos.tracker = Location::Invalid;
             }
+            Some(line.offset)
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -127,17 +118,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        for i in 0..5 {
-            // We should have resolved it by now
-            assert!(i<4);
-            let line = self.log.next(&mut self.rev_pos);
-            if let Some(line) = line {
-                return Some(line)
-            } else if self.rev_pos.tracker.is_invalid() {
-                return None
-            }
-        }
-        None
+        self.log.iter_next(&mut self.rev_pos)
     }
 }
 
@@ -146,18 +127,6 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        for i in 0..5 {
-            // dbg!(&self.pos);
-
-            // We should have resolved it by now
-            assert!(i<4);
-            let line = self.log.next(&mut self.pos);
-            if let Some(line) = line {
-                return Some(line)
-            } else if self.pos.tracker.is_invalid() {
-                return None
-            }
-        }
-        None
+        self.log.iter_next(&mut self.pos)
     }
 }

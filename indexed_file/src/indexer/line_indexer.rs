@@ -42,10 +42,22 @@ pub trait IndexedLog {
 
     /// Read the next line from the file
     /// returns search results and modifies the cursor with updated info
-    /// If line is None and pos.tracker is Some(Invalid), we're at the start/end of the file
+    /// If line is None and pos.tracker is Invalid, we're at the start/end of the file
     /// If line is None and tracker is anything else, there may be more to read
     fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine>;
 
+    fn iter_next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+        for i in 0..5 {
+            // We should have resolved it by now
+            assert!(i<4);
+            let line = self.next(pos);
+            if line.is_some() || pos.tracker.is_invalid() {
+                return line
+            }
+        }
+        // unreachable!("We failed to read a line in 5 tries");
+        None
+    }
 
     // Iterators
 
