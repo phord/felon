@@ -128,6 +128,7 @@ https://codeberg.org/rini/pomprt
     A readline-like prompt
 https://github.com/kkawakam/rustyline
     Another readline prompt. supports command history.
+    Does not support async.
 https://docs.rs/r3bl_terminal_async/latest/r3bl_terminal_async/
     Another one, derived from RustyLine-async, but evolved greatly
     Overkill?

@@ -225,7 +225,8 @@ impl Display {
 
     pub fn handle_command(&mut self, cmd: UserCommand) {
         // FIXME: commands should be queued so we don't lose any. For example, search prompt needs us to refresh and search-next. So it
-        //        calls us twice in a row.  I suppose we also need a way to cancel queued commands, then.  ^C?
+        //        calls us twice in a row.  I suppose we also need a way to cancel queued commands, then.  ^C? And some way to recognize
+        //        commands that cancel previous ones (RefreshDisplay, twice in a row, for example).
         match cmd {
             UserCommand::ScrollDown => {
                 self.scroll = ScrollAction::Down(1);
@@ -340,11 +341,11 @@ impl Scroll {
 }
 
 impl Display {
-    // Pull lines from an iterator and display them.  There are two modes:
+    // Pull lines from an iterator and display them.  There are three modes:
     // 1. Scroll up:  Display each new line at the next lower position, and scroll up from bottom
     // 2. Scroll down:  Display each new line at the next higher position, and scroll down from top
+    // 3. Repaint:  Display all lines from the given offset
     // pos is the offset in the file for the first line
-    // if size is larger than display height, we may skip unnecessary lines
     // Scroll distance is in screen rows.  If a read line takes multiple rows, they count as multiple lines.
     fn feed_lines(&mut self, doc: &mut Document, mode: LineViewMode, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
         log::trace!("feed_lines: {:?}", scroll);

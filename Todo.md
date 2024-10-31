@@ -6,8 +6,8 @@ A quick issue tracker
   - [x] Sanitize all output before splitting it
   - Move unicode to future roadmap
     - ** This contradicts BufRead::read_line and ::lines() which return String
-    -    Note: It's not possible to find newlines in a utf-8 the file without considering unicode.
-    -    Disabling Strings may mean only listing ASCII files
+         Note: It's not possible to find newlines in a utf-8 file without considering unicode.
+         Disabling Strings may mean only listing ASCII files
 
 - Fix IndexedLog.next() to be cooperatively concurrent
   - Maybe we can show a spinner on the screen while we wait for lines to appear
