@@ -19,6 +19,7 @@ use std::io::stdout;
 use UserCommand as cmd;
 const KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+W", cmd::Quit),
+    ("Shift+Q", cmd::Quit),
     ("Q", cmd::Quit),
     ("Esc", cmd::Quit),
     ("Up", cmd::ScrollUp),
@@ -30,8 +31,88 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("&", cmd::FilterPrompt),
     ("/", cmd::ForwardSearchPrompt),
     ("?", cmd::BackwardSearchPrompt),
-    ("n", cmd::SearchNext),
-    ("N", cmd::SearchPrev),
+    ("N", cmd::SearchNext),
+    ("Shift+N", cmd::SearchPrev),
+
+    ("R", cmd::RefreshDisplay),
+    ("Ctrl+R", cmd::RefreshDisplay),
+    ("Ctrl+L", cmd::RefreshDisplay),
+    ("Shift+R", cmd::RefreshDisplay),     // FIXME: and reload files
+
+    //     PgUp b ^B ESC-v w - scroll back one page (opposite of SPACE); w is sticky
+    // TODO: ESC-v?
+    ("B", cmd::PageUp),
+    ("Ctrl+B", cmd::PageUp),
+    ("W", cmd::PageUpSticky),
+
+    // PgDn SPACE ^V ^F f z -- move down one page or N lines (if N was given first); z is sticky (saves the page size)
+    (" ", cmd::PageDown),
+    ("Ctrl+V", cmd::PageDown),
+    ("Ctrl+F", cmd::PageDown),
+    ("F", cmd::PageDown),
+    ("Z", cmd::PageDownSticky),
+
+    // g < ESC-< - go to line N (not prompted; default 1)
+    // G > ESC-> - go to line N (not prompted; default end of file)
+    ("G", cmd::SeekStartLine),
+    ("<", cmd::SeekStartLine),
+    ("Shift+G", cmd::SeekEndLine),
+    (">", cmd::SeekEndLine),
+
+    // p - go to percentage point in file
+    // P - go to byte offset in file
+
+    ("P", cmd::GotoPercent),
+    ("Shift+P", cmd::GotoOffset),
+
+    // ENTER ^N e ^E j ^J J - move down N (default 1) lines
+    ("Enter", cmd::ScrollDown),
+    ("J", cmd::ScrollDown),
+    ("Shift+J", cmd::ScrollDown),
+    ("Ctrl+J", cmd::ScrollDown),
+    ("E", cmd::ScrollDown),
+    ("Ctrl+E", cmd::ScrollDown),
+
+    // y ^Y ^P k ^K K Y - scroll up N lines (opposite of j)
+    // J K and Y scroll past end/begin of screen. All others stop at file edges
+    ("Y", cmd::ScrollUp),
+    ("K", cmd::ScrollUp),
+    ("Shift+Y", cmd::ScrollUp),
+    ("Shift+K", cmd::ScrollUp),
+    ("Ctrl+Y", cmd::ScrollUp),
+    ("Ctrl+P", cmd::ScrollUp),
+    ("Ctrl+K", cmd::ScrollUp),
+
+    // d ^D - scroll forward half a screen or N lines; N is sticky; becomes new default for d/u
+    // u ^U - scroll up half a screen or N lines; N is sticky; becomes new default for d/u
+    ("D", cmd::HalfPageDown),
+    ("Ctrl+D", cmd::HalfPageDown),
+    ("U", cmd::HalfPageUp),
+    ("Ctrl+U", cmd::HalfPageUp),
+
+    // F - go to end of file and try to read more data
+    ("Shift+F", cmd::SeekEndLine),        // TODO: and read more data
+
+    // m <x> - bookmark first line on screen with letter given (x is any alpha, upper or lower)
+    // M <x> - bookmark last line on screen with letter given
+    // ' <x> - go to bookmark with letter given (and position as it was marked, at top or bottom)
+    // ^X^X <n> - got to bookmark
+    ("M", cmd::SetBookmarkTop),
+    ("Shift+M", cmd::SetBookmarkBottom),
+    ("'", cmd::GotoBookmark),
+    ("Ctrl+X", cmd::GotoBookmark),
+
+    // Digits: accumulate a number argument for the next command
+    ("0", cmd::CollectDigits),
+    ("1", cmd::CollectDigits),
+    ("2", cmd::CollectDigits),
+    ("3", cmd::CollectDigits),
+    ("4", cmd::CollectDigits),
+    ("5", cmd::CollectDigits),
+    ("6", cmd::CollectDigits),
+    ("7", cmd::CollectDigits),
+    ("8", cmd::CollectDigits),
+    ("9", cmd::CollectDigits),
 
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
@@ -52,24 +133,36 @@ const KEYMAP: &[(&str, UserCommand)] = &[
 #[derive(Copy, Clone, Debug)]
 pub enum UserCommand {
     None,
-    Quit,
-    ScrollUp,
-    ScrollDown,
-    MouseScrollUp,
-    MouseScrollDown,
-    PageUp,
-    PageDown,
-    ScrollToTop,
-    ScrollToBottom,
-    TerminalResize,
-    RefreshDisplay,
+    BackwardSearchPrompt,
     FilterPrompt,
     ForwardSearchPrompt,
-    BackwardSearchPrompt,
+    HalfPageDown,
+    HalfPageUp,
+    GotoBookmark,
+    SetBookmarkTop,
+    SetBookmarkBottom,
+    GotoOffset,
+    GotoPercent,
+    SeekStartLine,
+    SeekEndLine,
+    CollectDigits,
+    MouseScrollDown,
+    MouseScrollUp,
+    PageDown,
+    PageDownSticky,
+    PageUp,
+    PageUpSticky,
+    Quit,
+    RefreshDisplay,
+    ScrollDown,
+    ScrollToBottom,
+    ScrollToTop,
+    ScrollUp,
     SearchNext,
     SearchPrev,
     SelectWordAt(u16, u16),
     SelectWordDrag(u16, u16),
+    TerminalResize,
 }
 
 struct Reader {
