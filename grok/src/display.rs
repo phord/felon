@@ -88,13 +88,15 @@ impl io::Write for ScreenBuffer {
 
 enum ScrollAction {
     None,   // Nothing to do
-    StartOfFile,
-    EndOfFile,
+    StartOfFile(usize),
+    EndOfFile(usize),
     SearchForward,
     SearchBackward,
     Up(usize),
     Down(usize),
     Repaint,
+    GotoPercent(f64),
+    GotoOffset(usize),
 }
 
 pub struct Display {
@@ -110,6 +112,17 @@ pub struct Display {
 
     /// Scroll command from user
     scroll: ScrollAction,
+
+    /// Accumulated command argument
+    arg_num: usize,
+    arg_fraq: usize,
+    arg_denom: usize,
+
+    // Sticky whole-page scroll sizes
+    whole: usize,
+
+    // Sticky half-page scroll size
+    half: usize,
 
     /// Size of the bottom status panel
     panel: usize,
@@ -141,8 +154,13 @@ impl Display {
             width: 0,
             on_alt_screen: false,
             use_alt: config.altscreen,
-            scroll: ScrollAction::StartOfFile,
+            scroll: ScrollAction::StartOfFile(0),
+            arg_num: 0,
             panel: 1,
+            whole: 0,
+            half: 0,
+            arg_fraq: 0,
+            arg_denom: 0,
             prev: DisplayState { height: 0, width: 0},
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
@@ -223,31 +241,132 @@ impl Display {
         }
     }
 
+    // One line, or the given argument
+    fn get_one(&self) -> usize {
+        if self.arg_num > 0 {
+            self.arg_num
+        } else {
+            1
+        }
+    }
+
+    // Half-screen size, or the given argument
+    fn get_half(&self) -> usize {
+        if self.arg_num > 0 {
+            self.arg_num
+        } else if self.half > 0 {
+            self.half
+        } else {
+            self.page_size() / 2
+        }
+    }
+
+    // Whole-screen size, or the given argument
+    fn get_whole(&self) -> usize {
+        if self.arg_num > 0 {
+            self.arg_num
+        } else if self.whole > 0 {
+            self.whole
+        } else {
+            self.page_size()
+        }
+    }
+
+    // Sticky half-screen size
+    fn sticky_half(&mut self) -> usize {
+        if self.arg_num > 0 {
+            self.half = self.arg_num;
+        }
+        self.get_half()
+    }
+
+    // Sticky whole-screen size
+    fn sticky_whole(&mut self) -> usize {
+        if self.arg_num > 0 {
+            self.whole = self.arg_num;
+        }
+        self.get_whole()
+    }
+
+    fn collect_digit(&mut self, d: usize) {
+        if self.arg_denom == 0 {
+            // Mantissa
+            self.arg_num = self.arg_num * 10 + d;
+        } else {
+            // Fraction
+            self.arg_fraq = self.arg_fraq * 10 + d;
+            self.arg_denom *= 10;
+        }
+    }
+
+    fn collect_decimal(&mut self) {
+        if self.arg_denom == 0 { self.arg_denom = 1; }
+    }
+
+    fn get_arg(&self) -> f64 {
+        self.arg_num as f64 +
+            if self.arg_denom > 0 {
+                self.arg_fraq as f64 / self.arg_denom as f64
+            } else {
+                0f64
+            }
+    }
+
     pub fn handle_command(&mut self, cmd: UserCommand) {
         // FIXME: commands should be queued so we don't lose any. For example, search prompt needs us to refresh and search-next. So it
         //        calls us twice in a row.  I suppose we also need a way to cancel queued commands, then.  ^C? And some way to recognize
         //        commands that cancel previous ones (RefreshDisplay, twice in a row, for example).
         match cmd {
             UserCommand::ScrollDown => {
-                self.scroll = ScrollAction::Down(1);
+                self.scroll = ScrollAction::Down(self.get_one());
             }
             UserCommand::ScrollUp => {
-                self.scroll = ScrollAction::Up(1);
+                self.scroll = ScrollAction::Up(self.get_one());
+            }
+            UserCommand::CollectDigits(d) => {
+                self.collect_digit(d as usize);
+            }
+            UserCommand::CollectDecimal => {
+                self.collect_decimal();
             }
             UserCommand::PageDown => {
-                self.scroll = ScrollAction::Down(self.page_size());
+                self.scroll = ScrollAction::Down(self.get_whole());
             }
             UserCommand::PageUp => {
-                self.scroll = ScrollAction::Up(self.page_size());
+                self.scroll = ScrollAction::Up(self.get_whole());
+            }
+            UserCommand::PageDownSticky => {
+                self.scroll = ScrollAction::Down(self.sticky_whole());
+            }
+            UserCommand::PageUpSticky => {
+                self.scroll = ScrollAction::Up(self.sticky_whole());
+            }
+            UserCommand::HalfPageDown => {
+                self.scroll = ScrollAction::Down(self.sticky_half());
+            }
+            UserCommand::HalfPageUp => {
+                self.scroll = ScrollAction::Up(self.sticky_half());
             }
             UserCommand::ScrollToTop => {
-                self.scroll = ScrollAction::StartOfFile;
+                self.scroll = ScrollAction::StartOfFile(0);
             }
             UserCommand::ScrollToBottom => {
-                self.scroll = ScrollAction::EndOfFile;
+                self.scroll = ScrollAction::EndOfFile(0);
+            }
+            UserCommand::SeekStartLine => {
+                self.scroll = ScrollAction::StartOfFile(self.get_arg() as usize);
+            }
+            UserCommand::SeekEndLine => {
+                self.scroll = ScrollAction::EndOfFile(self.get_arg() as usize);
             }
             UserCommand::RefreshDisplay => {
                 self.scroll = ScrollAction::Repaint;
+            }
+            UserCommand::GotoPercent => {
+                self.scroll = ScrollAction::GotoPercent(self.get_arg())
+            }
+            UserCommand::GotoOffset => {
+                self.scroll = ScrollAction::GotoOffset(self.get_arg() as usize)
             }
             UserCommand::TerminalResize => {
                 self.update_size();
@@ -276,6 +395,13 @@ impl Display {
                 self.scroll = ScrollAction::SearchBackward;
             }
             _ => {}
+        }
+
+        // Clear argument when command is seen
+        if ! matches!(self.scroll, ScrollAction::None) {
+            self.arg_num = 0;
+            self.arg_denom = 0;
+            self.arg_fraq = 0;
         }
     }
 
@@ -353,24 +479,27 @@ impl Display {
         let mut buff = ScreenBuffer::new();
 
         let top_of_screen = 0;
+        let height = self.page_size();
 
         let (lines, mut row, mut count) = match scroll {
             Scroll::Up(sv) => {
                 // Partial or complete screen scroll backwards
-                let lines: Vec<_> = doc.get_lines_from_rev(mode, sv.offset, sv.lines).into_iter().rev().collect();
+                let skip = sv.lines.saturating_sub(sv.lines.min(height));
+                let lines: Vec<_> = doc.get_lines_from_rev(mode, sv.offset, sv.lines).into_iter().skip(skip).rev().collect();
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollDown(rows as u16)).unwrap();
                 self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(rows));
-                self.displayed_lines.truncate(self.page_size());
+                self.displayed_lines.truncate(height);
                 // TODO: add test for whole-screen offsets == self.displayed_lines
                 (lines, 0, 0)
             },
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
+                let skip = sv.lines.saturating_sub(sv.lines.min(height));
                 let mut lines = doc.get_lines_from(mode, sv.offset, sv.lines + 1);
                 if !lines.is_empty() {
-                    let skipped = lines.remove(0);
-                    assert_eq!(skipped.0, sv.offset);
+                    assert_eq!(lines.first().unwrap().0, sv.offset);
+                    lines = lines.into_iter().skip(skip + 1).collect();
                 }
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollUp(rows as u16)).unwrap();
@@ -380,15 +509,15 @@ impl Display {
                     Vec::new()
                 };
                 self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(rows));
-                (lines, self.page_size() - rows, 0)
+                (lines, height - rows, 0)
             },
             Scroll::Repaint(sv) => {
                 // Repainting whole screen, no scrolling
-                let lines = doc.get_lines_from(mode, sv.offset, sv.lines);
+                let lines = doc.get_lines_from(mode, sv.offset, sv.lines.min(height));
                 let rows = lines.len();
                 // queue!(buff, terminal::Clear(ClearType::All)).unwrap();
                 self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
-                (lines, 0, self.page_size())
+                (lines, 0, height)
             },
             Scroll::None => unreachable!("Scroll::None")
         };
@@ -400,7 +529,7 @@ impl Display {
             count = count.saturating_sub(1);
         }
 
-        while count > 0 && row < self.page_size() {
+        while count > 0 && row < height {
             // TODO: special color for these
             self.draw_line(doc, &mut buff, row, "~");
             row += 1;
@@ -434,19 +563,30 @@ impl Display {
                 Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
             } else {
                 match self.scroll {
+                    ScrollAction::GotoOffset(offset) => {
+                        // Scroll to the given offset
+                        log::trace!("scroll to offset {}", offset);
+                        Scroll::repaint(offset, view_height)
+                    }
+                    ScrollAction::GotoPercent(percent) => {
+                        // Scroll to the given percentage of the document
+                        log::trace!("scroll to percent {}", percent);
+                        let offset = doc.len() as f64 * percent / 100.0;
+                        Scroll::repaint(offset as usize, view_height)
+                    }
                     ScrollAction::Repaint => {
                         log::trace!("repaint everything");
                         Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
                     }
-                    ScrollAction::StartOfFile => {
+                    ScrollAction::StartOfFile(line) => {
                         // Scroll to top
                         log::trace!("scroll to top");
-                        Scroll::repaint(0, view_height)
+                        Scroll::down(0, view_height + line.saturating_sub(1))
                     }
-                    ScrollAction::EndOfFile => {
+                    ScrollAction::EndOfFile(line) => {
                         // Scroll to bottom
                         log::trace!("scroll to bottom");
-                        Scroll::up(usize::MAX, view_height)
+                        Scroll::up(usize::MAX, view_height + line.saturating_sub(1))
                     }
                     ScrollAction::Up(len) => {
                         // Scroll up 'len' lines before the top line

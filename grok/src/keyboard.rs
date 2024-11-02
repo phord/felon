@@ -63,6 +63,7 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     // P - go to byte offset in file
 
     ("P", cmd::GotoPercent),
+    ("%", cmd::GotoPercent),
     ("Shift+P", cmd::GotoOffset),
 
     // ENTER ^N e ^E j ^J J - move down N (default 1) lines
@@ -103,16 +104,17 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+X", cmd::GotoBookmark),
 
     // Digits: accumulate a number argument for the next command
-    ("0", cmd::CollectDigits),
-    ("1", cmd::CollectDigits),
-    ("2", cmd::CollectDigits),
-    ("3", cmd::CollectDigits),
-    ("4", cmd::CollectDigits),
-    ("5", cmd::CollectDigits),
-    ("6", cmd::CollectDigits),
-    ("7", cmd::CollectDigits),
-    ("8", cmd::CollectDigits),
-    ("9", cmd::CollectDigits),
+    ("0", cmd::CollectDigits(0)),
+    ("1", cmd::CollectDigits(1)),
+    ("2", cmd::CollectDigits(2)),
+    ("3", cmd::CollectDigits(3)),
+    ("4", cmd::CollectDigits(4)),
+    ("5", cmd::CollectDigits(5)),
+    ("6", cmd::CollectDigits(6)),
+    ("7", cmd::CollectDigits(7)),
+    ("8", cmd::CollectDigits(8)),
+    ("9", cmd::CollectDigits(9)),
+    (".", cmd::CollectDecimal),
 
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
@@ -145,7 +147,8 @@ pub enum UserCommand {
     GotoPercent,
     SeekStartLine,
     SeekEndLine,
-    CollectDigits,
+    CollectDigits(u8),
+    CollectDecimal,
     MouseScrollDown,
     MouseScrollUp,
     PageDown,

@@ -66,6 +66,10 @@ impl Document {
         Color::Rgb {r: red, g: green, b: blue}
     }
 
+    pub fn len(&self) -> usize {
+        self.log.len()
+    }
+
     pub fn line_colors(&self, line: &str) -> StyledLine {
         // FIXME: Doesn't need &self
 
