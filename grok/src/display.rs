@@ -445,6 +445,8 @@ enum Scroll {
     Up(ScrollVector),
     Down(ScrollVector),
     Repaint(ScrollVector),
+    GotoTop(ScrollVector),
+    GotoBottom(ScrollVector),
     None,
 }
 
@@ -457,6 +459,12 @@ impl Scroll {
     }
     fn repaint(offset: usize, lines: usize) -> Self {
         Self::Repaint( ScrollVector {offset, lines} )
+    }
+    fn goto_top(offset: usize, lines: usize) -> Self {
+        Self::GotoTop( ScrollVector {offset, lines} )
+    }
+    fn goto_bottom(offset: usize, lines: usize) -> Self {
+        Self::GotoBottom( ScrollVector {offset, lines} )
     }
     fn none() -> Self {
         Self::None
@@ -482,9 +490,9 @@ impl Display {
         let height = self.page_size();
 
         let (lines, mut row, mut count) = match scroll {
-            Scroll::Up(sv) => {
+            Scroll::Up(sv) | Scroll::GotoBottom(sv) => {
                 // Partial or complete screen scroll backwards
-                let skip = sv.lines.saturating_sub(sv.lines.min(height));
+                let skip = sv.lines.saturating_sub(height);
                 let lines: Vec<_> = doc.get_lines_from_rev(mode, sv.offset, sv.lines).into_iter().skip(skip).rev().collect();
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollDown(rows as u16)).unwrap();
@@ -495,10 +503,10 @@ impl Display {
             },
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
-                let skip = sv.lines.saturating_sub(sv.lines.min(height));
+                let skip = sv.lines.saturating_sub(height);
                 let mut lines = doc.get_lines_from(mode, sv.offset, sv.lines + 1);
                 if !lines.is_empty() {
-                    assert_eq!(lines.first().unwrap().0, sv.offset);
+                    // TODO: Only if scrolling down from some pos; not when homing: assert_eq!(lines.first().unwrap().0, sv.offset);
                     lines = lines.into_iter().skip(skip + 1).collect();
                 }
                 let rows = lines.len();
@@ -511,9 +519,11 @@ impl Display {
                 self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(rows));
                 (lines, height - rows, 0)
             },
-            Scroll::Repaint(sv) => {
+            Scroll::Repaint(sv) | Scroll::GotoTop(sv) => {
                 // Repainting whole screen, no scrolling
                 let lines = doc.get_lines_from(mode, sv.offset, sv.lines.min(height));
+                let skip = sv.lines.saturating_sub(height);
+                let lines:Vec<_> = lines.into_iter().skip(skip).collect();
                 let rows = lines.len();
                 // queue!(buff, terminal::Clear(ClearType::All)).unwrap();
                 self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
@@ -566,13 +576,13 @@ impl Display {
                     ScrollAction::GotoOffset(offset) => {
                         // Scroll to the given offset
                         log::trace!("scroll to offset {}", offset);
-                        Scroll::repaint(offset, view_height)
+                        Scroll::goto_top(offset, view_height)
                     }
                     ScrollAction::GotoPercent(percent) => {
                         // Scroll to the given percentage of the document
                         log::trace!("scroll to percent {}", percent);
                         let offset = doc.len() as f64 * percent / 100.0;
-                        Scroll::repaint(offset as usize, view_height)
+                        Scroll::goto_top(offset as usize, view_height)
                     }
                     ScrollAction::Repaint => {
                         log::trace!("repaint everything");
@@ -581,12 +591,12 @@ impl Display {
                     ScrollAction::StartOfFile(line) => {
                         // Scroll to top
                         log::trace!("scroll to top");
-                        Scroll::down(0, view_height + line.saturating_sub(1))
+                        Scroll::goto_top(0, view_height + line.saturating_sub(1))
                     }
                     ScrollAction::EndOfFile(line) => {
                         // Scroll to bottom
                         log::trace!("scroll to bottom");
-                        Scroll::up(usize::MAX, view_height + line.saturating_sub(1))
+                        Scroll::goto_bottom(usize::MAX, view_height + line.saturating_sub(1))
                     }
                     ScrollAction::Up(len) => {
                         // Scroll up 'len' lines before the top line
