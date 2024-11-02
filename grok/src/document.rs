@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log};
+use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log, LogLine};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
@@ -16,21 +16,9 @@ pub struct Document {
 
 impl Document {
 
-    pub fn get_lines_from_rev(&mut self, mode: LineViewMode, start: usize, len: usize) -> Vec<(usize, String)> {
+    pub fn get_lines_from(&mut self, mode: LineViewMode, start: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_{
         self.log
             .iter_view_from(mode, start)
-            .rev()
-            .take(len)
-            .map(|x| (x.offset, x.line))
-            .collect()
-    }
-
-    pub fn get_lines_from(&mut self, mode: LineViewMode, start: usize, len: usize) -> Vec<(usize, String)> {
-        self.log
-            .iter_view_from(mode, start)
-            .take(len)
-            .map(|x| (x.offset, x.line))
-            .collect()
     }
 
     pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {

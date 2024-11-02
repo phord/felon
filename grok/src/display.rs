@@ -493,10 +493,12 @@ impl Display {
             Scroll::Up(sv) | Scroll::GotoBottom(sv) => {
                 // Partial or complete screen scroll backwards
                 let skip = sv.lines.saturating_sub(height);
-                let lines: Vec<_> = doc.get_lines_from_rev(mode, sv.offset, sv.lines).into_iter().skip(skip).rev().collect();
+                let lines:Vec<_> = doc.get_lines_from(mode, sv.offset).rev().take(sv.lines).skip(skip).collect();
+                // Reverse the lines in our vector so we can display from top to bottom
+                let lines = lines.into_iter().rev().collect::<Vec<_>>();
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollDown(rows as u16)).unwrap();
-                self.displayed_lines.splice(0..0, lines.iter().map(|(pos, _)| *pos).take(rows));
+                self.displayed_lines.splice(0..0, lines.iter().map(|logline| logline.offset).take(rows));
                 self.displayed_lines.truncate(height);
                 // TODO: add test for whole-screen offsets == self.displayed_lines
                 (lines, 0, 0)
@@ -504,11 +506,11 @@ impl Display {
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
                 let skip = sv.lines.saturating_sub(height);
-                let mut lines = doc.get_lines_from(mode, sv.offset, sv.lines + 1);
-                if !lines.is_empty() {
-                    // TODO: Only if scrolling down from some pos; not when homing: assert_eq!(lines.first().unwrap().0, sv.offset);
-                    lines = lines.into_iter().skip(skip + 1).collect();
+                let mut lines = doc.get_lines_from(mode, sv.offset).take(sv.lines + 1);
+                if let Some(line) = lines.next() {
+                    assert_eq!(line.offset, sv.offset);
                 }
+                let lines: Vec<_> = lines.skip(skip).collect();
                 let rows = lines.len();
                 queue!(buff, terminal::ScrollUp(rows as u16)).unwrap();
                 self.displayed_lines = if self.displayed_lines.len() > rows {
@@ -516,25 +518,25 @@ impl Display {
                 } else {
                     Vec::new()
                 };
-                self.displayed_lines.extend(lines.iter().map(|(pos, _)| *pos).take(rows));
+                self.displayed_lines.extend(lines.iter().map(|logline| logline.offset).take(rows));
                 (lines, height - rows, 0)
             },
             Scroll::Repaint(sv) | Scroll::GotoTop(sv) => {
                 // Repainting whole screen, no scrolling
-                let lines = doc.get_lines_from(mode, sv.offset, sv.lines.min(height));
+                let lines = doc.get_lines_from(mode, sv.offset).take(sv.lines.min(height));
                 let skip = sv.lines.saturating_sub(height);
-                let lines:Vec<_> = lines.into_iter().skip(skip).collect();
+                let lines:Vec<_> = lines.skip(skip).collect();
                 let rows = lines.len();
                 // queue!(buff, terminal::Clear(ClearType::All)).unwrap();
-                self.displayed_lines = lines.iter().map(|(pos, _)| *pos).take(rows).collect();
+                self.displayed_lines = lines.iter().map(|logline| logline.offset).take(rows).collect();
                 (lines, 0, height)
             },
             Scroll::None => unreachable!("Scroll::None")
         };
 
-        for (pos, line) in lines.iter(){
-            assert_eq!(self.displayed_lines[row - top_of_screen],  *pos);
-            self.draw_line(doc, &mut buff, row, line);
+        for logline in lines.iter(){
+            assert_eq!(self.displayed_lines[row - top_of_screen],  logline.offset);
+            self.draw_line(doc, &mut buff, row, logline.line.as_str());
             row += 1;
             count = count.saturating_sub(1);
         }
