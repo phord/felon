@@ -72,4 +72,9 @@ impl IndexFilter {
         todo!("self.index.count_lines()");
     }
 
+    // Count the size of the indexed regions
+    pub fn indexed_bytes(&self) -> usize {
+        self.index.indexed_bytes()
+    }
+
 }

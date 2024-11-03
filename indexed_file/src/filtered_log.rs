@@ -98,6 +98,11 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
         self.log.len()
     }
 
+    // Count the size of the indexed regions
+    fn indexed_bytes(&self) -> usize {
+        self.filter.indexed_bytes()
+    }
+
     fn count_lines(&self) -> usize {
         self.filter.count_lines()
     }

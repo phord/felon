@@ -20,12 +20,12 @@ impl StatusLine {
         1
     }
 
-    pub fn refresh_screen(&mut self, _doc: &mut Document) -> crossterm::Result<()> {
+    pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
 
         let mut stdout = stdout();
-
-        let message = format!("Line {} of {}", "??", "??");
+        let indexed = doc.indexed_bytes() as f64 / doc.len() as f64 * 100.0;
+        let message = format!("Doc:  {} bytes, {:3.2}% indexed", doc.len(), indexed);
         // let message = format!("Showing {} of {} lines, {} filtered",
         //                               doc.filtered_line_count(), doc.all_line_count(),
         //                               doc.all_line_count() - doc.filtered_line_count());

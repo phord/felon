@@ -80,6 +80,10 @@ impl IndexedLog for Log {
         self.file.count_lines()
     }
 
+    fn indexed_bytes(&self) -> usize {
+        self.file.indexed_bytes()
+    }
+
     #[inline]
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
         self.file.read_line(pos, next_pos)

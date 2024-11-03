@@ -58,6 +58,10 @@ impl Document {
         self.log.len()
     }
 
+    pub fn indexed_bytes(&self) -> usize {
+        self.log.indexed_bytes()
+    }
+
     pub fn line_colors(&self, line: &str) -> StyledLine {
         // FIXME: Doesn't need &self
 

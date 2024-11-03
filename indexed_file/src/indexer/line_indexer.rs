@@ -100,6 +100,8 @@ pub trait IndexedLog {
 
     fn len(&self) -> usize;
 
+    fn indexed_bytes(&self) -> usize;
+
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -196,6 +198,10 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
     #[inline]
     fn len(&self) -> usize {
         self.source.len()
+    }
+
+    fn indexed_bytes(&self) -> usize {
+        self.index.indexed_bytes()
     }
 
     fn count_lines(&self) -> usize {

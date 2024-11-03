@@ -389,6 +389,13 @@ impl EventualIndex {
             }
         }
     }
+
+    // Count the size of the indexed regions
+    pub fn indexed_bytes(&self) -> usize {
+        self.indexes.iter().fold(0, |a, v| a + v.bytes())
+    }
+
+
 }
 
 // Cursor functions for EventualIndex
