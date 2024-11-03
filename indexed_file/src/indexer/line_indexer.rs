@@ -3,6 +3,7 @@
 use std::fmt;
 use std::io::SeekFrom;
 use std::ops::Range;
+use std::time::{Duration, Instant};
 use crate::files::LogFile;
 use crate::indexer::index::Index;
 use crate::indexer::eventual_index::{EventualIndex, Location, GapRange, Missing::{Bounded, Unbounded}};
@@ -18,6 +19,58 @@ pub struct LogLocation {
 
     // The location of the next line to read
     pub tracker: Location,
+
+    /// The time we want to allow to find the next line
+    pub timeout: Option<Instant>,
+}
+
+impl LogLocation {
+    pub fn set_timeout(self, ms: u64) -> LogLocation{
+        let timeout = Duration::from_millis(ms);
+        LogLocation {
+            timeout: Some(Instant::now() + timeout),
+            ..self
+        }
+    }
+
+    pub fn elapsed(&self) -> bool {
+        match self.timeout {
+            Some(timeout) => Instant::now() > timeout,
+            None => false,
+        }
+    }
+}
+
+pub enum LineOption {
+    /// We found a logline
+    Line(LogLine),
+
+    /// We timed out looking for the next line
+    Checkpoint,
+
+    /// We reached the end of the file
+    None,
+}
+
+impl LineOption {
+    pub fn is_some(&self) -> bool {
+        matches!(self, LineOption::Line(_))
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(self, LineOption::None)
+    }
+
+    pub fn is_checkpoint(&self) -> bool {
+        matches!(self, LineOption::Checkpoint)
+    }
+
+    pub fn unwrap(self) -> LogLine {
+        match self {
+            LineOption::Line(line) => line,
+            _ => panic!("Called unwrap on LineOption::None"),
+        }
+    }
 }
 
 pub trait IndexedLog {
@@ -26,6 +79,7 @@ pub trait IndexedLog {
         LogLocation {
             range: pos..pos,
             tracker: Location::Virtual(VirtualLocation::AtOrAfter(pos)),
+            timeout: None,
         }
     }
 
@@ -34,6 +88,7 @@ pub trait IndexedLog {
         LogLocation {
             range: pos..pos,
             tracker: Location::Virtual(VirtualLocation::Before(pos)),
+            timeout: None,
         }
     }
 
@@ -44,15 +99,17 @@ pub trait IndexedLog {
     /// returns search results and modifies the cursor with updated info
     /// If line is None and pos.tracker is Invalid, we're at the start/end of the file
     /// If line is None and tracker is anything else, there may be more to read
-    fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine>;
+    fn next(&mut self, pos: &mut LogLocation) -> LineOption;
 
     fn iter_next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
         for i in 0..5 {
             // We should have resolved it by now
             assert!(i<4);
             let line = self.next(pos);
-            if line.is_some() || pos.tracker.is_invalid() {
-                return line
+            if line.is_some() {
+                return Some(line.unwrap())
+            } else if pos.tracker.is_invalid() {
+                return None
             }
         }
         // unreachable!("We failed to read a line in 5 tries");
@@ -141,17 +198,16 @@ impl<LOG: LogFile> LineIndexer<LOG> {
 
     // fill in any gaps by parsing data from the file when needed
     #[inline]
-    fn resolve_location(&mut self, pos: Location) -> Location {
+    fn resolve_location(&mut self, pos: &mut LogLocation) {
         // Resolve any virtuals into gaps or indexed
-        let mut pos = self.index.resolve(pos, self.len());
+        pos.tracker = self.index.resolve(pos.tracker, self.len());
 
         // Resolve gaps
         for _ in 0..10 {
-            if !pos.is_gap() { return pos; }
-            pos = self.index_chunk(pos);
+            if !pos.tracker.is_gap() || pos.elapsed() { return; }
+            pos.tracker = self.index_chunk(pos.tracker);
         }
-        assert!(!pos.is_gap());
-        pos
+        assert!(!pos.tracker.is_gap());
     }
 }
 
@@ -179,7 +235,8 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
                     iref.offset..(origin + 1).max(eol)
                 };
                 let line = LogLine::new(line, iref.offset);
-                *pos = LogLocation { range, tracker: next_pos };
+                pos.range = range;
+                pos.tracker = next_pos;
                 Some(line)
             },
             _ => {
@@ -189,10 +246,18 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
         }
     }
 
-    fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
-        pos.tracker = self.resolve_location(pos.tracker);
-        let next = self.index.next(pos.tracker);
-        self.read_line(pos, next)
+    fn next(&mut self, pos: &mut LogLocation) -> LineOption {
+        self.resolve_location(pos);
+        if pos.elapsed() {
+            LineOption::Checkpoint
+        } else {
+            let next = self.index.next(pos.tracker);
+            if let Some(line) = self.read_line(pos, next) {
+                LineOption::Line(line)
+            } else {
+                LineOption::None
+            }
+        }
     }
 
     #[inline]

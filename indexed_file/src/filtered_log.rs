@@ -1,6 +1,7 @@
 use regex::Regex;
 
-use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::{GapRange, Location, TargetOffset, VirtualLocation}, line_indexer::{IndexedLog, LogLocation}}, LogLine};
+use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::{GapRange, Location, TargetOffset, VirtualLocation}, line_indexer::{IndexedLog, LogLocation, LineOption}}, LogLine};
+use std::time::{Duration, Instant};
 
 
 pub struct FilteredLog<LOG> {
@@ -38,29 +39,32 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     //  The log has no lines between here and the next gap
     //  The log has at least one line covering this location
     // We must resolve the gap in the log if it exists. Then our pos will resolve to a non-gap.
-    fn index_chunk(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+    fn index_chunk(&mut self, pos: &mut LogLocation) -> LineOption {
         use Location::*;
         assert!(pos.tracker.is_gap());
         let seek = pos.tracker.gap_to_target();
         let offset = seek.offset();
 
-        let mut cursor = LogLocation { range: offset..offset, tracker: Virtual(seek) };
-        loop {
-            if let Some(line) = self.log.next(&mut cursor) {
+        let mut cursor = LogLocation { range: offset..offset, tracker: Virtual(seek), timeout: pos.timeout.clone() };
+        while !pos.elapsed() {
+            let line = self.log.next(&mut cursor);
+            if line.is_some()  {
+                let line = line.unwrap();
                 pos.tracker = self.filter.eval(&pos.tracker, &cursor.range, &line);
                 if !pos.tracker.is_gap() {
-                    return Some(line);
+                    return LineOption::Line(line);
                 }
             } else {
                 // End of file
                 pos.tracker = Location::Invalid;
-                return None;
+                return LineOption::None;
             }
         }
+        LineOption::Checkpoint
     }
 
     // fill in any gaps by parsing data from the file when needed
-    fn resolve_location_filtered(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+    fn resolve_location_filtered(&mut self, pos: &mut LogLocation) -> LineOption {
         // Resolve the location in our filtered index, first. If it's still a gap, we need to resolve it by reading
         // the log and applying the filter there until we get a hit.  This could take a while.
         // Does this need to be cancellable?
@@ -76,20 +80,25 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             if ret.is_some() {
                 pos.tracker = self.filter.next(pos.tracker);
                 return ret;
+            } else if pos.elapsed() {
+                return LineOption::Checkpoint;
             }
         }
 
         // We found a region we've seen before.  Read the log line and return it.
         let next = self.filter.next(pos.tracker);
-        self.log.read_line(pos, next)
-        // FIXME: Could it be an empty index?  In that case, we'll return None here.  Will that confuse the caller into thinking this is the end?
+        if let Some(line) = self.log.read_line(pos, next) {
+            LineOption::Line(line)
+        } else {
+            LineOption::Checkpoint
+        }
     }
 }
 
 // Navigation
 impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
-    fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+    fn next(&mut self, pos: &mut LogLocation) -> LineOption {
         self.resolve_location_filtered(pos)
     }
 

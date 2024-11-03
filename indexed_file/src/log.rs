@@ -2,7 +2,7 @@ use crate::indexer::eventual_index::Location;
 use crate::time_stamper::TimeStamper;
 use crate::LogLine;
 use std::path::PathBuf;
-use crate::indexer::line_indexer::{IndexedLog, LineIndexer, LogLocation};
+use crate::indexer::line_indexer::{IndexedLog, LineIndexer, LineOption, LogLocation};
 
 use crate::files::{LogBase, LogSource, new_text_file};
 
@@ -67,7 +67,7 @@ impl Log {
 impl IndexedLog for Log {
 
     #[inline]
-    fn next(&mut self, pos: &mut LogLocation) -> Option<LogLine> {
+    fn next(&mut self, pos: &mut LogLocation) -> LineOption {
         self.file.next(pos)
     }
 

@@ -58,7 +58,7 @@ mod filtered_log_iterator_tests {
 
     use crate::filtered_log_iterator_helper::{new, Harness};
     use indexed_file::index_filter::SearchType;
-    use indexed_file::{LineIndexerDataIterator, Log};
+    use indexed_file::{IndexedLog, LineIndexerDataIterator, Log};
     use regex::Regex;
 
     #[test]
@@ -293,6 +293,18 @@ mod filtered_log_iterator_tests {
         }
         assert_eq!(harness.lines, lineset.len());
         assert_eq!(count, harness.lines);
+    }
+
+    #[test]
+    fn test_iterator_timeout() {
+        let (_harness, mut file) = Harness::default();
+        file.search_regex("000").unwrap();
+
+        let mut pos = file.seek(0).set_timeout(0);
+        assert!(file.next(&mut pos).is_checkpoint());
+
+        let mut pos = file.seek(0);
+        assert!(file.next(&mut pos).is_some());
     }
 
     #[test]
