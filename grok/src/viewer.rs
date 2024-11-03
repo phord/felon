@@ -35,6 +35,10 @@ impl Viewer {
     }
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
+
+        // HACK
+        self.doc.fill_gaps();
+
         self.display.refresh_screen(&mut self.doc)?;
         self.status.refresh_screen(&mut self.doc)?;
 

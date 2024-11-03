@@ -84,6 +84,10 @@ impl IndexedLog for Log {
         self.file.indexed_bytes()
     }
 
+    fn find_gap(&mut self) -> LogLocation {
+        self.file.find_gap()
+    }
+
     #[inline]
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
         self.file.read_line(pos, next_pos)

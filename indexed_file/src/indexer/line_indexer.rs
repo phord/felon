@@ -92,6 +92,8 @@ pub trait IndexedLog {
         }
     }
 
+    fn find_gap(&mut self) -> LogLocation ;
+
     // Read the line at pos, if any, and return the iterator results and the new cursor
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine>;
 
@@ -263,6 +265,11 @@ impl<LOG: LogFile> IndexedLog for LineIndexer<LOG> {
     #[inline]
     fn len(&self) -> usize {
         self.source.len()
+    }
+
+    fn find_gap(&mut self) -> LogLocation {
+        let pos = self.index.find_gap(self.len());
+        LogLocation { range: (0..0), tracker: pos, timeout: None}
     }
 
     fn indexed_bytes(&self) -> usize {

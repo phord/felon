@@ -390,6 +390,34 @@ impl EventualIndex {
         }
     }
 
+    // Find any gap in our index
+    pub fn find_gap(&mut self, eof: usize) -> Location {
+        let mut prev_end = 0;
+        for (i, index) in self.indexes.iter().enumerate() {
+            if index.start > prev_end {
+                return Location::Gap(
+                    GapRange { target: TargetOffset::AtOrAfter(prev_end),
+                                index: i,
+                                gap: Missing::Bounded(prev_end, index.start) });
+            }
+            prev_end = index.end;
+        }
+        if self.indexes.is_empty() {
+            Location::Gap(GapRange { target: TargetOffset::AtOrAfter(0), index: 0, gap: Missing::Unbounded(0) })
+        } else {
+            let end = self.indexes.last().unwrap().end;
+            if end >= eof {
+                Location::Invalid
+            } else {
+                Location::Gap(
+                    GapRange { target: TargetOffset::AtOrAfter(end),
+                                index: self.indexes.len(),
+                                gap: Missing::Unbounded(end) }
+                )
+            }
+        }
+    }
+
     // Count the size of the indexed regions
     pub fn indexed_bytes(&self) -> usize {
         self.indexes.iter().fold(0, |a, v| a + v.bytes())

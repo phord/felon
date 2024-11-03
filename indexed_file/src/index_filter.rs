@@ -77,4 +77,7 @@ impl IndexFilter {
         self.index.indexed_bytes()
     }
 
+    pub fn find_gap(&mut self, eof: usize) -> Location {
+        self.index.find_gap(eof)
+    }
 }

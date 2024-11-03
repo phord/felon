@@ -62,6 +62,20 @@ impl Document {
         self.log.indexed_bytes()
     }
 
+    pub fn fill_gaps(&mut self) {
+        let mut pos = self.log.find_gap().set_timeout(10);
+        if !pos.tracker.is_gap() {
+            log::trace!("No gap found!");
+        } else {
+            let mut count = 0;
+            while !pos.elapsed() {
+                self.log.next(&mut pos);
+                count += 1;
+            }
+            log::trace!("Filled {} gap lines", count);
+        }
+    }
+
     pub fn line_colors(&self, line: &str) -> StyledLine {
         // FIXME: Doesn't need &self
 

@@ -1,7 +1,6 @@
 use regex::Regex;
 
 use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::{GapRange, Location, TargetOffset, VirtualLocation}, line_indexer::{IndexedLog, LogLocation, LineOption}}, LogLine};
-use std::time::{Duration, Instant};
 
 
 pub struct FilteredLog<LOG> {
@@ -105,6 +104,11 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
     fn len(&self) -> usize {
         self.log.len()
+    }
+
+    fn find_gap(&mut self) -> LogLocation {
+        let pos = self.filter.find_gap(self.len());
+        LogLocation { range: (0..0), tracker: pos, timeout: None}
     }
 
     // Count the size of the indexed regions
