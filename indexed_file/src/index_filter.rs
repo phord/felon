@@ -13,12 +13,18 @@ use crate::{indexer::eventual_index::{EventualIndex, Location}, LogLine};
  #[derive(Debug)]
 pub enum SearchType {
     Regex(Regex),
+    Raw(String),
     Bookmark,
     None,
 }
 
 pub struct IndexFilter {
     f: SearchType,
+
+    /// Filter in (true) or out (false)
+    include: bool,
+
+    /// Memoized index of matching lines
     index: EventualIndex,
 }
 
@@ -26,6 +32,7 @@ pub struct IndexFilter {
 fn is_match_type(line: &str, typ: &SearchType) -> bool {
     match typ {
         SearchType::Regex(re) => re.is_match(line),
+        SearchType::Raw(s) => line.contains(s),
         SearchType::None => true,
         _ => { todo!("Unimplemented search type"); false},
     }
@@ -37,18 +44,30 @@ fn trim_newline(line: &str) -> &str {
     line.strip_suffix("\n").unwrap_or(line)
 }
 
+impl Default for IndexFilter {
+    fn default() -> Self {
+        Self::new(SearchType::None, true)
+    }
+}
+
 impl IndexFilter {
-    pub fn new(f: SearchType) -> Self {
+    pub fn new(f: SearchType, include: bool) -> Self {
         IndexFilter {
             f,
+            include,
             index: EventualIndex::new(),
         }
+    }
+
+    #[inline]
+    fn is_match(&self, line: &str) -> bool {
+        is_match_type(line, &self.f) ^ (!self.include)
     }
 
     // Evaluate a new line for inclusion in the index
     // returns the next gap or the indexed line, if it matched
     pub fn eval(&mut self, gap: &Location, range: &std::ops::Range<usize>, line: &LogLine) -> Location {
-        let found = if is_match_type(trim_newline(line.line.as_str()), &self.f) {
+        let found = if self.is_match(trim_newline(line.line.as_str())) {
             Some(line.offset)
         } else { None };
 

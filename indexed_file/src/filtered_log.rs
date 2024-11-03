@@ -11,25 +11,25 @@ pub struct FilteredLog<LOG> {
 impl<LOG: IndexedLog> FilteredLog<LOG> {
     pub fn new(log: LOG) -> Self {
         Self {
-            filter: IndexFilter::new(SearchType::None),
+            filter: IndexFilter::default(),
             log,
         }
     }
 
     /// Apply a new search to the filter
     /// Invalidates old results
-    pub fn search(&mut self, search: SearchType) {
+    pub fn search(&mut self, search: SearchType, include: bool) {
         // TODO: if search != self.filter.f {
-        self.filter = IndexFilter::new(search);
+        self.filter = IndexFilter::new(search, include);
     }
 
     /// Apply a new regex search expression to the filter
     /// Invalidates old results
     pub fn search_regex(&mut self, re: &str) -> Result<(), regex::Error> {
         if re.is_empty() {
-            self.search(SearchType::None);
+            self.search(SearchType::None, true);
         } else {
-            self.search(SearchType::Regex(Regex::new(re)?));
+            self.search(SearchType::Regex(Regex::new(re)?), true);
         }
         Ok(())
     }
