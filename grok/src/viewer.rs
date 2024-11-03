@@ -36,13 +36,18 @@ impl Viewer {
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
 
-        // HACK
-        self.doc.fill_gaps();
+        // FIXME: auto-adjust fill_timeout down when events received and up when idle
+        let fill_timeout = 40;
+        let event_timeout = if self.doc.fill_gaps(fill_timeout) {
+            0
+        } else {
+            500
+        };
 
         self.display.refresh_screen(&mut self.doc)?;
         self.status.refresh_screen(&mut self.doc)?;
 
-        let cmd = self.input.get_command()?;
+        let cmd = self.input.get_command(event_timeout)?;
         match cmd {
             UserCommand::None => {},
             _ => {  log::trace!("Got command: {:?}", cmd); }

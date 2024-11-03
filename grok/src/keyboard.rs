@@ -294,10 +294,11 @@ impl Reader {
         }
     }
 
-    fn get_command(&self) -> crossterm::Result<UserCommand> {
+    fn get_command(&self, timeout: u64) -> crossterm::Result<UserCommand> {
         loop {
-            if event::poll(Duration::from_millis(500))? {
-
+            if !event::poll(Duration::from_millis(timeout))? {
+                return Ok(UserCommand::None);
+            } else {
                 match event::read()? {
                     Event::Key(event) => {
                         return match self.keymap.get(&event) {
@@ -378,10 +379,10 @@ impl Input {
         Ok(())
     }
 
-    pub fn get_command(&mut self) -> crossterm::Result<UserCommand> {
+    pub fn get_command(&mut self, timeout: u64) -> crossterm::Result<UserCommand> {
         self.start()?;
 
         // TODO: Different keymaps for different modes. user-input, scrolling, etc.
-        self.reader.get_command()
+        self.reader.get_command(timeout)
     }
 }

@@ -62,10 +62,12 @@ impl Document {
         self.log.indexed_bytes()
     }
 
-    pub fn fill_gaps(&mut self) {
-        let mut pos = self.log.find_gap().set_timeout(10);
+    /// Index more of the file in the background.
+    /// Returns true if more lines were indexed.
+    pub fn fill_gaps(&mut self, timeout: u64) -> bool {
+        let mut pos = self.log.find_gap().set_timeout(timeout);
         if !pos.tracker.is_gap() {
-            log::trace!("No gap found!");
+            false
         } else {
             let mut count = 0;
             while !pos.elapsed() {
@@ -73,6 +75,7 @@ impl Document {
                 count += 1;
             }
             log::trace!("Filled {} gap lines", count);
+            true
         }
     }
 
