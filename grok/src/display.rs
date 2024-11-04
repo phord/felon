@@ -592,12 +592,12 @@ impl Display {
                     }
                     ScrollAction::StartOfFile(line) => {
                         // Scroll to top
-                        log::trace!("scroll to top");
+                        log::trace!("scroll to top: line {line}");
                         Scroll::goto_top(0, view_height + line.saturating_sub(1))
                     }
                     ScrollAction::EndOfFile(line) => {
                         // Scroll to bottom
-                        log::trace!("scroll to bottom");
+                        log::trace!("scroll to bottom: line -{line}");
                         Scroll::goto_bottom(usize::MAX, view_height + line.saturating_sub(1))
                     }
                     ScrollAction::Up(len) => {
