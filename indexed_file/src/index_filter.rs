@@ -66,12 +66,12 @@ impl IndexFilter {
 
     // Evaluate a new line for inclusion in the index
     // returns the next gap or the indexed line, if it matched
-    pub fn eval(&mut self, gap: &Location, range: &std::ops::Range<usize>, line: &LogLine) -> Location {
+    pub fn eval(&mut self, gap: &Location, range: &std::ops::Range<usize>, line: &LogLine) -> (Location, bool) {
         let found = if self.is_match(trim_newline(line.line.as_str())) {
             Some(line.offset)
         } else { None };
 
-        self.index.insert(gap, range, found)
+        ( self.index.insert(gap, range, found), found.is_some())
     }
 
     // Resolve any virtuals into gaps or indexed

@@ -34,10 +34,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         Ok(())
     }
 
-    // We have a gap in the index. One of the following is true:
-    //  The log has no lines between here and the next gap
-    //  The log has at least one line covering this location
-    // We must resolve the gap in the log if it exists. Then our pos will resolve to a non-gap.
+    // We have a gap in the index. Iterate lines from the origin and evaluate each against our filter.
     fn index_chunk(&mut self, pos: &mut LogLocation) -> LineOption {
         use Location::*;
         assert!(pos.tracker.is_gap());
@@ -49,9 +46,13 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             let line = self.log.next(&mut cursor);
             if line.is_some()  {
                 let line = line.unwrap();
-                pos.tracker = self.filter.eval(&pos.tracker, &cursor.range, &line);
-                if !pos.tracker.is_gap() {
+                let (loc, matched) = self.filter.eval(&pos.tracker, &cursor.range, &line);
+                pos.tracker = loc;
+                if matched {
                     return LineOption::Line(line);
+                } else if !pos.tracker.is_gap() {
+                    // We finished the gap with no lines found
+                    return LineOption::Checkpoint;
                 }
             } else {
                 // End of file
@@ -65,12 +66,12 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     // fill in any gaps by parsing data from the file when needed
     fn resolve_location_filtered(&mut self, pos: &mut LogLocation) -> LineOption {
         // Resolve the location in our filtered index, first. If it's still a gap, we need to resolve it by reading
-        // the log and applying the filter there until we get a hit.  This could take a while.
-        // Does this need to be cancellable?
+        // the log and applying the filter there until we get a hit.  This could take a while. LogLocation has a time
+        // limit, so we'll yield back if we can't find anything in time.
 
         pos.tracker = self.filter.resolve(pos.tracker, self.log.len());
-        // TODO: Make callers accept a gap return value. They can handle it by passing a CheckPoint up for the iterator response.
-        // Then only try once to resolve the gaps here.
+        // TODO: Let the inner filter return a checkpoint if it's ever going to read from disk twice. We can choose
+        // to checkpoint there to limit our forward search in case other work is being done.
 
         // Resolve gaps
         while pos.tracker.is_gap() {
