@@ -52,13 +52,13 @@ impl ReadBuffer {
     }
 
     pub(crate) fn extend(&mut self, data: Vec<u8>, pos: u64) {
-        if self.buffer.is_empty() {
+        if self.buffer.is_empty() || self.end() != pos{
+            // TODO: handle overlap case when pos < self.end()?
             self.buffer = data;
             self.start_offset = pos;
             self.consumed = 0;
         } else {
-            assert!((self.start()..=self.end()).contains(&pos));
-            // TODO: handle overlap case when pos < self.end()?
+            // assert!((self.start()..=self.end()).contains(&pos));
             self.buffer.extend(data);
         }
     }
