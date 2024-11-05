@@ -13,6 +13,7 @@ pub struct Viewer {
     filter: Search,
     input: Input,
     doc: Document,
+    fill_timeout: u64,
 }
 
 impl Viewer {
@@ -26,6 +27,7 @@ impl Viewer {
             filter: Search::new(&config),
             input: Input::new(),
             doc,
+            fill_timeout: 0,
         }
     }
 
@@ -36,21 +38,24 @@ impl Viewer {
 
     pub fn run(&mut self) -> crossterm::Result<bool> {
 
-        // FIXME: auto-adjust fill_timeout down when events received and up when idle
-        let fill_timeout = 40;
-        let event_timeout = if self.doc.fill_gaps(fill_timeout) {
-            0
-        } else {
-            500
-        };
+        let event_timeout =
+            if self.fill_timeout < 40 {
+                if self.fill_timeout > 0 && self.doc.fill_gaps(self.fill_timeout) {
+                    0
+                } else {
+                    500
+                }
+            } else {
+                0
+            };
 
         self.display.refresh_screen(&mut self.doc)?;
         self.status.refresh_screen(&mut self.doc)?;
 
         let cmd = self.input.get_command(event_timeout)?;
         match cmd {
-            UserCommand::None => {},
-            _ => {  log::trace!("Got command: {:?}", cmd); }
+            UserCommand::None => { self.fill_timeout += 3; },
+            _ => {  self.fill_timeout = 0; log::trace!("Got command: {:?}", cmd); }
         };
 
         match cmd {
