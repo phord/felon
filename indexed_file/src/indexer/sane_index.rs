@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
+use std::io::BufRead;
 
 
 /// SaneIndex
@@ -209,6 +210,37 @@ impl SaneIndex {
                 self.index.range(Waypoint::Mapped(range.start)..Waypoint::Mapped(range.end))
             }
         }
+    }
+
+    // Parse lines from a BufRead
+    pub fn parse_bufread<R: BufRead>(&mut self, source: &mut R, offset: usize, len: usize) -> std::io::Result<usize> {
+        /* Alternative:
+            let mut pos = offset;
+            let newlines = source.lines()
+                .map(|x| { pos += x.len() + 1; pos });
+            self.line_offsets.extend(newlines);
+            */
+        let mut pos = offset;
+        let end = offset + len;
+        while pos < end {
+            let bytes =
+                match source.fill_buf() {
+                    Ok(buf) => {
+                        if buf.is_empty() {
+                            break       // EOF
+                        }
+                        let len = buf.len().min(end - pos);
+                        self.parse_chunk(pos, &buf[..len]);
+                        len
+                    },
+                    Err(e) => {
+                        return std::io::Result::Err(e)
+                    },
+                };
+            pos += bytes;
+            source.consume(bytes);
+        }
+        Ok(pos - offset)
     }
 
     pub fn parse_chunk(&mut self, offset: usize, chunk: &[u8]) {
