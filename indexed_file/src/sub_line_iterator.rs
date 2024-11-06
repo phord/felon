@@ -1,7 +1,7 @@
 
 // Params that control how we will iterate across the log file
 
-use crate::{indexer::line_indexer::IndexedLog, LineIndexerDataIterator, LogLine};
+use crate::{indexer::IndexedLog, LineIndexerDataIterator, LogLine};
 
 #[derive(Clone, Copy)]
 pub enum LineViewMode{

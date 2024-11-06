@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::Location, line_indexer::{IndexedLog, LogLocation, LineOption}}, LogLine};
+use crate::{index_filter::{IndexFilter, SearchType}, indexer::{eventual_index::Location, IndexedLog, LogLocation, LineOption}, LogLine};
 
 /// Applies an IndexFilter to an IndexedLog to make a filtered IndexLog that can iterate lines after applying the filter.
 pub struct FilteredLog<LOG> {
