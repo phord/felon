@@ -1,7 +1,7 @@
 // Wrapper to discover and iterate log lines from a LogFile while memoizing parsed line offsets
 
 use std::fmt;
-use std::io::SeekFrom;
+use std::io::{Seek, SeekFrom};
 use crate::files::LogFile;
 use crate::indexer::eventual_index::{Location, GapRange, Missing::{Bounded, Unbounded}};
 use crate::LogLine;
@@ -14,6 +14,7 @@ pub struct SaneIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
     index: SaneIndex,
+    pos: u64,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -29,6 +30,7 @@ impl<LOG> SaneIndexer<LOG> {
         Self {
             source: file,
             index: SaneIndex::new(),
+            pos: 0,
         }
     }
 }
@@ -43,7 +45,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     #[inline]
     fn resolve_location(&mut self, pos: &mut LogLocation) {
         // Resolve any virtuals into gaps or indexed
-        pos.tracker = self.index.resolve(pos.tracker, self.len());
+        // pos.tracker = self.index.resolve(pos.tracker, self.len());
 
         // Resolve gaps
         for _ in 0..10 {
@@ -54,7 +56,14 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     }
 }
 
+impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        todo!("self.index.seek(pos)");
+    }
+}
+
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
+
 
     fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
         if pos.tracker.is_invalid() {
@@ -94,12 +103,12 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         if pos.elapsed() {
             LineOption::Checkpoint
         } else {
-            let next = self.index.next(pos.tracker);
-            if let Some(line) = self.read_line(pos, next) {
-                LineOption::Line(line)
-            } else {
+            // let next = self.index.next(pos.tracker);
+            // if let Some(line) = self.read_line(pos, next) {
+            //     LineOption::Line(line)
+            // } else {
                 LineOption::None
-            }
+            // }
         }
     }
 
@@ -154,8 +163,8 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
 
             // Send the buffer to the parsers
             self.source.seek(SeekFrom::Start(start as u64)).expect("Seek does not fail");
-            self.index.parse_bufread(&mut self.source, start, end - start).expect("Ignore read errors");
-            Location::Virtual::new(offset)
+            self.index.parse_bufread(&mut self.source, &(start..end)).expect("Ignore read errors");
+            Location::Invalid // FIXME
         }
     }
 

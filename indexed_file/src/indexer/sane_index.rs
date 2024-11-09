@@ -1,6 +1,6 @@
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::io::BufRead;
+use super::waypoint::Waypoint;
 
 
 /// SaneIndex
@@ -33,35 +33,6 @@ use std::io::BufRead;
 const IMAX:usize = usize::MAX;
 type Range = std::ops::Range<usize>;
 
-// struct Range {
-//     start: usize,
-//     end: usize,
-// }
-
-pub struct SaneIndex {
-    index: BTreeSet<Waypoint>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Waypoint {
-    /// The start of a line; e.g., first line starts at 0
-    Mapped(usize),
-
-    /// An uncharted region; beware of index shift. if we find \n at 0, the next line starts at 1.
-    /// Range bytes we have to search is in [start, end)
-    /// Range of Mapped we may discover is in (start, end]
-    Unmapped(Range),
-}
-
-impl Clone for Waypoint {
-    fn clone(&self) -> Self {
-        match self {
-            Waypoint::Mapped(offset) => Waypoint::Mapped(*offset),
-            Waypoint::Unmapped(range) => Waypoint::Unmapped(range.clone()),
-        }
-    }
-}
-
 /// Region of the index and direction we are searching
 /// The range is start-inclusive, end-exclusive
 pub enum Search {
@@ -69,73 +40,9 @@ pub enum Search {
     Backward(Range),
 }
 
-impl Waypoint {
-    pub fn cmp_offset(&self) -> usize {
-        match self {
-            Waypoint::Mapped(offset) => *offset,
-            Waypoint::Unmapped(range) => range.start + 1,
-        }
-    }
 
-    pub fn contains(&self, offset: usize) -> bool {
-        match self {
-            Waypoint::Mapped(mapped) => offset == *mapped,
-            Waypoint::Unmapped(range) => range.contains(&offset),
-        }
-    }
-
-    pub fn is_mapped(&self) -> bool {
-        matches!(self, Waypoint::Mapped(_))
-    }
-
-    fn split_at(&self, offset: usize) -> (Option<Waypoint>, Option<Waypoint>) {
-        match self {
-            Waypoint::Mapped(_) => unreachable!(),
-            Waypoint::Unmapped(range) => {
-                let left = if range.start < offset  {
-                    Some(Waypoint::Unmapped(range.start..offset.min(range.end)))
-                } else {
-                    None
-                };
-                let right = if range.end > offset {
-                    Some(Waypoint::Unmapped(offset.max(range.start)..range.end))
-                } else {
-                    None
-                };
-                (left, right)
-            }
-        }
-    }
-}
-
-
-impl Ord for Waypoint {
-    // unmapped regions are sorted relative to their start offset
-    fn cmp(&self, other: &Self) -> Ordering {
-        let this = self.cmp_offset().cmp(&other.cmp_offset());
-        match this {
-            Ordering::Equal => {
-                // If the offsets are equal, sort mapped before unmapped
-                match self {
-                    Waypoint::Mapped(_) => match other {
-                        Waypoint::Mapped(_) => Ordering::Equal,
-                        _ => Ordering::Less,
-                    },
-                    Waypoint::Unmapped(range) =>  match other {
-                        Waypoint::Unmapped(other_range) => range.end.cmp(&other_range.end),
-                        _ => Ordering::Greater,
-                    }
-                }
-            }
-            _ => this,
-        }
-    }
-}
-
-impl PartialOrd for Waypoint {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
+pub struct SaneIndex {
+    pub(crate) index: BTreeSet<Waypoint>,
 }
 
 impl Default for SaneIndex {
@@ -152,6 +59,7 @@ impl SaneIndex {
     }
 
     fn find_colliding_gap(&self, range: &Range) -> Option<&Waypoint> {
+        // TODO: Replace this with a btree_cursor when it is stable
         let frontier0 = self.index
                 .range(Waypoint::Mapped(0)..Waypoint::Mapped(range.end + 1))
                 .rev()
@@ -213,15 +121,15 @@ impl SaneIndex {
     }
 
     // Parse lines from a BufRead
-    pub fn parse_bufread<R: BufRead>(&mut self, source: &mut R, offset: usize, len: usize) -> std::io::Result<usize> {
-        /* Alternative:
+    pub fn parse_bufread<R: BufRead>(&mut self, source: &mut R, range: &Range) -> std::io::Result<usize> {
+        /* We want to do this, except it takes ownership of the source:
             let mut pos = offset;
             let newlines = source.lines()
                 .map(|x| { pos += x.len() + 1; pos });
             self.line_offsets.extend(newlines);
             */
-        let mut pos = offset;
-        let end = offset + len;
+        let mut pos = range.start;
+        let end = range.end;
         while pos < end {
             let bytes =
                 match source.fill_buf() {
@@ -240,7 +148,7 @@ impl SaneIndex {
             pos += bytes;
             source.consume(bytes);
         }
-        Ok(pos - offset)
+        Ok(pos - range.start)
     }
 
     pub fn parse_chunk(&mut self, offset: usize, chunk: &[u8]) {
@@ -254,6 +162,7 @@ impl SaneIndex {
         self.insert(&offsets, offset..offset + chunk.len());
     }
 }
+
 
 #[test]
 fn sane_index_basic() {
@@ -343,5 +252,18 @@ fn sane_index_parse_chunks_random_chunks() {
     for i in cuts {
         index.parse_chunk(i.start, file[i].as_bytes());
     }
+    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+}
+
+#[test]
+fn sane_index_full_bufread() {
+    use Waypoint::*;
+
+    let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
+    let mut cursor = std::io::Cursor::new(file);
+
+    let mut index = SaneIndex::new();
+
+    index.parse_bufread(&mut cursor, &(0..100)).unwrap();
     assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }
