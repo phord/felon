@@ -1,6 +1,6 @@
 pub mod files;
-pub mod index_filter;
-pub mod filtered_log;
+// pub mod index_filter;
+// pub mod filtered_log;
 pub mod indexer;
 pub mod log;
 
@@ -10,7 +10,7 @@ pub(crate) mod time_stamper;
 
 pub use iterator::LogLine;
 pub use crate::log::Log;
-pub use crate::filtered_log::FilteredLog;
+// pub use crate::filtered_log::FilteredLog;
 
 pub use indexer::IndexedLog;
 pub use iterator::{LineIndexerDataIterator, LineIndexerIterator};

@@ -1,7 +1,6 @@
 use log::trace;
 use regex::Regex;
 
-use crate::{indexer::eventual_index::{EventualIndex, Location}, LogLine};
 
 /**
  * Basic EventualIndex that accumulates matching line offsets. Can be used for search or filter, despite the name.

@@ -37,6 +37,18 @@ LogFile Implementations:
     CursorLogFile:
         In-memory file for unit tests
 
+SaneIndex:
+    Replacement for EventualIndex that builds its index in-place as it is iterated.
+    Less modular than EventualIndex, but hopefully more sane.
+
+    SaneIndexer:
+        TBD: Combines LogSource and SaneIndex; includes multiple Index filters that are updated as-we-go.
+        Indexes: includes, excludes, searches.
+        Supports background scanning/updating with timeout.
+        Can be iterated with SaneLines.
+        Will be used by SubLineIterator to navigate and keep indexes up-to-date.
+
+
 EventualIndex:
     A memoization class that iterates lines from piecewise text and remembers their locations
     Subsequent pieces merge together so the index is eventually complete.
@@ -58,7 +70,8 @@ LineViewMode:
     Describes how a line should be displayed: whole, wrapped, or partial
 
 Log:
-    Combines LogSource + EventualIndex
+    Combines LogSource + SaneIndexer
+    Primarily an interface to open different file types as an IndexedLog
     Supports iterators that memoize the line locations as they're used.
 
 LineIndexerIterator:

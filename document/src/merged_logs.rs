@@ -9,7 +9,7 @@ use indexed_file::LogLine;
 #[cfg(test)]
 use indexed_file::files::LogBase;
 #[cfg(test)]
-use indexed_file::indexer::LineIndexer;
+use indexed_file::indexer::sane_indexer::SaneIndexer;
 
 /* Thinking:
     TODO: Need a timestamp for each log line so we can sort by timestamp and jump to time offsets.
@@ -192,7 +192,7 @@ impl MergedLogs {
 
     #[cfg(test)]
     pub fn push_logbase<L: LogBase + 'static>(&mut self, log: L) {
-        let log = Log::new(LineIndexer::new(log.to_src()));
+        let log = Log::new(SaneIndexer::new(log.to_src()));
         self.files.push(log);
     }
 
@@ -213,7 +213,7 @@ impl MergedLogs {
 #[cfg(test)]
 mod merged_logs_iterator_tests {
 
-    use indexed_file::{files::{CachedStreamReader, CursorLogFile, CursorUtil, LogBase}, indexer::LineIndexer, IndexedLog, Log};
+    use indexed_file::{files::{CachedStreamReader, CursorLogFile, CursorUtil, LogBase}, indexer::sane_indexer::SaneIndexer, IndexedLog, Log};
     use super::MergedLogs;
 
     #[test]
@@ -322,7 +322,7 @@ mod merged_logs_iterator_tests {
         let nums = (0..lines).collect();
         let nums = CursorLogFile::from_vec(nums).unwrap();
         let nums = CachedStreamReader::from_reader(nums).unwrap();
-        let mut log = Log::new(LineIndexer::new(nums.to_src()));
+        let mut log = Log::new(SaneIndexer::new(nums.to_src()));
 
         let mut it = log.iter_lines().rev();
         let mut prev = it.next().unwrap();

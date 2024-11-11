@@ -7,11 +7,11 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log, LogLine};
+use indexed_file::{files, IndexedLog, LineViewMode, Log, LogLine};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
-    log: FilteredLog<Log>,
+    log: Log,
 }
 
 impl Document {
@@ -22,7 +22,7 @@ impl Document {
     }
 
     pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {
-        self.log.search_regex(filter)
+        todo!("self.log.search_regex(filter)");
     }
 
 }
@@ -33,7 +33,7 @@ impl Document {
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         Self {
-            log: FilteredLog::new(log),
+            log,
         }
     }
 
@@ -65,18 +65,19 @@ impl Document {
     /// Index more of the file in the background.
     /// Returns true if more lines were indexed.
     pub fn fill_gaps(&mut self, timeout: u64) -> bool {
-        let mut pos = self.log.find_gap().set_timeout(timeout);
-        if !pos.tracker.is_gap() {
-            false
-        } else {
-            let mut count = 0;
-            while !pos.elapsed() {
-                self.log.next(&mut pos);
-                count += 1;
-            }
-            log::trace!("Filled {} gap lines", count);
-            true
-        }
+        todo!("gap filler");
+        // let mut pos = self.log.find_gap().set_timeout(timeout);
+        // if !pos.tracker.is_gap() {
+        //     false
+        // } else {
+        //     let mut count = 0;
+        //     while !pos.elapsed() {
+        //         self.log.next(&mut pos);
+        //         count += 1;
+        //     }
+        //     log::trace!("Filled {} gap lines", count);
+        //     true
+        // }
     }
 
     pub fn line_colors(&self, line: &str) -> StyledLine {

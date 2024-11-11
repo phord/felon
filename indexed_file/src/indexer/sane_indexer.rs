@@ -3,18 +3,18 @@
 use std::fmt;
 use std::io::{Seek, SeekFrom};
 use crate::files::LogFile;
-use crate::indexer::eventual_index::{Location, GapRange, Missing::{Bounded, Unbounded}};
 use crate::LogLine;
 
-use super::indexed_log::{IndexedLog, LineOption, LogLocation};
+use super::indexed_log::IndexedLog;
 use super::sane_index::SaneIndex;
+use super::waypoint::Waypoint;
 
 
 pub struct SaneIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
     index: SaneIndex,
-    pos: u64,
+    pos: usize,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -41,75 +41,131 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         self.source.wait_for_end()
     }
 
-    // fill in any gaps by parsing data from the file when needed
-    #[inline]
-    fn resolve_location(&mut self, pos: &mut LogLocation) {
-        // Resolve any virtuals into gaps or indexed
-        // pos.tracker = self.index.resolve(pos.tracker, self.len());
-
-        // Resolve gaps
-        for _ in 0..10 {
-            if !pos.tracker.is_gap() || pos.elapsed() { return; }
-            pos.tracker = self.index_chunk(pos.tracker);
+    fn next_line(&mut self, offset: usize) -> Option<LogLine> {
+        if offset >= self.len() {
+            return None;
         }
-        assert!(!pos.tracker.is_gap());
+        let (bytes, line) = self.read_line(offset);
+        self.pos = offset + bytes;
+        line
     }
+
+    fn prev_line(&mut self, offset: usize) -> Option<LogLine> {
+        let (_bytes, line) = self.read_line(offset);
+        self.pos = offset;
+        line
+    }
+
+    fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
+        // Parse part or all of the gap and add it to our mapped index.
+        self.source.seek(std::io::SeekFrom::Start(gap.start as u64))?;
+        self.index.parse_bufread(&mut self.source, &gap)
+    }
+
 }
 
 impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        todo!("self.index.seek(pos)");
+        match pos {
+            SeekFrom::Start(offset) => {
+                self.pos = offset as usize;
+                self.source.seek(SeekFrom::Start(offset))
+            },
+            SeekFrom::End(offset) => {
+                self.pos = (self.source.len() as i64 - offset) as usize;
+                self.source.seek(SeekFrom::End(offset))
+            },
+            SeekFrom::Current(offset) => {
+                self.pos = (self.pos as i64 + offset) as usize;
+                self.source.seek(SeekFrom::Current(offset))
+            },
+        }
     }
 }
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
-
-    fn read_line(&mut self, pos: &mut LogLocation, next_pos: Location) -> Option<LogLine> {
-        if pos.tracker.is_invalid() {
-            return None;
-        }
-        let origin = pos.tracker.offset().min(self.source.len());
-        if origin >= self.source.len() {
-            pos.tracker = Location::Invalid;
-            return None;
-        }
-        match pos.tracker {
-            Location::Indexed(iref) => {
-                // FIXME: return Result<...>
-                let line = self.source.read_line_at(iref.offset).unwrap();
-                let eol = iref.offset + line.len();
-                let range = if origin <= iref.offset {
-                    // Moved forwards; range is [origin, end of line)
-                    origin..eol
-                } else {
-                    // Moved backwards; range is [start of line, max(origin+1, end of line) )
-                    iref.offset..(origin + 1).max(eol)
-                };
-                let line = LogLine::new(line, iref.offset);
-                pos.range = range;
-                pos.tracker = next_pos;
-                Some(line)
-            },
-            _ => {
-                pos.tracker = next_pos;
-                None
-            },
-        }
+    fn seek(&mut self, pos: usize) -> usize {
+        self.pos = pos.min(self.len());
+        self.pos
     }
 
-    fn next(&mut self, pos: &mut LogLocation) -> LineOption {
-        self.resolve_location(pos);
-        if pos.elapsed() {
-            LineOption::Checkpoint
+    fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
+        // Parse part or all of the gap and add it to our mapped index.
+        self.source.seek(std::io::SeekFrom::Start(gap.start as u64))?;
+        self.index.parse_bufread(&mut self.source, &gap)
+    }
+
+    fn read_line(&mut self, offset: usize) -> (usize, Option<LogLine>) {
+        // FIXME: Use read_line_at;  it needs to return bytes read for us, though.
+        // let line = self.source.read_line_at(offset).unwrap();
+        let mut line = String::new();
+        self.source.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
+        // FIXME: make this safe for non-utf-8 sequences?
+        let bytes = self.source.read_line(&mut line).unwrap();
+        let logline = if bytes >  0 {
+            Some(LogLine::new(line, offset))
         } else {
-            // let next = self.index.next(pos.tracker);
-            // if let Some(line) = self.read_line(pos, next) {
-            //     LineOption::Line(line)
-            // } else {
-                LineOption::None
-            // }
+            None
+        };
+        (bytes, logline)
+    }
+
+    fn next(&mut self) -> Option<LogLine> {
+        for _ in 0..5 {
+            let end = self.len();
+            let start = self.pos.min(end);
+            let mut it = self.index.index.range(Waypoint::Mapped(start)..Waypoint::Mapped(end));
+            match it.next() {
+                Some(Waypoint::Mapped(offset)) => {
+                    dbg!(offset);
+                    return self.next_line(*offset)
+                },
+                None => return None,
+                Some(Waypoint::Unmapped(range)) => {
+                    dbg!(range);
+                    if range.start >= self.len() {
+                        return None;
+                    }
+                    let start = range.start;
+                    let chunk_size = 1024*1024;
+                    let end = range.end.max(self.len()).min(start + chunk_size);
+                    // FIXME: return errors
+                    let _ = self.resolve_gap(start..end);
+                },
+            };
         }
+        unreachable!("Failed to resolve gap 5 times?");
+    }
+
+    fn next_back(&mut self) -> Option<LogLine> {
+        for _ in 0..5 {
+            let end = self.len();
+            let end = self.pos.min(end);
+            dbg!(end);
+            let mut it = self.index.index.range(Waypoint::Mapped(0)..Waypoint::Mapped(end)).rev();
+            match it.next() {
+                Some(Waypoint::Mapped(offset)) => {
+                    dbg!(offset);
+                    return self.prev_line(*offset)
+                },
+                None => return None,
+                Some(Waypoint::Unmapped(range)) => {
+                    dbg!(range);
+                    if range.start >= self.len() {
+                        self.pos = self.len() - 1;
+                        continue;
+                    }
+                    let start = range.start.min(self.len());
+                    let end = range.end.min(self.len());
+                    let chunk_size = 1024*1024;
+                    let start = start.max(end.saturating_sub(chunk_size));
+                    // FIXME: return errors
+                    let _ = self.resolve_gap(start..end);
+                },
+            }
+        }
+        unreachable!("Failed to resolve gap 5 times?");
     }
 
     #[inline]
@@ -118,58 +174,20 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn indexed_bytes(&self) -> usize {
-        todo!("self.index.indexed_bytes()");
+        let mut end = 0usize;
+        self.index.index.iter()
+            .filter(|w| matches!(w, Waypoint::Unmapped(_)))
+            .fold(0usize, |acc, w| {
+                if let Waypoint::Unmapped(range) = w {
+                    let prev = end;
+                    end = range.end;
+                    acc + range.start - prev
+                } else { unreachable!()}
+            })
     }
 
     fn count_lines(&self) -> usize {
-        todo!("self.index.count_lines()");
+        self.index.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count()
     }
 
-    fn find_gap(&mut self) -> LogLocation  {
-        todo!()
-    }
-
-}
-
-
-impl<LOG: LogFile> SaneIndexer<LOG> {
-
-    // Index a chunk of file at some gap location. May index only part of the gap.
-    fn index_chunk(&mut self, gap: Location) -> Location {
-        // Quench the file in case new data has arrived
-        self.source.quench();
-
-        let (target, start, end) = match gap {
-            Location::Gap(GapRange { target, index: _, gap: Bounded(start, end) }) => (target, start, end.min(self.len())),
-            Location::Gap(GapRange { target, index: _, gap: Unbounded(start) }) => (target, start, self.len()),
-            _ => panic!("Tried to index something which is not a gap: {:?}", gap),
-        };
-
-        // Offset near where we think we want to read; snapped to gap.
-        let offset = target.value().max(start).min(end);
-        assert!(start <= offset);
-        assert!(end <= self.len());
-
-        if start >= end {
-            // End of file
-            Location::Invalid
-        } else {
-            let (chunk_start, chunk_end) = self.source.chunk(offset);
-            let start = start.max(chunk_start);
-            let end = end.min(chunk_end);
-
-            assert!(start <= offset);
-            assert!(offset <= end);
-
-            // Send the buffer to the parsers
-            self.source.seek(SeekFrom::Start(start as u64)).expect("Seek does not fail");
-            self.index.parse_bufread(&mut self.source, &(start..end)).expect("Ignore read errors");
-            Location::Invalid // FIXME
-        }
-    }
-
-
-    pub fn count_lines(&self) -> usize {
-        todo!("self.index.lines()")
-    }
 }

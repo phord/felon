@@ -1,4 +1,4 @@
-
+/* Temporarily disable this file
 
 #[cfg(test)]
 mod filtered_log_iterator_helper {
@@ -408,3 +408,5 @@ mod filtered_log_iterator_tests {
         assert_eq!(count, 0, "No lines iterable after out-of-range");
      }
 }
+
+     */

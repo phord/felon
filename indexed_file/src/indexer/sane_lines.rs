@@ -1,110 +1,32 @@
 /// SaneLines combines a SaneIndex with a LogFile to provide an iterator over lines in a log file.
-/// It's only an index.
 
-use crate::files::LogFile;
+use crate::{indexer::{sane_index::SaneIndex, sane_indexer::SaneIndexer}, Log, LogLine};
 
-use super::{sane_index::SaneIndex, waypoint::Waypoint};
+use super::IndexedLog;
 
-type Range = std::ops::Range<usize>;
-
-struct SaneLines<'a, R: LogFile> {
-    index: &'a mut SaneIndex,
-    source: &'a mut R,
-    range: Range,
+pub struct SaneLines<'a, R> {
+    indexer: &'a mut R,
 }
 
-impl<'a, R: LogFile> SaneLines<'a, R> {
-    pub fn new(index: &'a mut SaneIndex, source: &'a mut R, range: Range) -> Self {
+impl<'a, R: IndexedLog> SaneLines<'a, R> {
+    pub fn new(indexer: &'a mut R) -> Self {
         SaneLines {
-            index,
-            source,
-            range,
+            indexer,
         }
     }
-
-    fn resolve_gap(&mut self, gap: Range) -> std::io::Result<usize> {
-        // Parse part or all of the gap and add it to our mapped index.
-        self.source.seek(std::io::SeekFrom::Start(gap.start as u64))?;
-        self.index.parse_bufread(self.source, &gap)
-    }
-
-    fn read_line(&mut self, offset: usize) -> (usize, Option<(usize, String)>) {
-        let mut line = String::new();
-        self.source.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
-        // FIXME: make this safe for non-utf-8 sequences?
-        let bytes = self.source.read_line(&mut line).unwrap();
-        let logline = if bytes >  0 {
-            Some((offset, line))
-        } else {
-            None
-        };
-        (bytes, logline)
-    }
-
-    fn next_line(&mut self, offset: usize) -> Option<(usize, String)> {
-        let (bytes, line) = self.read_line(offset);
-        self.range.start = offset + bytes;
-        line
-    }
-
-    fn prev_line(&mut self, offset: usize) -> Option<(usize, String)> {
-        let (bytes, line) = self.read_line(offset);
-        self.range.end = offset;
-        line
-    }
 }
 
-impl<'a, R: LogFile> Iterator for SaneLines<'a, R> {
-    type Item = (usize, String);
+impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
+    type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for _ in 0..5 {
-            let mut it = self.index.index.range(Waypoint::Mapped(self.range.start)..Waypoint::Mapped(self.range.end));
-            match it.next() {
-                Some(Waypoint::Mapped(offset)) => {
-                    return self.next_line(*offset)
-                },
-                None => return None,
-                Some(Waypoint::Unmapped(range)) => {
-                    if range.start >= self.source.len() {
-                        return None;
-                    }
-                    let start = range.start;
-                    let chunk_size = 1024*1024;
-                    let end = range.end.max(self.source.len()).min(start + chunk_size);
-                    // FIXME: return errors
-                    let _ = self.resolve_gap(start..end);
-                },
-            };
-        }
-        unreachable!();
+        self.indexer.next()
     }
 }
 
-impl<'a, R: LogFile> DoubleEndedIterator for SaneLines<'a, R> {
+impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        for _ in 0..5 {
-            let mut it = self.index.index.range(Waypoint::Mapped(self.range.start)..Waypoint::Mapped(self.range.end)).rev();
-            match it.next() {
-                Some(Waypoint::Mapped(offset)) => {
-                    return self.prev_line(*offset)
-                },
-                None => return None,
-                Some(Waypoint::Unmapped(range)) => {
-                    if range.start >= self.source.len() {
-                        self.range.end = self.source.len() - 1;
-                        continue;
-                    }
-                    let start = range.start.min(self.source.len());
-                    let end = range.end.min(self.source.len());
-                    let chunk_size = 1024*1024;
-                    let start = start.max(end.saturating_sub(chunk_size));
-                    // FIXME: return errors
-                    let _ = self.resolve_gap(start..end);
-                },
-            }
-        }
-        unreachable!();
+        self.indexer.next_back()
     }
 }
 
@@ -113,25 +35,25 @@ impl<'a, R: LogFile> DoubleEndedIterator for SaneLines<'a, R> {
 fn sane_index_iter() {
     use crate::files::CursorLogFile;
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
-
-    let log = SaneLines::new(&mut index, &mut cursor, 0..100);
-    assert_eq!(log.count(), 6);
+    let cursor = CursorLogFile::new(file.to_vec());
+    let mut log = Log::from(cursor);
+    let it = log.iter_lines();
+    assert_eq!(it.count(), 6);
 }
 
 #[test]
 fn sane_index_iter_rev() {
     use crate::files::CursorLogFile;
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
+    let cursor = CursorLogFile::new(file.to_vec());
+    let mut index = SaneIndexer::new(cursor.clone());
 
-    let log = SaneLines::new(&mut index, &mut cursor, 0..100);
+    let log = SaneLines::new(&mut index);
     let fwd = log.collect::<Vec<_>>();
 
-    let mut index = SaneIndex::new();
-    let log = SaneLines::new(&mut index, &mut cursor, 0..100);
+    let mut index = SaneIndexer::new(cursor);
+    let log = SaneLines::new(&mut index);
+    log.indexer.seek(100);
     let rev = log.rev().collect::<Vec<_>>();
     let rev = rev.into_iter().rev().collect::<Vec<_>>();
 
@@ -142,12 +64,14 @@ fn sane_index_iter_rev() {
 fn sane_index_fwd_rev() {
     use crate::files::CursorLogFile;
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
+    let cursor = CursorLogFile::new(file.to_vec());
 
-    let mut log = SaneLines::new(&mut index, &mut cursor, 0..100);
+    let mut log = Log::from(cursor);
+    let mut log = log.iter_lines();
     log.next();
     log.next();
+    // FIXME: This fails because we iterate from the same pos.  So rev() turns around from 2 and iterates backwards.
+    // Is this worth fixing?
 
     assert_eq!(log.rev().count(), 4);
 }
@@ -157,9 +81,9 @@ fn sane_index_fwd_rev() {
 fn sane_index_empty() {
     use crate::files::CursorLogFile;
     let file = b"";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
-    let mut log = SaneLines::new(&mut index, &mut cursor, 0..100);
+    let cursor = CursorLogFile::new(file.to_vec());
+    let mut log = Log::from(cursor);
+    let mut log = log.iter_lines();
     assert_eq!(log.next(), None);
 }
 
@@ -168,9 +92,9 @@ fn sane_index_empty() {
 fn sane_index_out_of_range() {
     use crate::files::CursorLogFile;
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
-    let mut log = SaneLines::new(&mut index, &mut cursor, 100..200);
+    let cursor = CursorLogFile::new(file.to_vec());
+    let mut log = Log::from(cursor);
+    let mut log = log.iter_lines_from(100);
     assert_eq!(log.next(), None);
 }
 
@@ -179,9 +103,9 @@ fn sane_index_out_of_range() {
 fn sane_index_rev_out_of_range() {
     use crate::files::CursorLogFile;
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
-    let mut log = SaneLines::new(&mut index, &mut cursor, 100..200);
+    let cursor = CursorLogFile::new(file.to_vec());
+    let mut log = Log::from(cursor);
+    let mut log = log.iter_lines_from(100);
     assert_eq!(log.next_back(), None);
 }
 
@@ -189,9 +113,9 @@ fn sane_index_rev_out_of_range() {
 fn sane_index_rev_line_zero() {
     use crate::files::CursorLogFile;
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = CursorLogFile::new(file.to_vec());
-    let mut index = SaneIndex::new();
-    let mut log = SaneLines::new(&mut index, &mut cursor, 0..5);
+    let cursor = CursorLogFile::new(file.to_vec());
+    let mut log = Log::from(cursor);
+    let mut log = log.iter_lines_from(5);
     assert!(log.next_back().is_some());
     assert!(log.next_back().is_none());
 }
