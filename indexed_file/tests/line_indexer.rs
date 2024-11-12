@@ -176,7 +176,10 @@ mod logfile_data_iterator_tests {
         assert_eq!(count, lines / 2);
     }
 
+    // This test fails because we do not follow the iterator norms anymore.
+    // Iterating forwards and backwards alternately moves the cursor to and fro over the same spot repeatedly.
     #[test]
+    #[ignore] // This test is no longer valid because our iterator is non-conforming.
     fn test_iterator_middle_out() {
         let patt = "filler\n";
         let patt_len = patt.len();

@@ -67,8 +67,8 @@ impl Log {
 impl IndexedLog for Log {
 
     /// Position log to read from given offset
-    fn seek(&mut self, pos: usize) -> usize {
-        self.file.seek(pos)
+    fn seek(&mut self, pos: Option<usize>) {
+        self.file.seek(pos);
     }
 
     #[inline]
