@@ -58,6 +58,36 @@ impl SaneIndex {
         Self::default()
     }
 
+    /// Find the first waypoint at or after the offset.
+    /// It could be a Mapped point or an Unmapped region.
+    /// If both a mapped point and a region exist, the mapped point is returned.
+    pub(crate) fn find_at_or_after(&self, offset: usize) -> Option<&Waypoint> {
+        // TODO: Replace this with a btree_cursor when it is stable
+        // For now, we have to search twice; first to find an unmapped predecessor, then to find the successor if the predecessor is not a match.
+        let unmapped = self.find_before(offset);
+        if let Some(unmapped) = unmapped {
+            if unmapped.contains(offset) {
+                return Some(unmapped);
+            }
+        }
+        self.index
+                .range(Waypoint::Mapped(offset)..)
+                .take(1)
+                .next()
+    }
+
+    /// Find the first waypoint before the offset.
+    /// It could be a Mapped point or an Unmapped region.
+    /// If both a mapped point and a region exist, the unmapped region is returned.
+    pub(crate) fn find_before(&self, offset: usize) -> Option<&Waypoint> {
+        // TODO: Replace this with a btree_cursor when it is stable
+        self.index
+                .range(..Waypoint::Mapped(offset))
+                .rev()
+                .take(1)
+                .next()
+    }
+
     fn find_colliding_gap(&self, range: &Range) -> Option<&Waypoint> {
         // TODO: Replace this with a btree_cursor when it is stable
         let frontier0 = self.index

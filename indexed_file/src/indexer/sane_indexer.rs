@@ -14,7 +14,10 @@ pub struct SaneIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
     index: SaneIndex,
-    pos: usize,
+
+    // File position if it was set or implied.
+    // If not set, it's zero for next, eof for next_back.
+    pos: Option<usize>,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -30,8 +33,12 @@ impl<LOG> SaneIndexer<LOG> {
         Self {
             source: file,
             index: SaneIndex::new(),
-            pos: 0,
+            pos: None,
         }
+    }
+
+    fn get_pos(&self, def: usize) -> usize {
+        self.pos.unwrap_or(def)
     }
 }
 
@@ -46,13 +53,13 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
             return None;
         }
         let (bytes, line) = self.read_line(offset);
-        self.pos = offset + bytes;
+        self.pos = Some(offset + bytes);
         line
     }
 
     fn prev_line(&mut self, offset: usize) -> Option<LogLine> {
         let (_bytes, line) = self.read_line(offset);
-        self.pos = offset;
+        self.pos = Some(offset);
         line
     }
 
@@ -68,15 +75,15 @@ impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         match pos {
             SeekFrom::Start(offset) => {
-                self.pos = offset as usize;
+                self.pos = Some(offset as usize);
                 self.source.seek(SeekFrom::Start(offset))
             },
             SeekFrom::End(offset) => {
-                self.pos = (self.source.len() as i64 - offset) as usize;
+                self.pos = Some((self.source.len() as i64 - offset) as usize);
                 self.source.seek(SeekFrom::End(offset))
             },
             SeekFrom::Current(offset) => {
-                self.pos = (self.pos as i64 + offset) as usize;
+                self.pos = Some((self.get_pos(0) as i64 + offset) as usize);
                 self.source.seek(SeekFrom::Current(offset))
             },
         }
@@ -85,9 +92,8 @@ impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
-    fn seek(&mut self, pos: usize) -> usize {
-        self.pos = pos.min(self.len());
-        self.pos
+    fn seek(&mut self, pos: Option<usize>) {
+        self.pos = pos;
     }
 
     fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
@@ -114,16 +120,15 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     fn next(&mut self) -> Option<LogLine> {
         for _ in 0..5 {
             let end = self.len();
-            let start = self.pos.min(end);
-            let mut it = self.index.index.range(Waypoint::Mapped(start)..Waypoint::Mapped(end));
+            let start = self.get_pos(0).min(end);
+            let start = self.index.find_at_or_after(start)?;
+            let mut it = self.index.index.range(start..);
             match it.next() {
                 Some(Waypoint::Mapped(offset)) => {
-                    dbg!(offset);
                     return self.next_line(*offset)
                 },
                 None => return None,
                 Some(Waypoint::Unmapped(range)) => {
-                    dbg!(range);
                     if range.start >= self.len() {
                         return None;
                     }
@@ -141,19 +146,17 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     fn next_back(&mut self) -> Option<LogLine> {
         for _ in 0..5 {
             let end = self.len();
-            let end = self.pos.min(end);
-            dbg!(end);
-            let mut it = self.index.index.range(Waypoint::Mapped(0)..Waypoint::Mapped(end)).rev();
+            let end = self.get_pos(end).min(end);
+            let end = self.index.find_before(end)?;
+            let mut it = self.index.index.range(..=end).rev();
             match it.next() {
                 Some(Waypoint::Mapped(offset)) => {
-                    dbg!(offset);
                     return self.prev_line(*offset)
                 },
                 None => return None,
                 Some(Waypoint::Unmapped(range)) => {
-                    dbg!(range);
                     if range.start >= self.len() {
-                        self.pos = self.len() - 1;
+                        self.pos = Some(self.len() - 1);
                         continue;
                     }
                     let start = range.start.min(self.len());

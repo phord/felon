@@ -27,7 +27,7 @@ impl Waypoint {
     pub fn cmp_offset(&self) -> usize {
         match self {
             Waypoint::Mapped(offset) => *offset,
-            Waypoint::Unmapped(range) => range.start + 1,
+            Waypoint::Unmapped(range) => range.start,
         }
     }
 

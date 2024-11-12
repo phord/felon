@@ -8,7 +8,7 @@ pub trait IndexedLog {
     }
 
     /// Position log to read from given offset
-    fn seek(&mut self, pos: usize) -> usize;
+    fn seek(&mut self, pos: Option<usize>);
 
     // Read the line at pos, if any, and return the iterator results and the new cursor
     fn read_line(&mut self, offset: usize) -> (usize, Option<LogLine>);
