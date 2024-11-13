@@ -39,6 +39,11 @@ pub trait IndexedLog {
         todo!("resolve_gap");
     }
 
+    /// Set a time limit for operations that may take too long
+    fn set_timeout(&mut self, limit: Option<Duration>) -> Instant {
+       todo!("force_time_limit");
+    }
+
     /// Length of the log in total bytes
     fn len(&self) -> usize;
 
