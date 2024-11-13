@@ -42,49 +42,23 @@ pub enum Search {
 
 #[derive(Clone)]
 pub struct SaneCursor {
-    /// The offset of the last waypoint we found
-    offset: usize,
+    /// The waypoint we found, or None if we are at the end of the index
+    pub waypoint: Option<Waypoint>,
 
     /// The internal index where we found it
     index: usize,
 
     /// The direction we are searching (true for forward, false for backward)
     fwd: bool,
-
-    /// The waypoint we found, or None if we are at the end of the index
-    pub waypoint: Option<Waypoint>,
 }
 
 impl SaneCursor {
     fn new(waypoint: Option<Waypoint>, fwd: bool) -> Self {
         SaneCursor {
-            offset: waypoint.clone().unwrap_or(Waypoint::Mapped(0)).cmp_offset(),
             index: 0,
             fwd,
             waypoint,
         }
-    }
-
-    pub fn at_or_after(offset: usize) -> Self {
-        SaneCursor {
-            offset,
-            index: 0,
-            fwd: true,
-            waypoint: None,
-        }
-    }
-
-    pub fn before(offset: usize) -> Self {
-        SaneCursor {
-            offset,
-            index: 0,
-            fwd: false,
-            waypoint: None,
-        }
-    }
-
-    pub fn offset(&self) -> usize {
-        self.offset
     }
 }
 
