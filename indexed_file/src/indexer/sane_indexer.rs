@@ -63,12 +63,6 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         line
     }
 
-    fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
-        // Parse part or all of the gap and add it to our mapped index.
-        self.source.seek(std::io::SeekFrom::Start(gap.start as u64))?;
-        self.index.parse_bufread(&mut self.source, &gap)
-    }
-
 }
 
 impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
