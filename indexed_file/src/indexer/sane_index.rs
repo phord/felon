@@ -40,6 +40,53 @@ pub enum Search {
     Backward(Range),
 }
 
+#[derive(Clone)]
+pub struct SaneCursor {
+    /// The offset of the last waypoint we found
+    offset: usize,
+
+    /// The internal index where we found it
+    index: usize,
+
+    /// The direction we are searching (true for forward, false for backward)
+    fwd: bool,
+
+    /// The waypoint we found, or None if we are at the end of the index
+    pub waypoint: Option<Waypoint>,
+}
+
+impl SaneCursor {
+    fn new(waypoint: Option<Waypoint>, fwd: bool) -> Self {
+        SaneCursor {
+            offset: waypoint.clone().unwrap_or(Waypoint::Mapped(0)).cmp_offset(),
+            index: 0,
+            fwd,
+            waypoint,
+        }
+    }
+
+    pub fn at_or_after(offset: usize) -> Self {
+        SaneCursor {
+            offset,
+            index: 0,
+            fwd: true,
+            waypoint: None,
+        }
+    }
+
+    pub fn before(offset: usize) -> Self {
+        SaneCursor {
+            offset,
+            index: 0,
+            fwd: false,
+            waypoint: None,
+        }
+    }
+
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+}
 
 pub struct SaneIndex {
     pub(crate) index: BTreeSet<Waypoint>,
@@ -61,32 +108,37 @@ impl SaneIndex {
     /// Find the first waypoint at or after the offset.
     /// It could be a Mapped point or an Unmapped region.
     /// If both a mapped point and a region exist, the mapped point is returned.
-    pub(crate) fn find_at_or_after(&self, offset: usize) -> Option<&Waypoint> {
+    pub(crate) fn find_at_or_after(&self, offset: usize) -> SaneCursor {
         // TODO: Replace this with a btree_cursor when it is stable
         // For now, we have to search twice; first to find an unmapped predecessor, then to find the successor if the predecessor is not a match.
-        let unmapped = self.find_before(offset);
-        if let Some(unmapped) = unmapped {
+        let cursor = self.find_before(offset);
+        if let Some(unmapped) = cursor.waypoint {
             if unmapped.contains(offset) {
-                return Some(unmapped);
+                return SaneCursor::new(Some(unmapped), true);
             }
         }
-        self.index
+        let waypoint = self.index
                 .range(Waypoint::Mapped(offset)..)
                 .take(1)
                 .next()
+                .cloned();
+        SaneCursor::new(waypoint, true)
     }
 
     /// Find the first waypoint before the offset.
     /// It could be a Mapped point or an Unmapped region.
     /// If both a mapped point and a region exist, the unmapped region is returned.
-    pub(crate) fn find_before(&self, offset: usize) -> Option<&Waypoint> {
+    pub(crate) fn find_before(&self, offset: usize) -> SaneCursor {
         // TODO: Replace this with a btree_cursor when it is stable
-        self.index
+        let waypoint = self.index
                 .range(..Waypoint::Mapped(offset))
                 .rev()
                 .take(1)
                 .next()
+                .cloned();
+        SaneCursor::new(waypoint, false)
     }
+
 
     fn find_colliding_gap(&self, range: &Range) -> Option<&Waypoint> {
         // TODO: Replace this with a btree_cursor when it is stable

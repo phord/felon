@@ -121,7 +121,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         for _ in 0..5 {
             let end = self.len();
             let start = self.get_pos(0).min(end);
-            let start = self.index.find_at_or_after(start)?;
+            let start = self.index.find_at_or_after(start).waypoint?;
             let mut it = self.index.index.range(start..);
             match it.next() {
                 Some(Waypoint::Mapped(offset)) => {
@@ -147,7 +147,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         for _ in 0..5 {
             let end = self.len();
             let end = self.get_pos(end).min(end);
-            let end = self.index.find_before(end)?;
+            let end = self.index.find_before(end).waypoint?;
             let mut it = self.index.index.range(..=end).rev();
             match it.next() {
                 Some(Waypoint::Mapped(offset)) => {
