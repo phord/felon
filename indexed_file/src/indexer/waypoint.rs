@@ -24,10 +24,19 @@ impl Clone for Waypoint {
 }
 
 impl Waypoint {
+    // Offset used for sorting
     pub fn cmp_offset(&self) -> usize {
         match self {
             Waypoint::Mapped(offset) => *offset,
             Waypoint::Unmapped(range) => range.start,
+        }
+    }
+
+    // End of the waypoint range (inclusive)
+    pub fn end_offset(&self) -> usize {
+        match self {
+            Waypoint::Mapped(offset) => *offset,
+            Waypoint::Unmapped(range) => range.end - 1,
         }
     }
 

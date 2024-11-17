@@ -112,17 +112,15 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn next(&mut self) -> Option<LogLine> {
+        let start = self.get_pos(0);
+        let mut cursor = self.index.find_at_or_after(start);
         for _ in 0..5 {
-            let end = self.len();
-            let start = self.get_pos(0).min(end);
-            let start = self.index.find_at_or_after(start).waypoint?;
-            let mut it = self.index.index.range(start..);
-            match it.next() {
+            match cursor.waypoint {
                 Some(Waypoint::Mapped(offset)) => {
-                    return self.next_line(*offset)
+                    return self.next_line(offset)
                 },
                 None => return None,
-                Some(Waypoint::Unmapped(range)) => {
+                Some(Waypoint::Unmapped(ref range)) => {
                     if range.start >= self.len() {
                         return None;
                     }
@@ -131,6 +129,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                     let end = range.end.max(self.len()).min(start + chunk_size);
                     // FIXME: return errors
                     let _ = self.resolve_gap(start..end);
+                    cursor = self.index.next(cursor);
                 },
             };
         }

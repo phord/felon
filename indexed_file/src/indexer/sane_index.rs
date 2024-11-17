@@ -93,7 +93,6 @@ impl SaneIndex {
         }
         let waypoint = self.index
                 .range(Waypoint::Mapped(offset)..)
-                .take(1)
                 .next()
                 .cloned();
         SaneCursor::new(waypoint, true)
@@ -106,13 +105,33 @@ impl SaneIndex {
         // TODO: Replace this with a btree_cursor when it is stable
         let waypoint = self.index
                 .range(..Waypoint::Mapped(offset))
-                .rev()
-                .take(1)
-                .next()
+                .next_back()
                 .cloned();
+        // dbg!(&waypoint);
         SaneCursor::new(waypoint, false)
     }
 
+    pub(crate) fn next(&self, cursor: SaneCursor) -> SaneCursor {
+        if cursor.waypoint.is_none() {
+            return cursor;
+        }
+        if cursor.fwd {
+            let waypoint = self.index
+                .range(Waypoint::Mapped(cursor.waypoint.unwrap().cmp_offset())..)
+                .next()
+                .cloned();
+            // dbg!(&waypoint);
+            SaneCursor::new(waypoint, true)
+        } else {
+            let waypoint = self.index
+                .range(..Waypoint::Mapped(cursor.waypoint.unwrap().end_offset()))
+                .rev()
+                .nth(1)
+                .cloned();
+            // dbg!(&waypoint);
+            SaneCursor::new(waypoint, true)
+        }
+    }
 
     fn find_colliding_gap(&self, range: &Range) -> Option<&Waypoint> {
         // TODO: Replace this with a btree_cursor when it is stable
