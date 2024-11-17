@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::io::BufRead;
-use super::waypoint::Waypoint;
+use super::waypoint::{Position, Waypoint};
 
 
 /// SaneIndex
@@ -42,25 +42,54 @@ pub enum Search {
 
 #[derive(Clone)]
 pub struct SaneCursor {
-    /// The waypoint we found, or None if we are at the end of the index
-    pub waypoint: Option<Waypoint>,
+    /// The waypoint we last found, or None if we are at the end of the index
+    pub position: Position,
 
     /// The internal index where we found it
     index: usize,
-
-    /// The direction we are searching (true for forward, false for backward)
-    fwd: bool,
 }
 
 impl SaneCursor {
-    fn new(waypoint: Option<Waypoint>, fwd: bool) -> Self {
+    fn new(position: Position) -> Self {
         SaneCursor {
             index: 0,
-            fwd,
-            waypoint,
+            position,
+        }
+    }
+
+    pub(crate) fn next(self, index: &SaneIndex) -> Self {
+        if self.position.is_none() {
+            return self;
+        }
+        // FIXME: read from indexed position
+        let waypoint = index.index
+            .range(Waypoint::Mapped(self.position.unwrap().cmp_offset())..)
+            .next()
+            .cloned();
+
+        SaneCursor {
+            index: self.index + 1,
+            position: waypoint,
+        }
+    }
+
+    pub(crate) fn next_back(self, index: &SaneIndex) -> Self {
+        if self.position.is_none() {
+            return self;
+        }
+        // FIXME: read from indexed position
+        let waypoint = index.index
+            .range(..Waypoint::Mapped(self.position.unwrap().end_offset()))
+            .rev()
+            .nth(1)
+            .cloned();
+        SaneCursor {
+            index: self.index.saturating_sub(1),
+            position: waypoint,
         }
     }
 }
+
 
 pub struct SaneIndex {
     pub(crate) index: BTreeSet<Waypoint>,
@@ -86,16 +115,16 @@ impl SaneIndex {
         // TODO: Replace this with a btree_cursor when it is stable
         // For now, we have to search twice; first to find an unmapped predecessor, then to find the successor if the predecessor is not a match.
         let cursor = self.find_before(offset);
-        if let Some(unmapped) = cursor.waypoint {
+        if let Some(unmapped) = cursor.position {
             if unmapped.contains(offset) {
-                return SaneCursor::new(Some(unmapped), true);
+                return SaneCursor::new(Some(unmapped));
             }
         }
         let waypoint = self.index
                 .range(Waypoint::Mapped(offset)..)
                 .next()
                 .cloned();
-        SaneCursor::new(waypoint, true)
+        SaneCursor::new(waypoint)
     }
 
     /// Find the first waypoint before the offset.
@@ -108,29 +137,32 @@ impl SaneIndex {
                 .next_back()
                 .cloned();
         // dbg!(&waypoint);
-        SaneCursor::new(waypoint, false)
+        SaneCursor::new(waypoint)
     }
 
     pub(crate) fn next(&self, cursor: SaneCursor) -> SaneCursor {
-        if cursor.waypoint.is_none() {
+        if cursor.position.is_none() {
             return cursor;
         }
-        if cursor.fwd {
-            let waypoint = self.index
-                .range(Waypoint::Mapped(cursor.waypoint.unwrap().cmp_offset())..)
-                .next()
-                .cloned();
-            // dbg!(&waypoint);
-            SaneCursor::new(waypoint, true)
-        } else {
-            let waypoint = self.index
-                .range(..Waypoint::Mapped(cursor.waypoint.unwrap().end_offset()))
-                .rev()
-                .nth(1)
-                .cloned();
-            // dbg!(&waypoint);
-            SaneCursor::new(waypoint, true)
+        let waypoint = self.index
+            .range(Waypoint::Mapped(cursor.position.unwrap().cmp_offset())..)
+            .next()
+            .cloned();
+        // dbg!(&waypoint);
+        SaneCursor::new(waypoint)
+    }
+
+    pub(crate) fn next_back(&self, cursor: SaneCursor) -> SaneCursor {
+        if cursor.position.is_none() {
+            return cursor;
         }
+        let waypoint = self.index
+            .range(..Waypoint::Mapped(cursor.position.unwrap().end_offset()))
+            .rev()
+            .nth(1)
+            .cloned();
+        // dbg!(&waypoint);
+        SaneCursor::new(waypoint)
     }
 
     fn find_colliding_gap(&self, range: &Range) -> Option<&Waypoint> {
