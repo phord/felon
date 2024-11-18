@@ -1,3 +1,4 @@
+use std::ops::Bound;
 use crate::indexer::{waypoint::{Position, VirtualPosition}, IndexedLog};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -41,13 +42,15 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
         }
     }
 
-    pub fn new_from(log: &'a mut LOG, offset: usize) -> Self {
-        todo!("replace this with some std::iter method to seek a position quickly");
-        let pos = log.seek(offset);
+    pub fn range<R>(log: &'a mut LOG, offset: R) -> Self
+    where R: std::ops::RangeBounds<usize>
+    {
+        let pos = log.seek(value_or(offset.start_bound(), 0));
+        let pos_back = log.seek(value_or(offset.end_bound(), usize::MAX));
         Self {
             log,
             pos,
-            pos_back: Position::Virtual(End),
+            pos_back,
         }
     }
 }
@@ -87,6 +90,14 @@ pub struct LineIndexerDataIterator<'a, LOG: IndexedLog> {
     pos_back: Position,
 }
 
+fn value_or(bound: Bound<&usize>, def: usize) -> usize {
+    match bound {
+        Bound::Included(val) => *val,
+        Bound::Excluded(val) => val.saturating_sub(1),  // FIXME: How to handle ..0?
+        Bound::Unbounded => def,
+    }
+}
+
 impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
         Self {
@@ -96,13 +107,15 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
         }
     }
 
-    pub fn new_from(log: &'a mut LOG, offset: usize) -> Self {
-        let pos = log.seek(offset);
-        todo!("replace this with some std::iter method to seek a position quickly");
+    pub fn range<R>(log: &'a mut LOG, offset: R) -> Self
+    where R: std::ops::RangeBounds<usize>
+    {
+        let pos = log.seek(value_or(offset.start_bound(), 0));
+        let pos_back = log.seek(value_or(offset.end_bound(), usize::MAX));
         Self {
             log,
-            pos: Position::Virtual(Start),
-            pos_back: Position::Virtual(End),
+            pos,
+            pos_back,
         }
     }
 }

@@ -160,7 +160,7 @@ mod logfile_data_iterator_tests {
         let mut file = Log::from(file);
 
         // A few bytes before the middle of the file
-        let mut it = LineIndexerDataIterator::new_from(&mut file, patt_len * lines / 2 - patt_len / 2);
+        let mut it = LineIndexerDataIterator::range(&mut file, patt_len * lines / 2 - patt_len / 2..);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -176,10 +176,7 @@ mod logfile_data_iterator_tests {
         assert_eq!(count, lines / 2);
     }
 
-    // This test fails because we do not follow the iterator norms anymore.
-    // Iterating forwards and backwards alternately moves the cursor to and fro over the same spot repeatedly.
     #[test]
-    #[ignore] // This test is no longer valid because our iterator is non-conforming.
     fn test_iterator_middle_out() {
         let patt = "filler\n";
         let patt_len = patt.len();
@@ -189,7 +186,8 @@ mod logfile_data_iterator_tests {
         let mut count = 0;
 
         // A few bytes after the middle of the file
-        let mut it = LineIndexerDataIterator::new_from(&mut file, patt_len * lines / 2 - patt_len / 2);
+        todo!("duplicate iterator for reading in the other direction");
+        let mut it = LineIndexerDataIterator::range(&mut file, patt_len * lines / 2 - patt_len / 2..);
 
         // Iterate forwards and backwards simultaneously
         let mut lineset = HashSet::new();
@@ -231,7 +229,7 @@ mod logfile_data_iterator_tests {
         assert_eq!(count, lines);
 
         // A few bytes before the middle of the file
-        let mut it = LineIndexerDataIterator::new_from(&mut file, patt_len * lines / 2 - patt_len / 2);
+        let mut it = LineIndexerDataIterator::range(&mut file, patt_len * lines / 2 - patt_len / 2..);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -255,17 +253,17 @@ mod logfile_data_iterator_tests {
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = Log::from(file);
         let mut count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, 0).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, ..=0).rev() {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        for _ in LineIndexerDataIterator::new_from(&mut file, 1).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, ..=1).rev() {
             count += 1;
         }
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
-        let mut it = LineIndexerDataIterator::new_from(&mut file, 0);
+        let mut it = LineIndexerDataIterator::range(&mut file, 0..);
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -290,12 +288,12 @@ mod logfile_data_iterator_tests {
         let out_of_range = patt_len * lines;
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range) {
+        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..) {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, ..out_of_range).rev() {
             count += 1;
         }
         assert_eq!(count, lines, "Whole file is reached from end");
@@ -313,13 +311,13 @@ mod logfile_data_iterator_tests {
         let out_of_range = patt_len * lines + 2;
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, ..out_of_range).rev() {
             count += 1;
         }
         assert_eq!(count, lines, "All lines iterable before out-of-range");
 
         count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range) {
+        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..) {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");

@@ -182,7 +182,8 @@ impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
     }
 
     pub fn new_from(log: &'a mut LOG, mode: LineViewMode, offset: usize) -> Self {
-        let inner = LineIndexerDataIterator::new_from(log, offset);
+        let inner = LineIndexerDataIterator::range(log, ..offset);
+        todo!("Replace with 'range' function, and fix fwd/rev accordingly; remove 'start' field");
 
         Self {
             inner,
