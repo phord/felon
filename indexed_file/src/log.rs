@@ -1,4 +1,5 @@
 use crate::indexer::sane_indexer::SaneIndexer;
+use crate::indexer::waypoint::Position;
 use crate::time_stamper::TimeStamper;
 use crate::LogLine;
 use std::path::PathBuf;
@@ -64,21 +65,22 @@ impl Log {
 }
 
 // Navigation
+// TODO: Delete this except for tests once SaneIndexer
 impl IndexedLog for Log {
 
     /// Position log to read from given offset
-    fn seek(&mut self, pos: Option<usize>) {
-        self.file.seek(pos);
+    fn seek(&mut self, pos: usize) -> Position {
+        self.file.seek(pos)
     }
 
     #[inline]
-    fn next(&mut self) -> Option<LogLine> {
-        self.file.next()
+    fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+        self.file.next(pos)
     }
 
     #[inline]
-    fn next_back(&mut self) -> Option<LogLine> {
-        self.file.next_back()
+    fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+        self.file.next_back(pos)
     }
 
     #[inline]

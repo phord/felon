@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 
+use super::sane_index::SaneIndex;
+
 
 type Range = std::ops::Range<usize>;
 
@@ -12,6 +14,139 @@ pub enum Waypoint {
     /// Range bytes we have to search is in [start, end)
     /// Range of Mapped we may discover is in (start, end]
     Unmapped(Range),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VirtualPosition {
+    /// Start of file
+    Start,
+
+    /// End of file
+    End,
+
+    /// Invalid iterator (exhausted)
+    Invalid,
+
+    /// Offset in the file
+    Offset(usize),
+}
+
+impl VirtualPosition {
+    pub fn offset(&self) -> Option<usize> {
+        match self {
+            VirtualPosition::Offset(offset) => Some(*offset),
+            VirtualPosition::Start => Some(0),
+            VirtualPosition::End => Some(usize::MAX),
+            VirtualPosition::Invalid => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Position {
+    /// Some unresolved position
+    Virtual(VirtualPosition),
+
+    /// A specific waypoint that exists (or existed) in the file
+    Some(usize, Waypoint),
+}
+
+impl Position {
+    #[inline]
+    pub fn is_invalid(&self) -> bool {
+        matches!(self, Position::Virtual(VirtualPosition::Invalid))
+    }
+
+    /// Resolve a virtual position to a real position, or Invalid
+    pub(crate) fn resolve(&mut self, index: &SaneIndex) {
+        match self {
+            Position::Virtual(ref virt) => {
+                if let Some(offset) = virt.offset() {
+                    let i = index.search(offset);
+                    if i < index.index.len() {
+                        *self = Position::Some(i, index.index[i].clone());
+                    } else {
+                        *self = Position::Virtual(VirtualPosition::Invalid);
+                    }
+                }
+            },
+            Position::Some(i, waypoint) => {
+                if *i >= index.index.len() || index.index[*i] != *waypoint {
+                    log::info!("Waypoint moved; searching new location: {}", waypoint.cmp_offset());
+                    *self = Position::Virtual(VirtualPosition::Offset(waypoint.cmp_offset()));
+                    self.resolve(index);
+                }
+            },
+        }
+    }
+
+    fn waypoint(&self) -> Option<Waypoint> {
+        match self {
+            Position::Some(_, waypoint) => Some(waypoint.clone()),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn advance(&mut self, index: &SaneIndex) -> Option<Waypoint> {
+        if let Position::Some(i, _) = self {
+            let next = *i + 1;
+            if next < index.index.len() {
+                let next_waypoint = index.index[next].clone();
+                *self = Position::Some(next, next_waypoint);
+            }
+        }
+        return self.waypoint();
+    }
+
+    // If position is virtual, resolve to first waypoint and return it
+    // If it's a waypoint, advance position to the next waypoint and return it
+    pub(crate) fn next(&mut self, index: &SaneIndex) -> Option<Waypoint> {
+        match self {
+            Position::Virtual(_) => {
+                self.resolve(index);
+                // TODO: validate that waypoint is still at index[i]?
+                return self.waypoint();
+            },
+            Position::Some(..) => {
+                // Ensure waypoint is still valid
+                self.resolve(index);
+                // Advance to next waypoint and return it
+                return self.advance(index);
+            },
+        }
+    }
+
+    pub(crate) fn advance_back(&mut self, index: &SaneIndex) -> Option<Waypoint> {
+        if let Position::Some(i, _) = self {
+            if *i > 0 {
+                let next = *i - 1;
+                let next_waypoint = index.index[next].clone();
+                *self = Position::Some(next, next_waypoint);
+            } else {
+                *self = Position::Virtual(VirtualPosition::Invalid);
+            }
+        }
+        return self.waypoint();
+    }
+
+    // If position is virtual, resolve to first waypoint and return it
+    // If it's a waypoint, advance_back position to the prev waypoint and return it
+    pub(crate) fn next_back(&mut self, index: &SaneIndex) -> Option<Waypoint> {
+        match self {
+            Position::Virtual(_) => {
+                self.resolve(index);
+                // TODO: validate that waypoint is still at index[i]?
+                return self.waypoint();
+            },
+            Position::Some(..) => {
+                // Ensure waypoint is still valid
+                self.resolve(index);
+                // Advance to next waypoint and return it
+                return self.advance_back(index);
+            },
+        }
+    }
+
 }
 
 impl Clone for Waypoint {

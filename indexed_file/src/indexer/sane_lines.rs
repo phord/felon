@@ -2,16 +2,20 @@
 
 use crate::{indexer::{sane_index::SaneIndex, sane_indexer::SaneIndexer}, Log, LogLine};
 
-use super::IndexedLog;
+use super::{waypoint::{Position, VirtualPosition}, IndexedLog};
 
 pub struct SaneLines<'a, R> {
     indexer: &'a mut R,
+    pos: Position,
+    pos_back: Position,
 }
 
 impl<'a, R: IndexedLog> SaneLines<'a, R> {
     pub fn new(indexer: &'a mut R) -> Self {
         SaneLines {
             indexer,
+            pos: Position::Virtual(VirtualPosition::Start),
+            pos_back: Position::Virtual(VirtualPosition::End),
         }
     }
 }
@@ -20,13 +24,17 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
     type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.indexer.next()
+        let (pos, line) = self.indexer.next(self.pos.clone());
+        self.pos = pos;
+        line
     }
 }
 
 impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.indexer.next_back()
+        let (pos, line) = self.indexer.next_back(self.pos_back.clone());
+        self.pos_back = pos;
+        line
     }
 }
 
@@ -53,7 +61,7 @@ fn sane_index_iter_rev() {
 
     let mut index = SaneIndexer::new(cursor);
     let log = SaneLines::new(&mut index);
-    log.indexer.seek(Some(100));
+    let pos = log.indexer.seek(100);
     let rev = log.rev().collect::<Vec<_>>();
     let rev = rev.into_iter().rev().collect::<Vec<_>>();
 

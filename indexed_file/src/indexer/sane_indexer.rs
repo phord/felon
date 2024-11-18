@@ -7,7 +7,7 @@ use crate::LogLine;
 
 use super::indexed_log::IndexedLog;
 use super::sane_index::SaneIndex;
-use super::waypoint::Waypoint;
+use super::waypoint::{Position, VirtualPosition, Waypoint};
 
 
 pub struct SaneIndexer<LOG> {
@@ -15,7 +15,7 @@ pub struct SaneIndexer<LOG> {
     source: LOG,
     index: SaneIndex,
 
-    // File position if it was set or implied.
+    /// Next line position to read.
     // If not set, it's zero for next, eof for next_back.
     pos: Option<usize>,
 }
@@ -86,8 +86,8 @@ impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
-    fn seek(&mut self, pos: Option<usize>) {
-        self.pos = pos;
+    fn seek(&mut self, pos: usize) -> Position {
+        Position::Virtual(VirtualPosition::Offset(pos))
     }
 
     fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
@@ -111,55 +111,66 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         (bytes, logline)
     }
 
-    fn next(&mut self) -> Option<LogLine> {
-        let start = self.get_pos(0);
-        let mut cursor = self.index.find_at_or_after(start);
+    fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+        let original = pos.clone();
+        let mut pos = pos;
         for _ in 0..5 {
-            match cursor.waypoint {
+            // Resolve position to next waypoint
+            match pos.next(&self.index) {
+                None => return (pos, None),
+
                 Some(Waypoint::Mapped(offset)) => {
-                    return self.next_line(offset)
+                    return (pos, self.next_line(offset))
                 },
-                None => return None,
-                Some(Waypoint::Unmapped(ref range)) => {
-                    if range.start >= self.len() {
-                        return None;
-                    }
+
+                Some(Waypoint::Unmapped(range)) => {
                     let start = range.start;
                     let chunk_size = 1024*1024;
                     let end = range.end.max(self.len()).min(start + chunk_size);
+                    dbg!((start, end));
+                    dbg!(range);
+                    if start >= end {
+                        return (pos, None);
+                    }
                     // FIXME: return errors
-                    let _ = self.resolve_gap(start..end);
-                    cursor = self.index.next(cursor);
+                    match self.resolve_gap(start..end) {
+                        Ok(0) => return (pos, None),
+                        Err(_) => return (pos, None), // TODO Pass errors upstream
+                        _ => {},
+                    }
+                    pos = original.clone();
                 },
             };
         }
         unreachable!("Failed to resolve gap 5 times?");
     }
 
-    fn next_back(&mut self) -> Option<LogLine> {
+    fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+        let original = pos.clone();
+        let mut pos = pos;
         for _ in 0..5 {
-            let end = self.len();
-            let end = self.get_pos(end).min(end);
-            let end = self.index.find_before(end).waypoint?;
-            let mut it = self.index.index.range(..=end).rev();
-            match it.next() {
+            // Resolve position to prev waypoint
+            match pos.next_back(&self.index) {
+                None => return (pos, None),
+
                 Some(Waypoint::Mapped(offset)) => {
-                    return self.prev_line(*offset)
+                    return (pos, self.prev_line(offset))
                 },
-                None => return None,
+
                 Some(Waypoint::Unmapped(range)) => {
-                    if range.start >= self.len() {
-                        self.pos = Some(self.len() - 1);
-                        continue;
-                    }
-                    let start = range.start.min(self.len());
                     let end = range.end.min(self.len());
                     let chunk_size = 1024*1024;
-                    let start = start.max(end.saturating_sub(chunk_size));
+                    let start = end.saturating_sub(chunk_size).max(range.start);
+                    if start >= end {
+                        unreachable!("Empty range?  Does this happen?");
+                        return (pos, None);
+                    }
                     // FIXME: return errors
                     let _ = self.resolve_gap(start..end);
+                    // FIXME: Adjust pos index by adding inserted waypoints
+                    pos = original.clone();
                 },
-            }
+            };
         }
         unreachable!("Failed to resolve gap 5 times?");
     }

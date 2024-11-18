@@ -1,4 +1,4 @@
-use crate::indexer::IndexedLog;
+use crate::indexer::{waypoint::{Position, VirtualPosition}, IndexedLog};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct LogLine {
@@ -24,23 +24,30 @@ impl std::fmt::Display for LogLine {
     }
 }
 
+use VirtualPosition::*;
 
 pub struct LineIndexerIterator<'a, LOG> {
     log: &'a mut LOG,
+    pos: Position,
+    pos_back: Position,
 }
 
 impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
-        log.seek(None);
         Self {
             log,
+            pos: Position::Virtual(Start),
+            pos_back: Position::Virtual(End),
         }
     }
 
     pub fn new_from(log: &'a mut LOG, offset: usize) -> Self {
-        log.seek(Some(offset));
+        todo!("replace this with some std::iter method to seek a position quickly");
+        let pos = log.seek(offset);
         Self {
             log,
+            pos,
+            pos_back: Position::Virtual(End),
         }
     }
 }
@@ -49,7 +56,9 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(line) = self.log.next() {
+        let (pos, line) = self.log.next(self.pos.clone());
+        self.pos = pos;
+        if let Some(line) = line {
             Some(line.offset)
         } else {
             None
@@ -60,7 +69,10 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some(line) = self.log.next_back() {
+        let (pos_back, line) = self.log.next_back(self.pos_back.clone());
+        self.pos_back = pos_back;
+        // todo!("if pos_back < pos, pos = invalid");
+        if let Some(line) = line {
             Some(line.offset)
         } else {
             None
@@ -71,20 +83,26 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
 // Iterate over lines as position, string
 pub struct LineIndexerDataIterator<'a, LOG: IndexedLog> {
     log: &'a mut LOG,
+    pos: Position,
+    pos_back: Position,
 }
 
 impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
-        log.seek(None);
         Self {
             log,
+            pos: Position::Virtual(Start),
+            pos_back: Position::Virtual(End),
         }
     }
 
     pub fn new_from(log: &'a mut LOG, offset: usize) -> Self {
-        log.seek(Some(offset));
+        let pos = log.seek(offset);
+        todo!("replace this with some std::iter method to seek a position quickly");
         Self {
             log,
+            pos: Position::Virtual(Start),
+            pos_back: Position::Virtual(End),
         }
     }
 }
@@ -93,7 +111,9 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.log.next_back()
+        let (pos, line) = self.log.next_back(self.pos_back.clone());
+        self.pos = pos;
+        line
     }
 }
 
@@ -102,6 +122,8 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.log.next()
+        let (pos, line) = self.log.next(self.pos.clone());
+        self.pos = pos;
+        line
     }
 }
