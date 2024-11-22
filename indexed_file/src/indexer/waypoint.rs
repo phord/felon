@@ -57,6 +57,20 @@ impl Position {
         matches!(self, Position::Virtual(VirtualPosition::Invalid))
     }
 
+    pub(crate) fn clip(&mut self, eof: usize) {
+        match self {
+            Position::Virtual(VirtualPosition::Offset(offset)) => {
+                if *offset >= eof {
+                    *self = Position::Virtual(VirtualPosition::Offset(eof.saturating_sub(1)))
+                }
+            },
+            Position::Virtual(VirtualPosition::End) => {
+                *self = Position::Virtual(VirtualPosition::Offset(eof.saturating_sub(1)))
+            }
+            _ => {},
+        }
+    }
+
     /// Resolve a virtual position to a real position, or Invalid
     pub(crate) fn resolve(&mut self, index: &SaneIndex) {
         match self {
@@ -78,6 +92,41 @@ impl Position {
                 }
             },
         }
+    }
+
+    /// Resolve backwards a virtual position to a real position, or Invalid
+    // TODO: dedup this with resolve
+    pub(crate) fn resolve_back(&mut self, index: &SaneIndex) {
+        // dbg!(&self);
+        match self {
+            Position::Virtual(ref virt) => {
+                // dbg!(&virt);
+                if let Some(offset) = virt.offset() {
+                    // dbg!(offset);
+                    let i = index.search(offset);
+                    // dbg!(i);
+                    let i =
+                        if i == index.index.len() || offset < index.index[i].cmp_offset() {
+                            i.saturating_sub(1)
+                        } else {
+                            i
+                        };
+                    if i < index.index.len() {
+                        *self = Position::Some(i, index.index[i].clone());
+                    } else {
+                        *self = Position::Virtual(VirtualPosition::Invalid);
+                    }
+                }
+            },
+            Position::Some(i, waypoint) => {
+                if *i >= index.index.len() || index.index[*i] != *waypoint {
+                    log::info!("Waypoint moved; searching new location: {}", waypoint.cmp_offset());
+                    *self = Position::Virtual(VirtualPosition::Offset(waypoint.cmp_offset()));
+                    self.resolve_back(index);
+                }
+            },
+        }
+        // dbg!(&self);
     }
 
     fn waypoint(&self) -> Option<Waypoint> {
@@ -134,18 +183,40 @@ impl Position {
     pub(crate) fn next_back(&mut self, index: &SaneIndex) -> Option<Waypoint> {
         match self {
             Position::Virtual(_) => {
-                self.resolve(index);
+                self.resolve_back(index);
                 // TODO: validate that waypoint is still at index[i]?
                 return self.waypoint();
             },
             Position::Some(..) => {
                 // Ensure waypoint is still valid
-                self.resolve(index);
+                self.resolve_back(index);
                 // Advance to next waypoint and return it
                 return self.advance_back(index);
             },
         }
     }
+
+    fn least_offset(&self) -> usize {
+        match self {
+            Position::Virtual(virt) => virt.offset().unwrap_or(usize::MAX),
+            Position::Some(_, waypoint) => waypoint.cmp_offset(),
+        }
+    }
+
+    fn most_offset(&self) -> usize {
+        match self {
+            Position::Virtual(virt) => virt.offset().unwrap_or(usize::MAX),
+            Position::Some(_, waypoint) => waypoint.end_offset(),
+        }
+    }
+
+    /// Is this position still to the left of the other position?
+    pub(crate) fn lt(&self, other: &Self) -> bool {
+        let left = self.least_offset();
+        let right = other.most_offset();
+        left < right
+    }
+
 
 }
 
@@ -171,7 +242,7 @@ impl Waypoint {
     pub fn end_offset(&self) -> usize {
         match self {
             Waypoint::Mapped(offset) => *offset,
-            Waypoint::Unmapped(range) => range.end - 1,
+            Waypoint::Unmapped(range) => range.end,
         }
     }
 

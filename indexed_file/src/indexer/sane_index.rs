@@ -1,6 +1,7 @@
-use std::collections::BTreeSet;
 use std::io::BufRead;
-use super::waypoint::{Position, Waypoint};
+use crate::indexer::waypoint;
+
+use super::waypoint::{Position, VirtualPosition, Waypoint};
 
 
 /// SaneIndex
@@ -33,72 +34,15 @@ use super::waypoint::{Position, Waypoint};
 const IMAX:usize = usize::MAX;
 type Range = std::ops::Range<usize>;
 
-/// Region of the index and direction we are searching
-/// The range is start-inclusive, end-exclusive
-pub enum Search {
-    Forward(Range),
-    Backward(Range),
-}
-
-#[derive(Clone)]
-pub struct SaneCursor {
-    /// The waypoint we last found, or None if we are at the end of the index
-    pub position: Position,
-
-    /// The internal index where we found it
-    index: usize,
-}
-
-impl SaneCursor {
-    fn new(position: Position) -> Self {
-        SaneCursor {
-            index: 0,
-            position,
-        }
-    }
-
-    pub(crate) fn next(self, index: &SaneIndex) -> Self {
-        if self.position.is_none() {
-            return self;
-        }
-        // FIXME: read from indexed position
-        let waypoint = index.index
-            .range(Waypoint::Mapped(self.position.unwrap().cmp_offset())..)
-            .next()
-            .cloned();
-
-        SaneCursor {
-            index: self.index + 1,
-            position: waypoint,
-        }
-    }
-
-    pub(crate) fn next_back(self, index: &SaneIndex) -> Self {
-        if self.position.is_none() {
-            return self;
-        }
-        // FIXME: read from indexed position
-        let waypoint = index.index
-            .range(..Waypoint::Mapped(self.position.unwrap().end_offset()))
-            .rev()
-            .nth(1)
-            .cloned();
-        SaneCursor {
-            index: self.index.saturating_sub(1),
-            position: waypoint,
-        }
-    }
-}
-
 
 pub struct SaneIndex {
-    pub(crate) index: BTreeSet<Waypoint>,
+    pub(crate) index: Vec<Waypoint>,
 }
 
 impl Default for SaneIndex {
     fn default() -> Self {
         SaneIndex {
-            index: BTreeSet::from([Waypoint::Unmapped(0..IMAX)]),
+            index: vec![Waypoint::Unmapped(0..IMAX)],
         }
     }
 }
@@ -108,121 +52,86 @@ impl SaneIndex {
         Self::default()
     }
 
-    /// Find the first waypoint at or after the offset.
-    /// It could be a Mapped point or an Unmapped region.
-    /// If both a mapped point and a region exist, the mapped point is returned.
-    pub(crate) fn find_at_or_after(&self, offset: usize) -> SaneCursor {
-        // TODO: Replace this with a btree_cursor when it is stable
-        // For now, we have to search twice; first to find an unmapped predecessor, then to find the successor if the predecessor is not a match.
-        let cursor = self.find_before(offset);
-        if let Some(unmapped) = cursor.position {
-            if unmapped.contains(offset) {
-                return SaneCursor::new(Some(unmapped));
-            }
-        }
-        let waypoint = self.index
-                .range(Waypoint::Mapped(offset)..)
-                .next()
-                .cloned();
-        SaneCursor::new(waypoint)
-    }
-
-    /// Find the first waypoint before the offset.
-    /// It could be a Mapped point or an Unmapped region.
-    /// If both a mapped point and a region exist, the unmapped region is returned.
-    pub(crate) fn find_before(&self, offset: usize) -> SaneCursor {
-        // TODO: Replace this with a btree_cursor when it is stable
-        let waypoint = self.index
-                .range(..Waypoint::Mapped(offset))
-                .next_back()
-                .cloned();
-        // dbg!(&waypoint);
-        SaneCursor::new(waypoint)
-    }
-
-    pub(crate) fn next(&self, cursor: SaneCursor) -> SaneCursor {
-        if cursor.position.is_none() {
-            return cursor;
-        }
-        let waypoint = self.index
-            .range(Waypoint::Mapped(cursor.position.unwrap().cmp_offset())..)
-            .next()
-            .cloned();
-        // dbg!(&waypoint);
-        SaneCursor::new(waypoint)
-    }
-
-    pub(crate) fn next_back(&self, cursor: SaneCursor) -> SaneCursor {
-        if cursor.position.is_none() {
-            return cursor;
-        }
-        let waypoint = self.index
-            .range(..Waypoint::Mapped(cursor.position.unwrap().end_offset()))
-            .rev()
-            .nth(1)
-            .cloned();
-        // dbg!(&waypoint);
-        SaneCursor::new(waypoint)
-    }
-
-    fn find_colliding_gap(&self, range: &Range) -> Option<&Waypoint> {
-        // TODO: Replace this with a btree_cursor when it is stable
-        let frontier0 = self.index
-                .range(Waypoint::Mapped(0)..Waypoint::Mapped(range.end + 1))
-                .rev()
-                .filter(|waypoint| !waypoint.is_mapped())
-                .take_while(|waypoint| waypoint.contains(range.start));
-        let frontier1 = self.index
-                .range(Waypoint::Mapped(range.start)..Waypoint::Mapped(IMAX))
-                .filter(|waypoint| !waypoint.is_mapped())
-                .take_while(|waypoint| waypoint.contains(range.end));
-        let hits: BTreeSet<&Waypoint> = frontier1.chain(frontier0).collect();
-        assert!(hits.len() <= 1);
-        if let Some(hit) = hits.last() {
-            Some(*hit)
+    /// Find the index holding the given offset, or where it would be inserted if none found.
+    pub(crate) fn search(&self, offset: usize) -> usize {
+        let find = self.index.binary_search(&Waypoint::Mapped(offset));
+        let i = match find {
+            // Found the matching index
+            Ok(i) => i,
+            // Found where the index should be inserted
+            Err(i) => i,
+        };
+        if i > 0 && self.index[i - 1].contains(offset) {
+            i - 1
+        } else if i < self.index.len() && offset > self.index[i].cmp_offset() {
+            i + 1
         } else {
-            None
+            i
         }
+    }
+
+    pub(crate) fn next(&self, pos: Position) -> Position {
+        let mut pos = pos;
+        pos.next(&self);
+        pos
+    }
+
+    pub(crate) fn next_back(&self, pos: Position) -> Position {
+        let mut pos = pos;
+        pos.next_back(&self);
+        pos
     }
 
     fn resolve_gap(&mut self, gap: Range) {
         // Find the Unmapped region that contains the gap and split it or remove it.
-        let mut to_remove : Option<Waypoint> = None;
-        let mut to_add = BTreeSet::new();
-        if let Some(unmapped) = self.find_colliding_gap(&gap) {
-            assert!(!unmapped.is_mapped());
-            let (left, middle) = unmapped.split_at(gap.start);
-            let (_, right) = middle.unwrap().split_at(gap.end);
-            if let Some(left) = left {
-                to_add.insert(left);
-            }
-            if let Some(right) = right {
-                to_add.insert(right);
-            }
-            to_remove = Some(unmapped.clone());
+        let mut to_add = Vec::new();
+        let mut i = self.search(gap.start);
+        if i + 1 < self.index.len() && self.index[i].is_mapped() {
+            i += 1;
+        } else if i > 0 && self.index[i - 1].contains(gap.start) {
+            i -= 1;
         }
-        if let Some(to_remove) = to_remove {
-            self.index.remove(&to_remove);
+        assert!(i < self.index.len());
+
+        let unmapped = &self.index[i];
+        assert!(!unmapped.is_mapped());
+        assert!(unmapped.end_offset() >= gap.end);
+        assert!(unmapped.cmp_offset() <= gap.start);
+
+        let (left, middle) = unmapped.split_at(gap.start);
+        let (_, right) = middle.unwrap().split_at(gap.end);
+        if let Some(left) = left {
+            to_add.push(left);
         }
-        self.index.extend(to_add);
+        if let Some(right) = right {
+            to_add.push(right);
+        }
+
+        // We have to add 0, 1 or 2 things and we have to remove 1.
+        if to_add.len() == 0 {
+            // Nothing to insert; remove only
+            self.index.remove(i);
+        } else {
+            self.index[i] = to_add.pop().unwrap();
+            for waypoint in to_add.into_iter().rev() {
+                self.index.insert(i, waypoint);
+            }
+        }
     }
 
     pub fn insert(&mut self, offsets: &[usize], range: Range) {
+        // Remove gaps that covered the region
         self.resolve_gap(range.clone());
-        for offset in offsets {
-            assert!(range.contains(offset) || range.end == *offset);
-            self.index.insert(Waypoint::Mapped(*offset));
-        }
-    }
 
-    pub fn search(&self, search: Search) -> impl Iterator<Item = &Waypoint> {
-        match search {
-            Search::Forward(range) => {
-                self.index.range(Waypoint::Mapped(range.start)..Waypoint::Mapped(range.end))
-            }
-            Search::Backward(range) => {
-                // FIXME: Need to reverse this iterator before using it
-                self.index.range(Waypoint::Mapped(range.start)..Waypoint::Mapped(range.end))
+        if let Some(val) = offsets.last() {
+            // Insert the new offsets into the index
+            // dbg!(val);
+            let i = self.search(*val);
+            // dbg!(i);
+            // FIXME: Insert the whole slice at once; what kind of container can do that?
+            for offset in offsets.into_iter().rev() {
+                assert!(range.contains(&offset) || range.end == *offset);
+                self.index.insert(i, Waypoint::Mapped(*offset));
             }
         }
     }
@@ -264,7 +173,7 @@ impl SaneIndex {
             .map(|(i, _)| offset + i + 1)
             .collect();
         if offset == 0 {
-            offsets.push(0);
+            offsets.insert(0, 0);
         }
         self.insert(&offsets, offset..offset + chunk.len());
     }

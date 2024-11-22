@@ -52,13 +52,13 @@ pub fn tail_cmd() {
         let mut log = Log::from(file);
 
         let first_line = log
-            .iter_lines_from(usize::MAX)
+            .iter_lines()
             .rev()
             .take(count)
             .last()
             .unwrap();
 
-        for line in log.iter_lines_from(first_line.offset) {
+        for line in log.iter_lines_range(first_line.offset..) {
             print!("{line}");
         }
     }

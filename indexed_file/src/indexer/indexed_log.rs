@@ -2,15 +2,13 @@ use std::ops::Range;
 use std::time::{Duration, Instant};
 use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
-use super::waypoint::Position;
+use super::waypoint::{Position, VirtualPosition};
 
 pub trait IndexedLog {
-    /// Position log to read from given offset, or None for start/end of file.
-    /// If None, the cursor is set to the start of the file if next() is called,
-    /// or to the end of the file when next_back() is called. Once either is called,
-    /// the cursor will remain on the last read line.  This a convenience to permit
-    /// iterators to be built that can be use simply for file navigation.
-    fn seek(&mut self, pos: usize) -> Position;
+    /// Return a Position to read from given offset.
+    fn seek(&mut self, pos: usize) -> Position {
+        Position::Virtual(VirtualPosition::Offset(pos))
+    }
 
     // Read the line at offset, if any, and return the iterator result and the number of bytes consumed.
     // Note the length of the line may be modified to fit utf-8 charset, so the bytes consumed may be
@@ -21,13 +19,14 @@ pub trait IndexedLog {
     /// Read the next/prev line from the file
     /// returns search results and advances the file position
     /// If line is None, we're at the start/end of the file or we reached some limit (max time)
-    /// Note: these form a non-conforming iterator since these functions do not consume an iterable range.
+    /// Note: Unlinke DoubleEndedIterator next_back, there is no rev() to reverse the iterator and "consumed"
+    ///    lines can still be read again.
     ///       For example,
-    ///         log.seek(Some(offset));
-    ///         let a = log.next();
-    ///         let b = log.next();
-    ///         let c = log.next_back();
-    ///         let d = log.next_back();
+    ///         let pos = log.seek(offset);
+    ///         let (pos, a) = log.next(pos);
+    ///         let (pos, b) = log.next(pos);
+    ///         let (pos, c) = log.next_back(pos);
+    ///         let (pos, d) = log.next_back(pos);
     ///         assert!(b == c);
     ///         assert!(a == d);
     ///
@@ -82,9 +81,10 @@ pub trait IndexedLog {
     }
 
     // Used in FilteredLog to stream from inner
-    fn iter_lines_from(&mut self, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
-    where Self: Sized {
-        self.iter_view_from(LineViewMode::WholeLine, offset)
+    fn iter_lines_range<R>(&mut self, range: R) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where R: std::ops::RangeBounds<usize>,
+        Self: Sized {
+        self.iter_view_from(LineViewMode::WholeLine, range)
     }
 
     // TEST and MergedLog
@@ -94,8 +94,10 @@ pub trait IndexedLog {
     }
 
     // Used in FilteredLog and Document (grok)
-    fn iter_view_from(&mut self, mode: LineViewMode, offset: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_
-    where Self: Sized {
-        SubLineIterator::new_from(self, mode, offset)
+    fn iter_view_from<R>(&mut self, mode: LineViewMode, range: R) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where
+        R: std::ops::RangeBounds<usize>,
+        Self: Sized {
+        SubLineIterator::range(self, mode, range)
     }
 }

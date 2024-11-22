@@ -68,11 +68,6 @@ impl Log {
 // TODO: Delete this except for tests once SaneIndexer
 impl IndexedLog for Log {
 
-    /// Position log to read from given offset
-    fn seek(&mut self, pos: usize) -> Position {
-        self.file.seek(pos)
-    }
-
     #[inline]
     fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
         self.file.next(pos)

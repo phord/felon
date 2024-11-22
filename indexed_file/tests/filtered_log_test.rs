@@ -260,7 +260,6 @@ mod filtered_log_iterator_tests {
     }
 
     #[test]
-    #[ignore] // This test is no longer valid because our iterator is non-conforming.
     fn test_iterator_middle_out() {
         let (harness, mut file) = Harness::default();
         file.search_regex("000").unwrap();

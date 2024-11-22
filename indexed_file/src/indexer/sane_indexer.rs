@@ -14,10 +14,6 @@ pub struct SaneIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
     index: SaneIndex,
-
-    /// Next line position to read.
-    // If not set, it's zero for next, eof for next_back.
-    pos: Option<usize>,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -33,12 +29,7 @@ impl<LOG> SaneIndexer<LOG> {
         Self {
             source: file,
             index: SaneIndex::new(),
-            pos: None,
         }
-    }
-
-    fn get_pos(&self, def: usize) -> usize {
-        self.pos.unwrap_or(def)
     }
 }
 
@@ -53,42 +44,17 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
             return None;
         }
         let (bytes, line) = self.read_line(offset);
-        self.pos = Some(offset + bytes);
         line
     }
 
     fn prev_line(&mut self, offset: usize) -> Option<LogLine> {
         let (_bytes, line) = self.read_line(offset);
-        self.pos = Some(offset);
         line
     }
 
 }
 
-impl<LOG: LogFile> Seek for SaneIndexer<LOG> {
-    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-        match pos {
-            SeekFrom::Start(offset) => {
-                self.pos = Some(offset as usize);
-                self.source.seek(SeekFrom::Start(offset))
-            },
-            SeekFrom::End(offset) => {
-                self.pos = Some((self.source.len() as i64 - offset) as usize);
-                self.source.seek(SeekFrom::End(offset))
-            },
-            SeekFrom::Current(offset) => {
-                self.pos = Some((self.get_pos(0) as i64 + offset) as usize);
-                self.source.seek(SeekFrom::Current(offset))
-            },
-        }
-    }
-}
-
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
-
-    fn seek(&mut self, pos: usize) -> Position {
-        Position::Virtual(VirtualPosition::Offset(pos))
-    }
 
     fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
         // Parse part or all of the gap and add it to our mapped index.
@@ -115,6 +81,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         let original = pos.clone();
         let mut pos = pos;
         for _ in 0..5 {
+            pos.clip(self.len());
             // Resolve position to next waypoint
             match pos.next(&self.index) {
                 None => return (pos, None),
@@ -127,8 +94,6 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                     let start = range.start;
                     let chunk_size = 1024*1024;
                     let end = range.end.max(self.len()).min(start + chunk_size);
-                    dbg!((start, end));
-                    dbg!(range);
                     if start >= end {
                         return (pos, None);
                     }
@@ -149,6 +114,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         let original = pos.clone();
         let mut pos = pos;
         for _ in 0..5 {
+            pos.clip(self.len());
             // Resolve position to prev waypoint
             match pos.next_back(&self.index) {
                 None => return (pos, None),
@@ -162,7 +128,6 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                     let chunk_size = 1024*1024;
                     let start = end.saturating_sub(chunk_size).max(range.start);
                     if start >= end {
-                        unreachable!("Empty range?  Does this happen?");
                         return (pos, None);
                     }
                     // FIXME: return errors

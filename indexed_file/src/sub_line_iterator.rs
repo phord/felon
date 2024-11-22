@@ -1,6 +1,8 @@
 
 // Params that control how we will iterate across the log file
 
+use std::ops::Bound;
+
 use crate::{indexer::IndexedLog, LineIndexerDataIterator, LogLine};
 
 #[derive(Clone, Copy)]
@@ -10,12 +12,14 @@ pub enum LineViewMode{
     WholeLine,
 }
 
-#[derive(Debug)]
 struct SubLineHelper {
     // Current line
     buffer: Option<LogLine>,
     // Index into current line for the next chunk to return
     index: usize,
+
+    // Start offset for the iterator
+    start: Option<usize>,
 }
 
 impl SubLineHelper {
@@ -23,6 +27,15 @@ impl SubLineHelper {
         Self {
             buffer: None,
             index: 0,
+            start: None,
+        }
+    }
+
+    fn new_from(offset: usize) -> Self {
+        Self {
+            buffer: None,
+            index: 0,
+            start: Some(offset),
         }
     }
 
@@ -32,6 +45,7 @@ impl SubLineHelper {
             if index >= buffer.line.len() {
                 None
             } else {
+                assert!(index < buffer.line.len(), "Subline index out of bounds {} >= {}", index, buffer.line.len());
                 let end = (index + width).min(buffer.line.len());
                 // Clip the line portion in unicode chars
                 let line = buffer.line.chars().take(end).skip(index).collect();
@@ -112,7 +126,23 @@ impl SubLineHelper {
         self.buffer = line;
         if let LineViewMode::Wrap{width} = mode {
             if let Some(buffer) = &self.buffer {
-                self.index = if buffer.line.is_empty() {0} else {(buffer.line.len() + width - 1) / width * width - width};
+                if !buffer.line.is_empty() {
+                    self.index =
+                    if let Some(start) = self.start {
+                        if (buffer.offset..buffer.offset + buffer.line.len()).contains(&start) {
+                            // position to start of the chunk containing the offset
+                            let i = start - buffer.offset;
+                            i - i % width
+                        } else {
+                            // TODO: dedup this code path
+                            // position to start of the last chunk
+                            (buffer.line.len() + width - 1) / width * width - width
+                        }
+                    } else {
+                        // position to start of the last chunk
+                        (buffer.line.len() + width - 1) / width * width - width
+                    };
+                }
             }
         }
     }
@@ -132,11 +162,10 @@ impl SubLineHelper {
         }
     }
 
-    // If we're wrapping lines, this helper loads the initial line and finds the sub-offset given some desired starting point.
-    // If the offset isn't in this line, it just returns a new helper with no buffer.
-    // The helper will be built to return the chunk containing the offset next.
-    // This is a non-conforming iterator.  next and next_back move the same index.
-    fn chop_prev(buffer: LogLine, mode: &LineViewMode, offset: usize) -> SubLineHelper {
+    // If we're wrapping lines, this helper splits the initial line into fwd and rev chunks given some desired offset starting point.
+    // Two new SubLineHelpers will be returned to be used for the "fwd" or "rev" iterator.
+    // The rev helper will be built to return the chunk before the one containing the offset. The fwd will ref the chunk containing the offset.
+    fn chop_prev(buffer: LogLine, mode: &LineViewMode, offset: usize) -> (SubLineHelper, SubLineHelper) {
         let mut rev = Self::new();
         rev.init_back(mode, Some(buffer));
         match mode {
@@ -146,14 +175,22 @@ impl SubLineHelper {
                     let buffer = rev.buffer.as_ref().unwrap();
                     let fwd_index = (offset - buffer.offset) / width * width;
 
-                    rev.index = fwd_index;
-                    rev
+                    // Construct a SubLineHelper for the fwd iterator
+                    let fwd_buf = if fwd_index > 0 {
+                        rev.index = fwd_index - width;
+                        Some(LogLine::new(buffer.line.clone(), buffer.offset))
+                    } else {
+                        // Fwd offset is in the first chunk; we don't have any rev chunk remaining
+                        rev.buffer.take()
+                    };
+                    let fwd = Self { index: fwd_index, buffer: fwd_buf , start: None};
+                    (rev, fwd)
                 } else {
                     // TODO assert buffer.offset + buffer.line.len() == offset
-                    Self::new()
+                    (rev, Self::new())
                 }
             },
-            _ => Self::new(),
+            _ => (rev, Self::new()),
         }
     }
 }
@@ -163,10 +200,17 @@ impl SubLineHelper {
 pub struct SubLineIterator<'a, LOG: IndexedLog> {
     inner: LineIndexerDataIterator<'a, LOG>,
     mode: LineViewMode,
-    sub: SubLineHelper,
+    fwd: SubLineHelper,
+    rev: SubLineHelper,
+}
 
-    // Start of first line; used to load and split the first line if we're in the middle
-    start: Option<usize>,
+// TODO: Dedup this from iterator.rs
+fn value_or(bound: Bound<&usize>, def: usize) -> usize {
+    match bound {
+        Bound::Included(val) => *val,
+        Bound::Excluded(val) => val.saturating_sub(1), // FIXME: How to handle ..0?
+        Bound::Unbounded => def,
+    }
 }
 
 impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
@@ -176,45 +220,60 @@ impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
         Self {
             inner,
             mode,
-            sub: SubLineHelper::new(),
-            start: None,
+            fwd: SubLineHelper::new(),
+            rev: SubLineHelper::new(),
         }
     }
-
-    pub fn new_from(log: &'a mut LOG, mode: LineViewMode, offset: usize) -> Self {
-        let inner = LineIndexerDataIterator::range(log, ..offset);
-        todo!("Replace with 'range' function, and fix fwd/rev accordingly; remove 'start' field");
+    pub fn range<R>(log: &'a mut LOG, mode: LineViewMode, offset: R) -> Self
+    where
+        R: std::ops::RangeBounds<usize>,
+    {
+        let fwd = SubLineHelper::new_from(value_or(offset.start_bound(), 0));
+        let rev = SubLineHelper::new_from(value_or(offset.end_bound(), usize::MAX));
+        let inner = LineIndexerDataIterator::range(log, offset);
 
         Self {
             inner,
             mode,
-            sub: SubLineHelper::new(),
-            start: Some(offset),
+            fwd,
+            rev,
         }
+    }
+}
+
+impl<'a, LOG: IndexedLog>  SubLineIterator<'a, LOG> {
+    // Usually when an offset is given we can count on the lineindexer to correctly load the previous line and next line correctly.
+    // But if we are wrapping lines, the "next" and "prev" chunks may come from the same line in the file. We handle this here.
+    // When we load the first line of this iterator, if an offset was given, we may need to split the line into two chunks.
+    // If the offset was at the start of the line, we don't need to do anything.  But if it was in the middle, then the line we
+    // need will be in the "prev" line loader.  That is, it will be before the given offset.  So we need to load the previous line
+    // and split it in two. The chop_prev function handles cleaving at the right place.
+    #[inline]
+    fn adjust_first_helpers(&mut self) {
+        todo!("Handle case here when both fwd and rev have a start value and both are in the same line");
+        // if let Some(offset) = self.start {
+        //     assert!(self.rev.buffer.is_none());
+        //     assert!(self.fwd.buffer.is_none());
+        //     if let LineViewMode::Wrap{width: _} = self.mode {
+        //         if let Some(prev) = self.inner.next_back() {
+        //             (self.rev, self.fwd) = SubLineHelper::chop_prev(prev, &self.mode, offset);
+        //         }
+        //     }
+        //     self.start = None;
+        // }
     }
 }
 
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some(offset) = self.start {
-            assert!(self.sub.buffer.is_none());
-            if let LineViewMode::Wrap{width: _} = self.mode {
-                if let Some(prev) = self.inner.next_back() {
-                    self.sub = SubLineHelper::chop_prev(prev, &self.mode, offset);
-                    if ! self.sub.contains(offset) {
-                        // Non-conforming iterator: undo the next_back by calling next()
-                        self.inner.next();
-                    }
-                }
-            }
-            self.start = None;
-        }
-        let ret = self.sub.sub_next_back(&self.mode);
+        // self.adjust_first_helpers();
+
+        let ret = self.rev.sub_next_back(&self.mode);
         if ret.is_some() {
             ret
         } else {
-            self.sub.next_back(&self.mode, self.inner.next_back())
+            self.rev.next_back(&self.mode, self.inner.next_back())
         }
     }
 }
@@ -224,22 +283,12 @@ impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(offset) = self.start {
-            assert!(self.sub.buffer.is_none());
-            if let LineViewMode::Wrap{width: _} = self.mode {
-                if let Some(prev) = self.inner.next_back() {
-                    self.sub = SubLineHelper::chop_prev(prev, &self.mode, offset);
-                    // Non-conforming iterator: undo the next_back by calling next()
-                    self.inner.next();
-                }
-            }
-            self.start = None;
-        }
-        let ret = self.sub.sub_next(&self.mode);
+        // self.adjust_first_helpers();
+        let ret = self.fwd.sub_next(&self.mode);
         if ret.is_some() {
             ret
         } else {
-            self.sub.next(&self.mode, self.inner.next())
+            self.fwd.next(&self.mode, self.inner.next())
         }
     }
 }

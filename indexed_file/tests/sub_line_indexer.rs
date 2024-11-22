@@ -66,15 +66,18 @@ mod sub_line_iterator_helper {
         SubLineIterator::new(log, mode)
     }
 
-    pub(crate) fn new_from<LOG: IndexedLog>(log: &mut LOG, offset: usize) -> SubLineIterator<LOG> {
+    pub(crate) fn new_from<LOG: IndexedLog, R>(log: &mut LOG, offset: R) -> SubLineIterator<LOG>
+    where
+        R: std::ops::RangeBounds<usize>
+    {
         let mode = LineViewMode::WholeLine;
-        SubLineIterator::new_from(log, mode, offset)
+        SubLineIterator::range(log, mode, offset)
     }
 }
 
-// Tests for LineIndexerIterator
+// Tests for SubLineIterator
 #[cfg(test)]
-mod logfile_iterator_tests {
+mod subline_iterator_tests {
     use indexed_file::IndexedLog;
 
     use crate::sub_line_iterator_helper::Harness;
@@ -131,7 +134,6 @@ mod logfile_iterator_tests {
     }
 
     #[test]
-    #[ignore] // This test is no longer valid because our iterator is non-conforming.
     fn test_iterator_fwd_rev_meet() {
         let (harness, mut file) =  Harness::new_small(10);
         let mut it = file.iter_offsets();
@@ -342,7 +344,7 @@ mod sub_line_iterator_tests {
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
-        let mut it = sub_line_iterator_helper::new_from(&mut file, offset);
+        let mut it = sub_line_iterator_helper::new_from(&mut file, offset..);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -356,14 +358,14 @@ mod sub_line_iterator_tests {
     }
 
     #[test]
-    #[ignore] // This test is no longer valid because our iterator is non-conforming.
     fn test_iterator_middle_out() {
         let (harness, mut file) =  Harness::new_small(1000);
         let mut count = 0;
 
         // A few bytes after the middle of the file
         let offset = harness.patt_len * harness.lines / 2 + harness.patt_len / 2;
-        let mut it = sub_line_iterator_helper::new_from(&mut file, offset);
+        todo!("Fix this to be towards_middle instead");
+        let mut it = sub_line_iterator_helper::new_from(&mut file, offset..offset);
 
         // Iterate forwards and backwards simultaneously
         let mut lineset = HashSet::new();
@@ -398,7 +400,7 @@ mod sub_line_iterator_tests {
         assert_eq!(count, harness.lines);
 
         // A few bytes before the middle of the file
-        let mut it = sub_line_iterator_helper::new_from(&mut file, harness.patt_len * harness.lines / 2 - harness.patt_len / 2);
+        let mut it = sub_line_iterator_helper::new_from(&mut file, harness.patt_len * harness.lines / 2 - harness.patt_len / 2..);
 
         // Get first line and verify we get the expected position and line
         let line = it.next().unwrap();
@@ -415,13 +417,13 @@ mod sub_line_iterator_tests {
     #[test]
     fn test_iterator_from_offset_start() {
         let (harness, mut file) =  Harness::new_small(100);
-        let count = sub_line_iterator_helper::new_from(&mut file, 0).rev().count();
+        let count = sub_line_iterator_helper::new_from(&mut file, ..0).rev().count();
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        let count = sub_line_iterator_helper::new_from(&mut file, 1).rev().count();
+        let count = sub_line_iterator_helper::new_from(&mut file, ..1).rev().count();
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
-        let mut it = sub_line_iterator_helper::new_from(&mut file, 0);
+        let mut it = sub_line_iterator_helper::new_from(&mut file, ..0);
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -439,10 +441,10 @@ mod sub_line_iterator_tests {
         let (harness, mut file) =  Harness::new_small(100);
         let out_of_range = harness.patt_len * harness.lines;
 
-        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).count();
+        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range..).count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).rev().count();
+        let count = sub_line_iterator_helper::new_from(&mut file, ..out_of_range).rev().count();
         assert_eq!(count, harness.lines, "Whole file is reached from end");
 
     }
@@ -453,10 +455,10 @@ mod sub_line_iterator_tests {
 
         let out_of_range = harness.patt_len * harness.lines + 2;
 
-        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).rev().count();
+        let count = sub_line_iterator_helper::new_from(&mut file, ..out_of_range).rev().count();
         assert_eq!(count, harness.lines, "All lines iterable before out-of-range");
 
-        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range).count();
+        let count = sub_line_iterator_helper::new_from(&mut file, out_of_range..).count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
      }
 }
@@ -475,9 +477,11 @@ mod sub_line_wrap_tests {
         SubLineIterator::new(log, mode)
     }
 
-    fn wrapped_new_from(log: &mut Log, width: usize, offset: usize) -> SubLineIterator<Log> {
+    fn wrapped_new_range<R>(log: &mut Log, width: usize, offset: R) -> SubLineIterator<Log>
+    where
+        R: std::ops::RangeBounds<usize> {
         let mode = LineViewMode::Wrap{width};
-        SubLineIterator::new_from(log, mode, offset)
+        SubLineIterator::range(log, mode, offset)
     }
 
     #[test]
@@ -590,7 +594,7 @@ mod sub_line_wrap_tests {
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
-        let mut it = wrapped_new_from(&mut file, width, offset);
+        let mut it = wrapped_new_range(&mut file, width, offset..);
 
         // Iterate verify we get the expected line
         let line = it.next().unwrap();
@@ -604,14 +608,14 @@ mod sub_line_wrap_tests {
     }
 
     #[test]
-    #[ignore] // This test is no longer valid because our iterator is non-conforming.
     fn test_iterator_middle_out() {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
         // A few bytes after the middle of the file
         let offset = harness.patt_len * harness.lines / 2 + harness.patt_len / 2;
-        let mut it = wrapped_new_from(&mut file, width, offset);
+        todo!();
+        let mut it = wrapped_new_range(&mut file, width, offset..offset);
 
         let mut fwd_offset = harness.expected_bol(offset, width);
         let mut rev_offset = fwd_offset;
@@ -653,7 +657,7 @@ mod sub_line_wrap_tests {
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
-        let mut it = wrapped_new_from(&mut file, width, offset);
+        let mut it = wrapped_new_range(&mut file, width, offset..);
 
         // Get first line and verify we get the expected position and line
         let line = it.next().unwrap();
@@ -672,19 +676,19 @@ mod sub_line_wrap_tests {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
-        let it = wrapped_new_from(&mut file, width, 0);
+        let it = wrapped_new_range(&mut file, width, ..0);
         let count = it.rev().count();
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        let it = wrapped_new_from(&mut file, width, 1);
+        let it = wrapped_new_range(&mut file, width, ..1);
         let count = it.rev().count();
         assert_eq!(count, 1, "First subline is reachable from offset 1 in reverse");
 
-        let it = wrapped_new_from(&mut file, width, width);
+        let it = wrapped_new_range(&mut file, width, ..width);
         let count = it.rev().count();
         assert_eq!(count, 2, "First two lines are reachable from offset 'width'");
 
-        let mut it = wrapped_new_from(&mut file, width, 0);
+        let mut it = wrapped_new_range(&mut file, width, ..0);
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -704,15 +708,15 @@ mod sub_line_wrap_tests {
 
         let end_of_file = harness.patt_len * harness.lines;
 
-        let it = wrapped_new_from(&mut file, width, end_of_file);
+        let it = wrapped_new_range(&mut file, width, end_of_file..);
         let count = it.count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        let it = wrapped_new_from(&mut file, width, end_of_file).rev();
+        let it = wrapped_new_range(&mut file, width, ..end_of_file).rev();
         let count = it.count();
         assert_eq!(count, harness.total_len(width), "Whole file is reached from end");
 
-        let it = wrapped_new_from(&mut file, width, end_of_file + 1).rev();
+        let it = wrapped_new_range(&mut file, width, ..end_of_file + 1).rev();
         let count = it.count();
         assert_eq!(count, harness.total_len(width), "Whole file is reached from way out-of-range");
     }
@@ -724,11 +728,11 @@ mod sub_line_wrap_tests {
 
         let out_of_range = harness.patt_len * harness.lines + 2;
 
-        let it = wrapped_new_from(&mut file, width, out_of_range).rev();
+        let it = wrapped_new_range(&mut file, width, ..out_of_range).rev();
         let count = it.count();
         assert_eq!(count, harness.total_len(width), "All lines iterable before out-of-range");
 
-        let it = wrapped_new_from(&mut file, width, out_of_range);
+        let it = wrapped_new_range(&mut file, width, out_of_range..);
         let count = it.count();
         assert_eq!(count, 0, "No lines iterable after out-of-range");
      }
