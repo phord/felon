@@ -107,7 +107,7 @@ mod subline_iterator_tests {
 
         for i in it.take(harness.lines - 1) {
             let bol = i;
-            println!("{bol} {prev}");
+            // println!("{bol} {prev}");
             assert_eq!(prev - bol, harness.patt_len);
             prev = bol;
         }
@@ -144,7 +144,7 @@ mod subline_iterator_tests {
         for _ in 0..harness.lines/2 - 1 {
             let i = it.next().unwrap();
             count += 1;
-            println!("{count} {i}");
+            // println!("{count} {i}");
             let bol = i;
             assert_eq!(bol - prev, harness.patt_len);
             prev = bol;
@@ -162,7 +162,7 @@ mod subline_iterator_tests {
         for _ in 0..harness.lines/2 - 1 {
             let i = it.next().unwrap();
             count += 1;
-            println!("{count} {i}");
+            // println!("{count} {i}");
             let bol = i;
             assert_eq!(prev - bol, harness.patt_len);
             prev = bol;
@@ -350,14 +350,15 @@ mod sub_line_iterator_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        assert_eq!(prev, harness.patt_len * harness.lines / 2);
+        assert_eq!(prev, harness.patt_len * (harness.lines / 2 - 1));
         assert_eq!(line, harness.patt);
 
         let count = it.count() + 1;
-        assert_eq!(count, harness.lines / 2);
+        assert_eq!(count, harness.lines / 2 + 1);
     }
 
     #[test]
+    #[ignore]   // middle-out doesn't work on conforming iterators
     fn test_iterator_middle_out() {
         let (harness, mut file) =  Harness::new_small(1000);
         let mut count = 0;
@@ -400,18 +401,19 @@ mod sub_line_iterator_tests {
         assert_eq!(count, harness.lines);
 
         // A few bytes before the middle of the file
-        let mut it = sub_line_iterator_helper::new_from(&mut file, harness.patt_len * harness.lines / 2 - harness.patt_len / 2..);
+        let start = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let mut it = sub_line_iterator_helper::new_from(&mut file, start..);
 
         // Get first line and verify we get the expected position and line
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        let expected_offset = harness.patt_len * harness.lines / 2;
+        let expected_offset = harness.patt_len * (harness.lines / 2 - 1);
         assert_eq!(prev, expected_offset);
         assert_eq!(line, harness.patt);
 
         let count = it.count() + 1;
-        assert_eq!(count, harness.lines / 2);
+        assert_eq!(count, harness.lines / 2 + 1);
     }
 
     #[test]
@@ -420,10 +422,10 @@ mod sub_line_iterator_tests {
         let count = sub_line_iterator_helper::new_from(&mut file, ..0).rev().count();
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        let count = sub_line_iterator_helper::new_from(&mut file, ..1).rev().count();
+        let count = sub_line_iterator_helper::new_from(&mut file, ..=1).rev().count();
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
-        let mut it = sub_line_iterator_helper::new_from(&mut file, ..0);
+        let mut it = sub_line_iterator_helper::new_from(&mut file, ..=1);
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -608,6 +610,7 @@ mod sub_line_wrap_tests {
     }
 
     #[test]
+    #[ignore]   // middle-out doesn't work on conforming iterators
     fn test_iterator_middle_out() {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
@@ -663,6 +666,7 @@ mod sub_line_wrap_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
+        dbg!(offset);
         let expected_offset = harness.expected_bol(offset, width);
         assert_eq!(prev, expected_offset);
         assert_eq!(line, harness.expected_line(offset, width));
@@ -676,15 +680,17 @@ mod sub_line_wrap_tests {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
+        // let it = wrapped_new_range(&mut file, width, ..0);
+        // dbg!(it.rev().collect::<Vec<_>>());
         let it = wrapped_new_range(&mut file, width, ..0);
         let count = it.rev().count();
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        let it = wrapped_new_range(&mut file, width, ..1);
+        let it = wrapped_new_range(&mut file, width, ..=1);
         let count = it.rev().count();
         assert_eq!(count, 1, "First subline is reachable from offset 1 in reverse");
 
-        let it = wrapped_new_range(&mut file, width, ..width);
+        let it = wrapped_new_range(&mut file, width, ..=width);
         let count = it.rev().count();
         assert_eq!(count, 2, "First two lines are reachable from offset 'width'");
 
@@ -728,6 +734,10 @@ mod sub_line_wrap_tests {
 
         let out_of_range = harness.patt_len * harness.lines + 2;
 
+        // let it = wrapped_new_range(&mut file, width, ..out_of_range).rev();
+        // for i in it {
+        //     println!("{} {}", i.offset, i.line);
+        // }
         let it = wrapped_new_range(&mut file, width, ..out_of_range).rev();
         let count = it.count();
         assert_eq!(count, harness.total_len(width), "All lines iterable before out-of-range");

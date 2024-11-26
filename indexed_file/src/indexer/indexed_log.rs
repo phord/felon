@@ -1,4 +1,3 @@
-use std::ops::Range;
 use std::time::{Duration, Instant};
 use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
@@ -19,8 +18,8 @@ pub trait IndexedLog {
     /// Read the next/prev line from the file
     /// returns search results and advances the file position
     /// If line is None, we're at the start/end of the file or we reached some limit (max time)
-    /// Note: Unlinke DoubleEndedIterator next_back, there is no rev() to reverse the iterator and "consumed"
-    ///    lines can still be read again.
+    /// Note: Unlike DoubleEndedIterator next_back, there is no rev() to reverse the iterator;
+    ///    and "consumed" lines can still be read again.
     ///       For example,
     ///         let pos = log.seek(offset);
     ///         let (pos, a) = log.next(pos);

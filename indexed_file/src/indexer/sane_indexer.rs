@@ -87,7 +87,23 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                 None => return (pos, None),
 
                 Some(Waypoint::Mapped(offset)) => {
-                    return (pos, self.next_line(offset))
+                    let next = self.next_line(offset);
+                    if let Some(logline) = next {
+                        #[allow(clippy::single_match)]
+                        match original {
+                            Position::Virtual(VirtualPosition::Offset(target)) => {
+                                if (logline.offset..logline.offset + logline.line.len()).contains(&target) {
+                                    return (pos, Some(logline));
+                                }
+                                // else -- next loop will find the correct line with pos.next(), or unmapped, and we'll do this dance again.
+                            },
+                            _ => {
+                                return (pos, Some(logline));
+                            },
+                        }
+                    } else {
+                        return (pos, None)
+                    }
                 },
 
                 Some(Waypoint::Unmapped(range)) => {
@@ -120,7 +136,23 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                 None => return (pos, None),
 
                 Some(Waypoint::Mapped(offset)) => {
-                    return (pos, self.prev_line(offset))
+                    let next = self.prev_line(offset);
+                    if let Some(logline) = next {
+                        #[allow(clippy::single_match)]
+                        match original {
+                            Position::Virtual(VirtualPosition::Offset(target)) => {
+                                if logline.offset < target {
+                                    return (pos, Some(logline));
+                                }
+                                // else -- next loop will find the correct line with pos.next(), or unmapped, and we'll do this dance again.
+                            },
+                            _ => {
+                                return (pos, Some(logline));
+                            },
+                        }
+                    } else {
+                        return (pos, None)
+                    }
                 },
 
                 Some(Waypoint::Unmapped(range)) => {

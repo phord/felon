@@ -258,17 +258,24 @@ fn sane_index_parse_chunks_random_chunks() {
 
     let mut index = SaneIndex::new();
     let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut rando:Vec<usize> = (0..=66).collect::<Vec<_>>();
+    let mut rando:Vec<usize> = (1..=66).collect::<Vec<_>>();
     rando.shuffle(&mut thread_rng());
     let mut start = 0;
+
+    // Collect 1/3 of the byte offsets from the file.
     let mut cuts:Vec<&usize> = rando.iter().take(rando.len()/3).collect();
+
+    // Always ensure that the last byte is included.
     cuts.push(&67);
     cuts.sort();
-    let cuts = cuts.iter().map(|i| { let s = start; start = **i; s..**i }).collect::<Vec<_>>();
+    let mut cuts = cuts.iter().map(|i| { let s = start; start = **i; s..**i }).collect::<Vec<_>>();
+
+    // Resolve the ranges in random order
+    cuts.shuffle(&mut thread_rng());
     for i in cuts {
         index.parse_chunk(i.start, file[i].as_bytes());
     }
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.index.to_vec(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -281,5 +288,5 @@ fn sane_index_full_bufread() {
     let mut index = SaneIndex::new();
 
     index.parse_bufread(&mut cursor, &(0..100)).unwrap();
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.index.to_vec(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }

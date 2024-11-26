@@ -5,13 +5,14 @@ use std::ops::Bound;
 
 use crate::{indexer::IndexedLog, LineIndexerDataIterator, LogLine};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum LineViewMode{
     Wrap{width: usize},
     Chop{width: usize, left: usize},
     WholeLine,
 }
 
+#[derive(Debug)]
 struct SubLineHelper {
     // Current line
     buffer: Option<LogLine>,
@@ -20,6 +21,9 @@ struct SubLineHelper {
 
     // Start offset for the iterator
     start: Option<usize>,
+
+    // Last offset consumed
+    consumed: Option<usize>,
 }
 
 impl SubLineHelper {
@@ -28,6 +32,7 @@ impl SubLineHelper {
             buffer: None,
             index: 0,
             start: None,
+            consumed: None,
         }
     }
 
@@ -36,7 +41,16 @@ impl SubLineHelper {
             buffer: None,
             index: 0,
             start: Some(offset),
+            consumed: None,
         }
+    }
+
+    fn offset(&self) -> usize {
+        self.consumed.unwrap()
+    }
+
+    fn le(&self, other: &Self) -> bool {
+        self.consumed.is_some() && other.consumed.is_some() && self.offset() <= other.offset()
     }
 
     // Returns subbuffer of line with given width if any remains; else None
@@ -63,6 +77,7 @@ impl SubLineHelper {
             LineViewMode::Wrap{width} => {
                 let ret = self.get_sub(self.index, width);
                 self.index += width;
+                self.mark_consumed();
                 if let Some(buffer) = &self.buffer {
                     if self.index >= buffer.line.len() {
                         // No more to give
@@ -72,14 +87,22 @@ impl SubLineHelper {
                 ret
             },
             LineViewMode::Chop{width, left} => {
+                self.mark_consumed();
                 let ret = self.get_sub(left, width);
                 // No more to give
                 self.buffer = None;
                 ret
             },
             LineViewMode::WholeLine => {
+                self.mark_consumed();
                 self.buffer.take()
             },
+        }
+    }
+
+    fn mark_consumed(&mut self) {
+        if let Some(buffer) = &self.buffer {
+            self.consumed = Some(buffer.offset + self.index);
         }
     }
 
@@ -101,24 +124,55 @@ impl SubLineHelper {
                         panic!("Subline index underflow. Did width change between calls? width={} index={}", width, self.index);
                     }
                 }
+                self.mark_consumed();
                 ret
             },
             LineViewMode::Chop{width, left} => {
+                self.mark_consumed();
                 let ret = self.get_sub(left, width);
                 // No more to give
                 self.buffer = None;
                 ret
             },
             LineViewMode::WholeLine => {
+                self.mark_consumed();
                 self.buffer.take()
             },
         }
     }
 
+    fn init_fwd(&mut self, mode: &LineViewMode, line: Option<LogLine>) {
+        self.buffer = line;
+        if let LineViewMode::Wrap{width} = mode {
+            if let Some(buffer) = &self.buffer {
+                if !buffer.line.is_empty() {
+                    self.index =
+                        if let Some(start) = self.start {
+                            if (buffer.offset..buffer.offset + buffer.line.len()).contains(&start) {
+                                // position to start of the chunk after the one containing the offset
+                                let i = start - buffer.offset;
+                                i - i % width
+                                // (i + width - 1) / width * width
+                            } else {
+                                // TODO: dedup this code path
+                                // Start is outside this line; presumably before us.
+                                // position to start of the first chunk
+                                0
+                            }
+                        } else {
+                            // position to start of the first chunk
+                            0
+                        };
+                }
+            }
+        } else {
+            self.index = 0;
+        }
+    }
+
     // Supply a new line and get the next chunk
     fn next(&mut self, mode: &LineViewMode, line: Option<LogLine>) -> Option<LogLine> {
-        self.buffer = line;
-        self.index = 0;
+        self.init_fwd(mode, line);
         self.sub_next(mode)
     }
 
@@ -128,22 +182,25 @@ impl SubLineHelper {
             if let Some(buffer) = &self.buffer {
                 if !buffer.line.is_empty() {
                     self.index =
-                    if let Some(start) = self.start {
-                        if (buffer.offset..buffer.offset + buffer.line.len()).contains(&start) {
-                            // position to start of the chunk containing the offset
-                            let i = start - buffer.offset;
-                            i - i % width
+                        if let Some(start) = self.start {
+                            if (buffer.offset..buffer.offset + buffer.line.len()).contains(&start) {
+                                // position to start of the chunk containing the offset
+                                let i = start - buffer.offset;
+                                i - i % width
+                            } else {
+                                // TODO: dedup this code path
+                                // Start is outside this line; Presumably there were no lines before this one.
+                                // position to start of the last chunk
+                                (buffer.line.len() + width - 1) / width * width - width
+                            }
                         } else {
-                            // TODO: dedup this code path
                             // position to start of the last chunk
                             (buffer.line.len() + width - 1) / width * width - width
-                        }
-                    } else {
-                        // position to start of the last chunk
-                        (buffer.line.len() + width - 1) / width * width - width
-                    };
+                        };
                 }
             }
+        } else {
+            self.index = 0;
         }
     }
 
@@ -183,7 +240,7 @@ impl SubLineHelper {
                         // Fwd offset is in the first chunk; we don't have any rev chunk remaining
                         rev.buffer.take()
                     };
-                    let fwd = Self { index: fwd_index, buffer: fwd_buf , start: None};
+                    let fwd = Self { index: fwd_index, buffer: fwd_buf , start: None, consumed: None};
                     (rev, fwd)
                 } else {
                     // TODO assert buffer.offset + buffer.line.len() == offset
@@ -269,11 +326,13 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     fn next_back(&mut self) -> Option<Self::Item> {
         // self.adjust_first_helpers();
 
-        let ret = self.rev.sub_next_back(&self.mode);
-        if ret.is_some() {
-            ret
+        let ret = self.rev.sub_next_back(&self.mode)
+            .or_else(|| {self.rev.next_back( &self.mode, self.inner.next_back()) });
+        if self.rev.le(&self.fwd) {
+            // exhausted
+            None
         } else {
-            self.rev.next_back(&self.mode, self.inner.next_back())
+            ret
         }
     }
 }
@@ -284,11 +343,13 @@ impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         // self.adjust_first_helpers();
-        let ret = self.fwd.sub_next(&self.mode);
-        if ret.is_some() {
-            ret
+        let ret = self.fwd.sub_next(&self.mode)
+            .or_else(|| {self.fwd.next( &self.mode, self.inner.next()) });
+        if self.rev.le(&self.fwd) {
+            // exhausted
+            None
         } else {
-            self.fwd.next(&self.mode, self.inner.next())
+            ret
         }
     }
 }

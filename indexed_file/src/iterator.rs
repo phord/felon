@@ -55,12 +55,11 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.pos.lt(&self.pos_back) {
-            return None;
-        }
         let (pos, line) = self.log.next(self.pos.clone());
         self.pos = pos;
-        if let Some(line) = line {
+        if !self.pos.lt(&self.pos_back) {
+            None
+        } else if let Some(line) = line {
             Some(line.offset)
         } else {
             // FIXME: invalidate iterators?
@@ -72,12 +71,11 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
-        if !self.pos.lt(&self.pos_back) {
-            return None;
-        }
         let (pos_back, line) = self.log.next_back(self.pos_back.clone());
         self.pos_back = pos_back;
-        if let Some(line) = line {
+        if !self.pos.lt(&self.pos_back) {
+            None
+        } else if let Some(line) = line {
             Some(line.offset)
         } else {
             None
@@ -126,7 +124,7 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LO
             return None;
         }
         let (pos, line) = self.log.next_back(self.pos_back.clone());
-        self.pos = pos;
+        self.pos_back = pos;
         line
     }
 }

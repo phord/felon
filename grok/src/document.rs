@@ -18,7 +18,7 @@ impl Document {
 
     pub fn get_lines_from(&mut self, mode: LineViewMode, start: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_{
         self.log
-            .iter_view_from(mode, start)
+            .iter_view_from(mode, start..)
     }
 
     pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {

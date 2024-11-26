@@ -60,8 +60,8 @@ fn sane_index_iter_rev() {
     let fwd = log.collect::<Vec<_>>();
 
     let mut index = SaneIndexer::new(cursor);
-    let log = SaneLines::new(&mut index);
-    let pos = log.indexer.seek(100);
+    let mut log = SaneLines::new(&mut index);
+    log.pos_back = log.indexer.seek(100);
     let rev = log.rev().collect::<Vec<_>>();
     let rev = rev.into_iter().rev().collect::<Vec<_>>();
 
@@ -75,11 +75,13 @@ fn sane_index_fwd_rev() {
     let cursor = CursorLogFile::new(file.to_vec());
 
     let mut log = Log::from(cursor);
+    let lines = log.iter_lines().count();
+
     let mut log = log.iter_lines();
     log.next();
     log.next();
-    // Non-conforming iterator; reverse iterator covers what forward iterator produced.
-    assert_eq!(log.rev().count(), 2);
+
+    assert_eq!(log.rev().count(), lines - 2);
 }
 
 
@@ -100,7 +102,7 @@ fn sane_index_out_of_range() {
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let cursor = CursorLogFile::new(file.to_vec());
     let mut log = Log::from(cursor);
-    let mut log = log.iter_lines_from(100);
+    let mut log = log.iter_lines_range(100..);
     assert_eq!(log.next(), None);
 }
 
@@ -111,7 +113,7 @@ fn sane_index_rev_out_of_range() {
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let cursor = CursorLogFile::new(file.to_vec());
     let mut log = Log::from(cursor);
-    let mut log = log.iter_lines_from(100);
+    let mut log = log.iter_lines_range(..100);
     assert!(log.next_back().is_some());
 }
 
@@ -121,7 +123,7 @@ fn sane_index_rev_line_zero() {
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let cursor = CursorLogFile::new(file.to_vec());
     let mut log = Log::from(cursor);
-    let mut log = log.iter_lines_from(5);
+    let mut log = log.iter_lines_range(..5);
     assert!(log.next_back().is_some());
     assert!(log.next_back().is_none());
 }
