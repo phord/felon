@@ -16,9 +16,10 @@ pub struct Document {
 
 impl Document {
 
-    pub fn get_lines_from(&mut self, mode: LineViewMode, start: usize) -> impl DoubleEndedIterator<Item = LogLine> + '_{
+    pub fn get_lines_range<R>(&mut self, mode: LineViewMode, range: R) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    where R: std::ops::RangeBounds<usize> {
         self.log
-            .iter_view_from(mode, start..)
+            .iter_view_from(mode, range)
     }
 
     pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {
