@@ -179,7 +179,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
     fn indexed_bytes(&self) -> usize {
         let mut end = 0usize;
-        self.index.index.iter()
+        self.index.iter()
             .filter(|w| matches!(w, Waypoint::Unmapped(_)))
             .fold(0usize, |acc, w| {
                 if let Waypoint::Unmapped(range) = w {
@@ -191,7 +191,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn count_lines(&self) -> usize {
-        self.index.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count()
+        self.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count()
     }
 
 }

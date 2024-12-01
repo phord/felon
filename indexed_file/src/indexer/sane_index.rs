@@ -1,5 +1,4 @@
 use std::io::BufRead;
-use crate::indexer::waypoint;
 
 use super::waypoint::{Position, VirtualPosition, Waypoint};
 
@@ -31,18 +30,24 @@ use super::waypoint::{Position, VirtualPosition, Waypoint};
 ///
 /// Note we always assume there is a line at Mapped(0).  But it may not be inserted in every index.
 
+/// Updated to use a splitvec-style implementation when growing in the middle.
+/// Each internal vector either has a single Unmapped(range) or more Mapped(offset) values.
+
+
 const IMAX:usize = usize::MAX;
 type Range = std::ops::Range<usize>;
 
+type IndexVec = Vec<Vec<Waypoint>>;
+pub type IndexIndex = (usize, usize);
 
 pub struct SaneIndex {
-    pub(crate) index: Vec<Waypoint>,
+    pub(crate) index: IndexVec,
 }
 
 impl Default for SaneIndex {
     fn default() -> Self {
         SaneIndex {
-            index: vec![Waypoint::Unmapped(0..IMAX)],
+            index: vec![vec![Waypoint::Unmapped(0..IMAX)]],
         }
     }
 }
@@ -52,87 +57,136 @@ impl SaneIndex {
         Self::default()
     }
 
-    /// Find the index holding the given offset, or where it would be inserted if none found.
-    pub(crate) fn search(&self, offset: usize) -> usize {
-        let find = self.index.binary_search(&Waypoint::Mapped(offset));
-        let i = match find {
-            // Found the matching index
-            Ok(i) => i,
-            // Found where the index should be inserted
-            Err(i) => i,
-        };
-        if i > 0 && self.index[i - 1].contains(offset) {
-            i - 1
-        } else if i < self.index.len() && offset > self.index[i].cmp_offset() {
-            i + 1
+    pub fn index_prev(&self, idx: IndexIndex) -> Option<IndexIndex> {
+        let (i, j) = idx;
+        if j > 0 {
+            Some((i, j - 1))
+        } else if i > 0 {
+            Some((i - 1, self.index[i - 1].len() - 1))
         } else {
-            i
+            None
         }
+    }
+
+    pub fn index_next(&self, idx: IndexIndex) -> Option<IndexIndex> {
+        let (i, j) = idx;
+        if j + 1 < self.index[i].len() {
+            Some((i, j + 1))
+        } else if i + 1 < self.index.len() {
+            Some((i + 1, 0))
+        } else {
+            None
+        }
+    }
+
+    pub fn index_valid(&self, idx: IndexIndex) -> bool {
+        let (i, j) = idx;
+        i < self.index.len() && j < self.index[i].len()
+    }
+
+    pub fn value(&self, idx: IndexIndex) -> &Waypoint {
+        let (i, j) = idx;
+        &self.index[i][j]
+    }
+
+    /// Find the index holding the given offset, or where it would be inserted if none found.
+    pub(crate) fn search(&self, offset: usize) -> IndexIndex {
+        let target = &Waypoint::Mapped(offset);
+        let find = self.index.binary_search_by_key(&target, |v| v.first().unwrap());
+        let ndx  = match find {
+            // Found the matching index
+            Ok(i) => (i, 0),
+            // Found where the index should be inserted
+            Err(i) => {
+                let i = i.saturating_sub(1);
+                match self.index[i].binary_search(target) {
+                    Ok(j) => (i, j),
+                    Err(j) => {
+                        if j == self.index[i].len() {
+                            (i + 1, 0)
+                        } else {
+                            (i, j)
+                        }
+                    },
+                }
+            },
+        };
+
+        if let Some(prev) = self.index_prev(ndx) {
+            if self.value(prev).contains(offset) {
+                return prev;
+            }
+        }
+        if self.index_valid(ndx) && offset > self.value(ndx).cmp_offset() {
+            if let Some(next) = self.index_next(ndx) {
+                return next;
+            }
+        }
+        ndx
     }
 
     pub(crate) fn next(&self, pos: Position) -> Position {
         let mut pos = pos;
-        pos.next(&self);
+        pos.next(self);
         pos
     }
 
     pub(crate) fn next_back(&self, pos: Position) -> Position {
         let mut pos = pos;
-        pos.next_back(&self);
+        pos.next_back(self);
         pos
     }
 
-    fn resolve_gap(&mut self, gap: Range) {
-        // Find the Unmapped region that contains the gap and split it or remove it.
-        let mut to_add = Vec::new();
-        let mut i = self.search(gap.start);
-        if i + 1 < self.index.len() && self.index[i].is_mapped() {
-            i += 1;
-        } else if i > 0 && self.index[i - 1].contains(gap.start) {
-            i -= 1;
+    /// Find the Unmapped region that contains the gap and split it;
+    /// return the index of the row that can be overwritten
+    fn resolve_gap(&mut self, gap: Range) -> usize {
+        let mut ndx = self.search(gap.start);
+        if self.value(ndx).is_mapped() {
+            if let Some(next) = self.index_next(ndx) {
+                ndx = next;
+            }
+        } else if let Some(prev) = self.index_prev(ndx) {
+            if self.value(prev).contains(gap.start) {
+                ndx = prev;
+            }
         }
-        assert!(i < self.index.len());
+        assert!(self.index_valid(ndx));
 
-        let unmapped = &self.index[i];
+        let unmapped = &self.value(ndx);
         assert!(!unmapped.is_mapped());
         assert!(unmapped.end_offset() >= gap.end);
         assert!(unmapped.cmp_offset() <= gap.start);
 
+        let (mut i, j) = ndx;
+        assert!(j == 0, "unmapped regions should be in their own vector");
+        assert!(self.index[i].len() == 1, "unmapped regions should be in their own vector");
+
         let (left, middle) = unmapped.split_at(gap.start);
         let (_, right) = middle.unwrap().split_at(gap.end);
         if let Some(left) = left {
-            to_add.push(left);
+            self.index.insert(i, vec![left]);
+            i += 1;
         }
         if let Some(right) = right {
-            to_add.push(right);
+            self.index.insert(i + 1, vec![right]);
         }
-
-        // We have to add 0, 1 or 2 things and we have to remove 1.
-        if to_add.len() == 0 {
-            // Nothing to insert; remove only
-            self.index.remove(i);
-        } else {
-            self.index[i] = to_add.pop().unwrap();
-            for waypoint in to_add.into_iter().rev() {
-                self.index.insert(i, waypoint);
-            }
-        }
+        i
     }
 
     pub fn insert(&mut self, offsets: &[usize], range: Range) {
         // Remove gaps that covered the region
-        self.resolve_gap(range.clone());
+        let i = self.resolve_gap(range.clone());
 
-        if let Some(val) = offsets.last() {
-            // Insert the new offsets into the index
-            // dbg!(val);
-            let i = self.search(*val);
-            // dbg!(i);
-            // FIXME: Insert the whole slice at once; what kind of container can do that?
-            for offset in offsets.into_iter().rev() {
-                assert!(range.contains(&offset) || range.end == *offset);
-                self.index.insert(i, Waypoint::Mapped(*offset));
-            }
+        assert!(self.index[i].len() == 1, "unmapped regions should be in their own vector");
+        assert!(!self.index[i][0].is_mapped());
+        if offsets.is_empty() {
+            self.index.remove(i);
+        } else {
+            self.index[i] = offsets.into_iter()
+                .map(|offset| {
+                    assert!(range.contains(&offset) || range.end == *offset);
+                    Waypoint::Mapped(*offset)
+                }).collect();
         }
     }
 
@@ -177,6 +231,41 @@ impl SaneIndex {
         }
         self.insert(&offsets, offset..offset + chunk.len());
     }
+
+    pub(crate) fn iter(&self) -> SaneIter {
+        SaneIter::new(self)
+    }
+}
+
+pub struct SaneIter<'a> {
+    index: &'a SaneIndex,
+    pos: Position,
+}
+
+impl<'a> SaneIter<'a> {
+    fn new(index: &'a SaneIndex) -> Self {
+        SaneIter {
+            pos: Position::Virtual(VirtualPosition::Start),
+            index,
+        }
+    }
+}
+
+impl<'a> Iterator for SaneIter<'a> {
+    type Item = Waypoint;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.index.next(self.pos.clone()) {
+            Position::Existing(i, waypoint) => {
+                self.pos = Position::Existing(i, waypoint.clone());
+                Some(waypoint)
+            },
+            _ => {
+                self.pos = Position::Virtual(VirtualPosition::Invalid);
+                None
+            },
+        }
+    }
 }
 
 
@@ -184,17 +273,17 @@ impl SaneIndex {
 fn sane_index_basic() {
     let mut index = SaneIndex::new();
     index.insert(&[0], 0..13);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Unmapped(13..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Unmapped(13..IMAX)]);
     index.insert(&[13], 13..14);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Unmapped(14..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Unmapped(14..IMAX)]);
     index.insert(&[14], 14..30);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Unmapped(30..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Unmapped(30..IMAX)]);
     index.insert(&[30], 30..51);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Unmapped(51..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Unmapped(51..IMAX)]);
     index.insert(&[51], 51..52);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Mapped(51), Waypoint::Unmapped(52..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Mapped(51), Waypoint::Unmapped(52..IMAX)]);
     index.insert(&[], 52..67);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Mapped(51), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Mapped(51), Waypoint::Unmapped(67..IMAX)]);
     assert_eq!(index.index.len(), 6);
 }
 
@@ -202,13 +291,13 @@ fn sane_index_basic() {
 fn sane_index_basic_rev() {
     let mut index = SaneIndex::new();
     index.insert(&[], 52..67);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&[13], 13..14);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..13), Waypoint::Mapped(13), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..13), Waypoint::Mapped(13), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&[], 0..13);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(13), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&[14], 14..30);
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Unmapped(30..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Unmapped(30..52), Waypoint::Unmapped(67..IMAX)]);
 }
 
 
@@ -218,7 +307,7 @@ fn sane_index_parse_basic() {
     let mut index = SaneIndex::new();
     let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     index.parse_chunk(0, file.as_bytes());
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -228,9 +317,9 @@ fn sane_index_parse_chunks() {
     let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let start = 35;
     index.parse_chunk(start, file[start..].as_bytes());
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Unmapped(0..start), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Unmapped(0..start), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
     index.parse_chunk(0, file[..start].as_bytes());
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -246,7 +335,7 @@ fn sane_index_parse_chunks_random_bytes() {
     for i in rando {
         index.parse_chunk(i, file[i..i+1].as_bytes());
     }
-    assert_eq!(index.index.iter().cloned().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }
 
 
@@ -275,7 +364,7 @@ fn sane_index_parse_chunks_random_chunks() {
     for i in cuts {
         index.parse_chunk(i.start, file[i].as_bytes());
     }
-    assert_eq!(index.index.to_vec(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -288,5 +377,5 @@ fn sane_index_full_bufread() {
     let mut index = SaneIndex::new();
 
     index.parse_bufread(&mut cursor, &(0..100)).unwrap();
-    assert_eq!(index.index.to_vec(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
 }

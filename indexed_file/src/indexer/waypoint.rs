@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use super::sane_index::SaneIndex;
+use super::sane_index::{IndexIndex, SaneIndex};
 
 
 type Range = std::ops::Range<usize>;
@@ -48,7 +48,7 @@ pub enum Position {
     Virtual(VirtualPosition),
 
     /// A specific waypoint that exists (or existed) in the file
-    Existing(usize, Waypoint),
+    Existing(IndexIndex, Waypoint),
 }
 
 impl Position {
@@ -77,21 +77,25 @@ impl Position {
             Position::Virtual(ref virt) => {
                 if let Some(offset) = virt.offset() {
                     let i = index.search(offset);
-                    if i < index.index.len() {
+                    if index.index_valid(i) {
                         let i =
-                            if offset < index.index[i].cmp_offset() {
-                                i.saturating_sub(1)
+                            if offset < index.value(i).cmp_offset() {
+                                if let Some(prev) = index.index_prev(i) {
+                                    prev
+                                } else {
+                                    i
+                                }
                             } else {
                                 i
                             };
-                        *self = Position::Existing(i, index.index[i].clone());
+                        *self = Position::Existing(i, index.value(i).clone());
                     } else {
                         *self = Position::Virtual(VirtualPosition::Invalid);
                     }
                 }
             },
             Position::Existing(i, waypoint) => {
-                if *i >= index.index.len() || index.index[*i] != *waypoint {
+                if !index.index_valid(*i) || index.value(*i) != waypoint {
                     log::info!("Waypoint moved; searching new location: {}", waypoint.cmp_offset());
                     *self = Position::Virtual(VirtualPosition::Offset(waypoint.cmp_offset()));
                     self.resolve(index);
@@ -109,23 +113,22 @@ impl Position {
                 // dbg!(&virt);
                 if let Some(offset) = virt.offset() {
                     // dbg!(offset);
-                    let i = index.search(offset);
+                    let mut i = index.search(offset);
                     // dbg!(i);
-                    let i =
-                        if i == index.index.len() || offset < index.index[i].cmp_offset() {
-                            i.saturating_sub(1)
-                        } else {
-                            i
-                        };
-                    if i < index.index.len() {
-                        *self = Position::Existing(i, index.index[i].clone());
+                    if !index.index_valid(i) || offset < index.value(i).cmp_offset() {
+                        if let Some(ndx) = index.index_prev(i) {
+                            i = ndx;
+                        }
+                    }
+                    if index.index_valid(i) {
+                        *self = Position::Existing(i, index.value(i).clone());
                     } else {
                         *self = Position::Virtual(VirtualPosition::Invalid);
                     }
                 }
             },
             Position::Existing(i, waypoint) => {
-                if *i >= index.index.len() || index.index[*i] != *waypoint {
+                if !index.index_valid(*i) || index.value(*i) != waypoint {
                     log::info!("Waypoint moved; searching new location: {}", waypoint.cmp_offset());
                     *self = Position::Virtual(VirtualPosition::Offset(waypoint.cmp_offset()));
                     self.resolve_back(index);
@@ -145,10 +148,11 @@ impl Position {
 
     pub(crate) fn advance(&mut self, index: &SaneIndex) -> Option<Waypoint> {
         if let Position::Existing(i, _) = self {
-            let next = *i + 1;
-            if next < index.index.len() {
-                let next_waypoint = index.index[next].clone();
+            if let Some(next) = index.index_next(*i) {
+                let next_waypoint = index.value(next).clone();
                 *self = Position::Existing(next, next_waypoint);
+            } else {
+                *self = Position::Virtual(VirtualPosition::Invalid);
             }
         }
         self.waypoint()
@@ -174,10 +178,9 @@ impl Position {
 
     pub(crate) fn advance_back(&mut self, index: &SaneIndex) -> Option<Waypoint> {
         if let Position::Existing(i, _) = self {
-            if *i > 0 {
-                let next = *i - 1;
-                let next_waypoint = index.index[next].clone();
-                *self = Position::Existing(next, next_waypoint);
+            if let Some(prev) = index.index_prev(*i) {
+                let prev_waypoint = index.value(prev).clone();
+                *self = Position::Existing(prev, prev_waypoint);
             } else {
                 *self = Position::Virtual(VirtualPosition::Invalid);
             }
@@ -355,7 +358,7 @@ fn test_position_next() {
     index.insert(&[30], 30..51);
     index.insert(&[51], 51..52);
     index.insert(&[], 52..67);
-    assert_eq!(index.index.to_vec(),
+    assert_eq!(index.iter().collect::<Vec<_>>(),
             vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Unmapped(67..usize::MAX)]);
 
     let mut pos = Virtual(Start);
@@ -380,7 +383,7 @@ fn test_position_prev() {
     index.insert(&[30], 30..51);
     index.insert(&[51], 51..52);
     index.insert(&[], 52..67);
-    assert_eq!(index.index.to_vec(),
+    assert_eq!(index.iter().collect::<Vec<_>>(),
             vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Unmapped(67..usize::MAX)]);
 
     let mut pos = Virtual(End);
@@ -405,7 +408,7 @@ fn test_position_prev_unmapped() {
     index.insert(&[30], 30..51);
     index.insert(&[51], 51..52);
     index.insert(&[], 52..67);
-    assert_eq!(index.index.to_vec(),
+    assert_eq!(index.iter().collect::<Vec<_>>(),
             vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Unmapped(67..usize::MAX)]);
 
     let mut pos = Virtual(End);
