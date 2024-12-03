@@ -13,7 +13,7 @@ pub trait IndexedLog {
     // Note the length of the line may be modified to fit utf-8 charset, so the bytes consumed may be
     // different than the string length. The new file position will be the offset + the bytes consumed.
     // FIXME: We should return the new offset, not the bytes consumed.
-    fn read_line(&mut self, offset: usize) -> (usize, Option<LogLine>);
+    fn read_line(&mut self, offset: usize) -> Option<LogLine>;
 
     /// Read the next/prev line from the file
     /// returns search results and advances the file position

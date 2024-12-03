@@ -43,13 +43,11 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         if offset >= self.len() {
             return None;
         }
-        let (bytes, line) = self.read_line(offset);
-        line
+        self.read_line(offset)
     }
 
     fn prev_line(&mut self, offset: usize) -> Option<LogLine> {
-        let (_bytes, line) = self.read_line(offset);
-        line
+        self.read_line(offset)
     }
 
 }
@@ -62,19 +60,14 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         self.index.parse_bufread(&mut self.source, &gap)
     }
 
-    fn read_line(&mut self, offset: usize) -> (usize, Option<LogLine>) {
-        // FIXME: Use read_line_at;  it needs to return bytes read for us, though.
-        // let line = self.source.read_line_at(offset).unwrap();
-        let mut line = String::new();
-        self.source.seek(std::io::SeekFrom::Start(offset as u64)).unwrap();
-        // FIXME: make this safe for non-utf-8 sequences?
-        let bytes = self.source.read_line(&mut line).unwrap();
-        let logline = if bytes >  0 {
+    fn read_line(&mut self, offset: usize) -> Option<LogLine> {
+        // TODO: return errors?
+        let line = self.source.read_line_at(offset).unwrap();
+        if !line.is_empty() {
             Some(LogLine::new(line, offset))
         } else {
             None
-        };
-        (bytes, logline)
+        }
     }
 
     fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {

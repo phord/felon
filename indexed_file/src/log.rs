@@ -92,7 +92,7 @@ impl IndexedLog for Log {
     }
 
     #[inline]
-    fn read_line(&mut self, offset: usize) -> (usize, Option<LogLine>) {
+    fn read_line(&mut self, offset: usize) -> Option<LogLine> {
         self.file.read_line(offset)
     }
 }
