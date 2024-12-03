@@ -182,9 +182,9 @@ impl SaneIndex {
         if offsets.is_empty() {
             self.index.remove(i);
         } else {
-            self.index[i] = offsets.into_iter()
+            self.index[i] = offsets.iter()
                 .map(|offset| {
-                    assert!(range.contains(&offset) || range.end == *offset);
+                    assert!(range.contains(offset) || range.end == *offset);
                     Waypoint::Mapped(*offset)
                 }).collect();
         }
