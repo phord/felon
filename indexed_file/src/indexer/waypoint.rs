@@ -8,6 +8,7 @@ type Range = std::ops::Range<usize>;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Waypoint {
     /// The start of a line; e.g., first line starts at 0
+    /// FIXME: Should mapped include the whole range?  Makes searching easier.
     Mapped(usize),
 
     /// An uncharted region; beware of index shift. if we find \n at 0, the next line starts at 1.
@@ -48,7 +49,7 @@ pub enum Position {
     Virtual(VirtualPosition),
 
     /// A specific waypoint that exists (or existed) in the file
-    Existing(IndexIndex, Waypoint),
+    Existing(IndexIndex, usize, Waypoint),
 }
 
 impl Position {
@@ -76,28 +77,29 @@ impl Position {
         match self {
             Position::Virtual(ref virt) => {
                 if let Some(offset) = virt.offset() {
-                    let i = index.search(offset);
+                    let mut i = index.search(offset);
                     if index.index_valid(i) {
-                        let i =
-                            if offset < index.value(i).cmp_offset() {
-                                if let Some(prev) = index.index_prev(i) {
-                                    prev
-                                } else {
-                                    i
+                        if offset < index.value(i).cmp_offset() {
+                            if let Some(prev) = index.index_prev(i) {
+                                let val = index.value(prev);
+                                // If the previous waypoint is mapped, then it contains this offset.
+                                // If the previous waypoint is unmapped, then use it only if it contains this offset.
+                                if val.is_mapped() || offset < val.end_offset() {
+                                    i = prev;
                                 }
-                            } else {
-                                i
-                            };
-                        *self = Position::Existing(i, index.value(i).clone());
+                            }
+                        }
+                        *self = Position::Existing(i, offset, index.value(i).clone());
                     } else {
                         *self = Position::Virtual(VirtualPosition::Invalid);
                     }
                 }
+                // else -- invalid
             },
-            Position::Existing(i, waypoint) => {
+            Position::Existing(i, target, waypoint) => {
                 if !index.index_valid(*i) || index.value(*i) != waypoint {
-                    log::info!("Waypoint moved; searching new location: {}", waypoint.cmp_offset());
-                    *self = Position::Virtual(VirtualPosition::Offset(waypoint.cmp_offset()));
+                    log::info!("Waypoint moved; searching new location: {}", target);
+                    *self = Position::Virtual(VirtualPosition::Offset(*target));
                     self.resolve(index);
                 }
             },
@@ -121,16 +123,16 @@ impl Position {
                         }
                     }
                     if index.index_valid(i) {
-                        *self = Position::Existing(i, index.value(i).clone());
+                        *self = Position::Existing(i, offset, index.value(i).clone());
                     } else {
                         *self = Position::Virtual(VirtualPosition::Invalid);
                     }
                 }
             },
-            Position::Existing(i, waypoint) => {
+            Position::Existing(i, offset, waypoint) => {
                 if !index.index_valid(*i) || index.value(*i) != waypoint {
-                    log::info!("Waypoint moved; searching new location: {}", waypoint.cmp_offset());
-                    *self = Position::Virtual(VirtualPosition::Offset(waypoint.cmp_offset()));
+                    log::info!("Waypoint moved; searching new location: {}", offset);
+                    *self = Position::Virtual(VirtualPosition::Offset(*offset));
                     self.resolve_back(index);
                 }
             },
@@ -139,18 +141,18 @@ impl Position {
     }
 
     /// Extract the waypoint, if there is one
-    fn waypoint(&self) -> Option<Waypoint> {
+    fn waypoint(&self) -> Option<(Waypoint, usize)> {
         match self {
-            Position::Existing(_, waypoint) => Some(waypoint.clone()),
+            Position::Existing(_, target, waypoint) => Some((waypoint.clone(), *target)),
             _ => None,
         }
     }
 
-    pub(crate) fn advance(&mut self, index: &SaneIndex) -> Option<Waypoint> {
-        if let Position::Existing(i, _) = self {
+    pub(crate) fn advance(&mut self, index: &SaneIndex) -> Option<(Waypoint, usize)> {
+        if let Position::Existing(i, ..) = self {
             if let Some(next) = index.index_next(*i) {
                 let next_waypoint = index.value(next).clone();
-                *self = Position::Existing(next, next_waypoint);
+                *self = Position::Existing(next, next_waypoint.cmp_offset(), next_waypoint);
             } else {
                 *self = Position::Virtual(VirtualPosition::Invalid);
             }
@@ -160,7 +162,8 @@ impl Position {
 
     // If position is virtual, resolve to first appropriate waypoint and return it
     // If it's a waypoint, advance position to the next waypoint and return it
-    pub(crate) fn next(&mut self, index: &SaneIndex) -> Option<Waypoint> {
+    pub(crate) fn next(&mut self, index: &SaneIndex) -> Option<(Waypoint, usize)> {
+        log::debug!("next: {:?}", self);
         match self {
             Position::Virtual(_) => {
                 self.resolve(index);
@@ -176,11 +179,11 @@ impl Position {
         }
     }
 
-    pub(crate) fn advance_back(&mut self, index: &SaneIndex) -> Option<Waypoint> {
-        if let Position::Existing(i, _) = self {
+    pub(crate) fn advance_back(&mut self, index: &SaneIndex) -> Option<(Waypoint, usize)> {
+        if let Position::Existing(i, ..) = self {
             if let Some(prev) = index.index_prev(*i) {
                 let prev_waypoint = index.value(prev).clone();
-                *self = Position::Existing(prev, prev_waypoint);
+                *self = Position::Existing(prev, prev_waypoint.end_offset(), prev_waypoint);
             } else {
                 *self = Position::Virtual(VirtualPosition::Invalid);
             }
@@ -190,7 +193,7 @@ impl Position {
 
     // If position is virtual, resolve to first waypoint and return it
     // If it's a waypoint, advance_back position to the prev waypoint and return it
-    pub(crate) fn next_back(&mut self, index: &SaneIndex) -> Option<Waypoint> {
+    pub(crate) fn next_back(&mut self, index: &SaneIndex) -> Option<(Waypoint, usize)> {
         match self {
             Position::Virtual(_) => {
                 self.resolve_back(index);
@@ -209,14 +212,14 @@ impl Position {
     fn least_offset(&self) -> usize {
         match self {
             Position::Virtual(virt) => virt.offset().unwrap_or(usize::MAX),
-            Position::Existing(_, waypoint) => waypoint.cmp_offset(),
+            Position::Existing(_, _, waypoint) => waypoint.cmp_offset(),
         }
     }
 
     fn most_offset(&self) -> usize {
         match self {
             Position::Virtual(virt) => virt.offset().unwrap_or(usize::MAX),
-            Position::Existing(_, waypoint) => waypoint.end_offset(),
+            Position::Existing(_, _, waypoint) => waypoint.end_offset(),
         }
     }
 
@@ -228,6 +231,7 @@ impl Position {
         }
         let left = self.least_offset();
         let right = other.most_offset();
+        dbg!(left, right);
         left < right
     }
 
@@ -362,12 +366,12 @@ fn test_position_next() {
             vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Unmapped(67..usize::MAX)]);
 
     let mut pos = Virtual(Start);
-    assert_eq!(pos.next(&index), Some(Mapped(0)));
-    assert_eq!(pos.next(&index), Some(Mapped(13)));
-    assert_eq!(pos.next(&index), Some(Mapped(14)));
-    assert_eq!(pos.next(&index), Some(Mapped(30)));
-    assert_eq!(pos.next(&index), Some(Mapped(51)));
-    assert_eq!(pos.next(&index), Some(Unmapped(67..usize::MAX)));
+    assert_eq!(pos.next(&index), Some((Mapped(0), 0)));
+    assert_eq!(pos.next(&index), Some((Mapped(13), 13)));
+    assert_eq!(pos.next(&index), Some((Mapped(14), 14)));
+    assert_eq!(pos.next(&index), Some((Mapped(30), 30)));
+    assert_eq!(pos.next(&index), Some((Mapped(51), 51)));
+    assert_eq!(pos.next(&index), Some((Unmapped(67..usize::MAX), 67)));
 }
 
 #[test]
@@ -387,12 +391,12 @@ fn test_position_prev() {
             vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Unmapped(67..usize::MAX)]);
 
     let mut pos = Virtual(End);
-    assert_eq!(pos.next_back(&index), Some(Unmapped(67..usize::MAX)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(51)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(30)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(14)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(13)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(0)));
+    assert_eq!(pos.next_back(&index), Some((Unmapped(67..usize::MAX), usize::MAX)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(51), 51)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(30), 30)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(14), 14)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(13), 13)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(0), 0)));
 }
 
 #[test]
@@ -412,10 +416,10 @@ fn test_position_prev_unmapped() {
             vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Unmapped(67..usize::MAX)]);
 
     let mut pos = Virtual(End);
-    assert_eq!(pos.next_back(&index), Some(Unmapped(67..usize::MAX)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(51)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(30)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(14)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(13)));
-    assert_eq!(pos.next_back(&index), Some(Mapped(0)));
+    assert_eq!(pos.next_back(&index), Some((Unmapped(67..usize::MAX), usize::MAX)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(51), 51)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(30), 30)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(14), 14)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(13), 13)));
+    assert_eq!(pos.next_back(&index), Some((Mapped(0), 0)));
 }

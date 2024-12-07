@@ -256,8 +256,8 @@ impl<'a> Iterator for SaneIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.index.next(self.pos.clone()) {
-            Position::Existing(i, waypoint) => {
-                self.pos = Position::Existing(i, waypoint.clone());
+            Position::Existing(i, target, waypoint) => {
+                self.pos = Position::Existing(i, target, waypoint.clone());
                 Some(waypoint)
             },
             _ => {

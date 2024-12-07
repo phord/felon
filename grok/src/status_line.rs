@@ -23,6 +23,8 @@ impl StatusLine {
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
 
+        // FIXME: Don't print the status line again if nothing changed
+
         let mut stdout = stdout();
         let indexed = doc.indexed_bytes() as f64 / doc.len() as f64 * 100.0;
         let message = format!("Doc:  {} bytes, {:3.2}% indexed", doc.len(), indexed);

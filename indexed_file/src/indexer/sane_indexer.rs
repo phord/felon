@@ -79,7 +79,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
             match pos.next(&self.index) {
                 None => return (pos, None),
 
-                Some(Waypoint::Mapped(offset)) => {
+                Some((Waypoint::Mapped(offset), _target)) => {
                     let next = self.next_line(offset);
                     if let Some(logline) = next {
                         #[allow(clippy::single_match)]
@@ -89,6 +89,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                                     return (pos, Some(logline));
                                 }
                                 // else -- next loop will find the correct line with pos.next(), or unmapped, and we'll do this dance again.
+                                return (pos, Some(logline));
                             },
                             _ => {
                                 return (pos, Some(logline));
@@ -99,10 +100,13 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                     }
                 },
 
-                Some(Waypoint::Unmapped(range)) => {
-                    let start = range.start;
+                Some((Waypoint::Unmapped(range), target)) => {
+                    assert!(range.contains(&target));
+
                     let chunk_size = 1024*1024;
-                    let end = range.end.max(self.len()).min(start + chunk_size);
+                    let start = target.saturating_sub(1).max(range.start);
+                    let end = range.end.min(self.len()).min(start + chunk_size);
+                    let start = end.saturating_sub(chunk_size).min(start).max(range.start);
                     if start >= end {
                         return (pos, None);
                     }
@@ -128,7 +132,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
             match pos.next_back(&self.index) {
                 None => return (pos, None),
 
-                Some(Waypoint::Mapped(offset)) => {
+                Some((Waypoint::Mapped(offset), _target)) => {
                     let next = self.prev_line(offset);
                     if let Some(logline) = next {
                         #[allow(clippy::single_match)]
@@ -148,9 +152,9 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
                     }
                 },
 
-                Some(Waypoint::Unmapped(range)) => {
-                    let end = range.end.min(self.len());
+                Some((Waypoint::Unmapped(range), target)) => {
                     let chunk_size = 1024*1024;
+                    let end = target.saturating_add(chunk_size).min(range.end).min(self.len());
                     let start = end.saturating_sub(chunk_size).max(range.start);
                     if start >= end {
                         return (pos, None);
@@ -171,6 +175,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn indexed_bytes(&self) -> usize {
+        // FIXME -- cache this result so we don't burn CPU all the time measuring it again.
         let mut end = 0usize;
         self.index.iter()
             .filter(|w| matches!(w, Waypoint::Unmapped(_)))
@@ -184,6 +189,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn count_lines(&self) -> usize {
+        // FIXME -- cache this result so we don't burn CPU all the time measuring it again.
         self.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count()
     }
 
