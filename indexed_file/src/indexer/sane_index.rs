@@ -17,18 +17,18 @@ use super::waypoint::{Position, VirtualPosition, Waypoint};
 /// Initially the file is unmapped:     [ Unmapped(0..IMAX) ]
 ///
 /// -> When we read the first line, we learn the offset of the second one. Notice unmapped still includes the start of the 2nd line.
-/// We read the first line and map it:  [ Mapped(0), Mapped(13), Unmapped(13..IMAX) ]
+/// We read the first line and map it:  [ Mapped(0..13), Mapped(13..14), Unmapped(13..IMAX) ]
 ///
 /// -> When we read the last line, we leave an umapped region at the end in case the file grows later.
-/// We read the last line and map it:   [ Mapped(0), Mapped(13), Unmapped(13..51), Mapped(52), Unmapped(67..IMAX)]
-/// We read the second line and map it: [ Mapped(0), Mapped(13), Mapped(14), Unmapped(14..51), Mapped(52), Unmapped(67..IMAX) ]
-/// Finally we scan the middle region:  [ Mapped(0), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Unmapped(67..IMAX) ]
+/// We read the last line and map it:   [ Mapped(0..13), Mapped(13..14), Unmapped(13..51), Mapped(52), Unmapped(67..IMAX)]
+/// We read the second line and map it: [ Mapped(0..13), Mapped(13..14), Mapped(14..30), Unmapped(14..51), Mapped(52), Unmapped(67..IMAX) ]
+/// Finally we scan the middle region:  [ Mapped(0..13), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52), Unmapped(67..IMAX) ]
 ///
 /// Suppose we mapped the middle section of the file first.
 /// Initially the file is unmapped:     [ Unmapped(0..IMAX) ]
-/// We scan bytes 10 to 39:             [ Unmapped(0..10), Mapped(13), Mapped(14), Mapped(30), Unmapped(40..IMAX) ]
+/// We scan bytes 10 to 39:             [ Unmapped(0..10), Mapped(13..14), Mapped(14..30), Mapped(30..51), Unmapped(40..IMAX) ]
 ///
-/// Note we always assume there is a line at Mapped(0).  But it may not be inserted in every index.
+/// Note we always assume there is a line at Mapped(0..13).  But it may not be inserted in every index.
 
 /// Updated to use a splitvec-style implementation when growing in the middle.
 /// Each internal vector either has a single Unmapped(range) or more Mapped(offset) values.
@@ -91,12 +91,12 @@ impl SaneIndex {
 
     /// Find the index holding the given offset, or where it would be inserted if none found.
     pub(crate) fn search(&self, offset: usize) -> IndexIndex {
-        let target = &Waypoint::Mapped(offset);
+        let target = &Waypoint::Mapped(offset..offset);
         let find = self.index.binary_search_by_key(&target, |v| v.first().unwrap());
         let ndx  = match find {
-            // Found the matching index
+            // Found the matching index in the first element of the row.  What luck!
             Ok(i) => (i, 0),
-            // Found where the index should be inserted
+            // Found the row where the index should exist (at i-1)
             Err(i) => {
                 let i = i.saturating_sub(1);
                 match self.index[i].binary_search(target) {
@@ -179,14 +179,39 @@ impl SaneIndex {
 
         assert!(self.index[i].len() == 1, "unmapped regions should be in their own vector");
         assert!(!self.index[i][0].is_mapped());
-        if offsets.is_empty() {
-            self.index.remove(i);
-        } else {
-            self.index[i] = offsets.iter()
-                .map(|offset| {
-                    assert!(range.contains(offset) || range.end == *offset);
-                    Waypoint::Mapped(*offset)
-                }).collect();
+
+        // The end of the last line now being uncovered
+        let endpoint =  {
+            if i + 1 < self.index.len() {
+                self.index[i + 1].first().unwrap().cmp_offset()
+            } else {
+                range.end
+            }
+        };
+
+        let prev_end =
+            if offsets.is_empty() {
+                self.index.remove(i);
+                endpoint
+            } else {
+                // FIXME: Make all waypoints hold complete lines?
+                self.index[i] = offsets.iter().zip(offsets.iter().skip(1).chain(std::iter::once(&endpoint)))
+                    .map(|(start, end)| {
+                        assert!((range.contains(start) || range.end == *start) && (range.contains(end) || range.end == *end || endpoint == *end));
+                        Waypoint::Mapped(*start..*end)
+                    }).collect();
+                assert_eq!(self.index[i].len(), offsets.len());
+                *offsets.first().unwrap()
+            };
+        // extend the previous Mapped() tail to include this region's head
+        if i > 0 {
+            let prev = &mut self.index[i - 1];
+            assert!(!prev.is_empty(), "no empty rows in the index");
+            if let Some(tail) = prev.last_mut() {
+                if tail.is_mapped() {
+                    *tail = Waypoint::Mapped(tail.cmp_offset()..prev_end);
+                }
+            }
         }
     }
 
@@ -273,17 +298,17 @@ impl<'a> Iterator for SaneIter<'a> {
 fn sane_index_basic() {
     let mut index = SaneIndex::new();
     index.insert(&[0], 0..13);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Unmapped(13..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Unmapped(13..IMAX)]);
     index.insert(&[13], 13..14);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Unmapped(14..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Unmapped(14..IMAX)]);
     index.insert(&[14], 14..30);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Unmapped(30..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Unmapped(30..IMAX)]);
     index.insert(&[30], 30..51);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Unmapped(51..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Unmapped(51..IMAX)]);
     index.insert(&[51], 51..52);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Mapped(51), Waypoint::Unmapped(52..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Mapped(51..52), Waypoint::Unmapped(52..IMAX)]);
     index.insert(&[], 52..67);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0), Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Mapped(30), Waypoint::Mapped(51), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Mapped(51..67), Waypoint::Unmapped(67..IMAX)]);
     assert_eq!(index.index.len(), 6);
 }
 
@@ -293,11 +318,11 @@ fn sane_index_basic_rev() {
     index.insert(&[], 52..67);
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&[13], 13..14);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..13), Waypoint::Mapped(13), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..13), Waypoint::Mapped(13..14), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&[], 0..13);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13..14), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&[14], 14..30);
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13), Waypoint::Mapped(14), Waypoint::Unmapped(30..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Unmapped(30..52), Waypoint::Unmapped(67..IMAX)]);
 }
 
 
@@ -307,7 +332,7 @@ fn sane_index_parse_basic() {
     let mut index = SaneIndex::new();
     let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     index.parse_chunk(0, file.as_bytes());
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -317,9 +342,9 @@ fn sane_index_parse_chunks() {
     let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let start = 35;
     index.parse_chunk(start, file[start..].as_bytes());
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Unmapped(0..start), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Unmapped(0..start), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
     index.parse_chunk(0, file[..start].as_bytes());
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -335,7 +360,7 @@ fn sane_index_parse_chunks_random_bytes() {
     for i in rando {
         index.parse_chunk(i, file[i..i+1].as_bytes());
     }
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
 }
 
 
@@ -364,7 +389,7 @@ fn sane_index_parse_chunks_random_chunks() {
     for i in cuts {
         index.parse_chunk(i.start, file[i].as_bytes());
     }
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
 }
 
 #[test]
@@ -377,5 +402,5 @@ fn sane_index_full_bufread() {
     let mut index = SaneIndex::new();
 
     index.parse_bufread(&mut cursor, &(0..100)).unwrap();
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0), Mapped(13), Mapped(14), Mapped(30), Mapped(51), Mapped(52), Mapped(67), Unmapped(67..IMAX)]);
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
 }

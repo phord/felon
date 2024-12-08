@@ -39,17 +39,12 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         self.source.wait_for_end()
     }
 
-    fn next_line(&mut self, offset: usize) -> Option<LogLine> {
+    fn get_line(&mut self, offset: usize) -> Option<LogLine> {
         if offset >= self.len() {
             return None;
         }
         self.read_line(offset)
     }
-
-    fn prev_line(&mut self, offset: usize) -> Option<LogLine> {
-        self.read_line(offset)
-    }
-
 }
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
@@ -74,13 +69,12 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         let original = pos.clone();
         let mut pos = pos;
         for _ in 0..5 {
-            pos.clip(self.len());
             // Resolve position to next waypoint
             match pos.next(&self.index) {
                 None => return (pos, None),
 
-                Some((Waypoint::Mapped(offset), _target)) => {
-                    let next = self.next_line(offset);
+                Some((Waypoint::Mapped(range), _target)) => {
+                    let next = self.get_line(range.start);
                     if let Some(logline) = next {
                         #[allow(clippy::single_match)]
                         match original {
@@ -123,6 +117,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         unreachable!("Failed to resolve gap 5 times?");
     }
 
+    // FIXME: dedup with next
     fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
         let original = pos.clone();
         let mut pos = pos;
@@ -132,8 +127,8 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
             match pos.next_back(&self.index) {
                 None => return (pos, None),
 
-                Some((Waypoint::Mapped(offset), _target)) => {
-                    let next = self.prev_line(offset);
+                Some((Waypoint::Mapped(range), _target)) => {
+                    let next = self.get_line(range.start);
                     if let Some(logline) = next {
                         #[allow(clippy::single_match)]
                         match original {
