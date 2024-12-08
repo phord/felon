@@ -9,11 +9,28 @@ use super::indexed_log::IndexedLog;
 use super::sane_index::SaneIndex;
 use super::waypoint::{Position, VirtualPosition, Waypoint};
 
+struct indexer_stats {
+    stale: bool,
+    bytes_indexed: usize,
+    lines_indexed: usize,
+}
+
+impl Default for indexer_stats {
+    fn default() -> Self {
+        Self {
+            stale: true,
+            bytes_indexed: 0,
+            lines_indexed: 0,
+        }
+    }
+}
 
 pub struct SaneIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
     index: SaneIndex,
+
+    stats: indexer_stats,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -29,8 +46,30 @@ impl<LOG> SaneIndexer<LOG> {
         Self {
             source: file,
             index: SaneIndex::new(),
+            stats: indexer_stats::default(),
         }
     }
+
+    // Update statistics about the index for reporting to the user
+    fn update_stats(&mut self) {
+        if self.stats.stale {
+            let mut end = 0usize;
+            self.stats.bytes_indexed = self.index.iter()
+                .filter(|w| matches!(w, Waypoint::Unmapped(_)))
+                .fold(0usize, |acc, w| {
+                    if let Waypoint::Unmapped(range) = w {
+                        let prev = end;
+                        end = range.end;
+                        acc + range.start - prev
+                    } else { unreachable!()}
+                });
+
+            self.stats.lines_indexed = self.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count();
+
+            self.stats.stale = false;
+        }
+    }
+
 }
 
 impl<LOG: LogFile> SaneIndexer<LOG> {
@@ -51,8 +90,12 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
     fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
         // Parse part or all of the gap and add it to our mapped index.
+        self.stats.stale = true;
         self.source.seek(std::io::SeekFrom::Start(gap.start as u64))?;
-        self.index.parse_bufread(&mut self.source, &gap)
+        let ret = self.index.parse_bufread(&mut self.source, &gap);
+        // FIXME: Let parse_bufread tell us exactly what changed
+        self.update_stats();
+        ret
     }
 
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
@@ -117,7 +160,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         unreachable!("Failed to resolve gap 5 times?");
     }
 
-    // FIXME: dedup with next
+    // this is a near-dup of next, but it has several subtle differences.  :-(
     fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
         let original = pos.clone();
         let mut pos = pos;
@@ -170,22 +213,11 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn indexed_bytes(&self) -> usize {
-        // FIXME -- cache this result so we don't burn CPU all the time measuring it again.
-        let mut end = 0usize;
-        self.index.iter()
-            .filter(|w| matches!(w, Waypoint::Unmapped(_)))
-            .fold(0usize, |acc, w| {
-                if let Waypoint::Unmapped(range) = w {
-                    let prev = end;
-                    end = range.end;
-                    acc + range.start - prev
-                } else { unreachable!()}
-            })
+        self.stats.bytes_indexed
     }
 
     fn count_lines(&self) -> usize {
-        // FIXME -- cache this result so we don't burn CPU all the time measuring it again.
-        self.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count()
+        self.stats.lines_indexed
     }
 
 }
