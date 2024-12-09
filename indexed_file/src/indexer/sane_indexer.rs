@@ -50,25 +50,6 @@ impl<LOG> SaneIndexer<LOG> {
         }
     }
 
-    // Update statistics about the index for reporting to the user
-    fn update_stats(&mut self) {
-        if self.stats.stale {
-            let mut end = 0usize;
-            self.stats.bytes_indexed = self.index.iter()
-                .filter(|w| matches!(w, Waypoint::Unmapped(_)))
-                .fold(0usize, |acc, w| {
-                    if let Waypoint::Unmapped(range) = w {
-                        let prev = end;
-                        end = range.end;
-                        acc + range.start - prev
-                    } else { unreachable!()}
-                });
-
-            self.stats.lines_indexed = self.index.iter().filter(|w| matches!(w, Waypoint::Mapped(_))).count();
-
-            self.stats.stale = false;
-        }
-    }
 
 }
 
@@ -90,11 +71,8 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
     fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
         // Parse part or all of the gap and add it to our mapped index.
-        self.stats.stale = true;
         self.source.seek(std::io::SeekFrom::Start(gap.start as u64))?;
         let ret = self.index.parse_bufread(&mut self.source, &gap);
-        // FIXME: Let parse_bufread tell us exactly what changed
-        self.update_stats();
         ret
     }
 

@@ -39,15 +39,23 @@ type Range = std::ops::Range<usize>;
 
 type IndexVec = Vec<Vec<Waypoint>>;
 pub type IndexIndex = (usize, usize);
+#[derive(Default)]
+struct IndexStats {
+    bytes_indexed: usize,
+    lines_indexed: usize,
+}
+
 
 pub struct SaneIndex {
     pub(crate) index: IndexVec,
+    stats: IndexStats,
 }
 
 impl Default for SaneIndex {
     fn default() -> Self {
         SaneIndex {
             index: vec![vec![Waypoint::Unmapped(0..IMAX)]],
+            stats: IndexStats::default(),
         }
     }
 }
@@ -55,6 +63,16 @@ impl Default for SaneIndex {
 impl SaneIndex {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[inline]
+    pub fn indexed_bytes(&self) -> usize {
+        self.stats.bytes_indexed
+    }
+
+    #[inline]
+    pub fn count_lines(&self) -> usize {
+        self.stats.lines_indexed
     }
 
     pub fn index_prev(&self, idx: IndexIndex) -> Option<IndexIndex> {
@@ -213,6 +231,9 @@ impl SaneIndex {
                 }
             }
         }
+
+        self.stats.lines_indexed += offsets.len();
+        self.stats.bytes_indexed += range.end - range.start;
     }
 
     // Parse lines from a BufRead
@@ -310,6 +331,7 @@ fn sane_index_basic() {
     index.insert(&[], 52..67);
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Mapped(51..67), Waypoint::Unmapped(67..IMAX)]);
     assert_eq!(index.index.len(), 6);
+    todo!("Add tests for indexed-bytes, -lines");
 }
 
 #[test]
