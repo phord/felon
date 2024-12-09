@@ -157,7 +157,7 @@ impl SaneIndex {
 
     /// Find the Unmapped region that contains the gap and split it;
     /// return the index of the row that can be overwritten
-    fn resolve_gap(&mut self, gap: Range) -> usize {
+    fn find_gap(&mut self, gap: Range) -> Position {
         let mut ndx = self.search(gap.start);
         if self.value(ndx).is_mapped() {
             if let Some(next) = self.index_next(ndx) {
@@ -170,7 +170,17 @@ impl SaneIndex {
         }
         assert!(self.index_valid(ndx));
 
-        let unmapped = &self.value(ndx);
+        Position::Existing(ndx, /*arbitrary*/ gap.start, self.value(ndx).clone())
+    }
+
+    // Resolves gap which must be in a Position::Existing(Mapped)
+    // Returns the index of the row that can be overwritten
+    fn resolve_gap_at(&mut self, pos: Position, gap: Range) -> usize {
+        let (ndx, unmapped) = match pos {
+            Position::Existing(ndx, _, waypoint) => (ndx, waypoint),
+            _ => panic!("Can only resolve gaps at unmapped positions"),
+        };
+
         assert!(!unmapped.is_mapped());
         assert!(unmapped.end_offset() >= gap.end);
         assert!(unmapped.cmp_offset() <= gap.start);
@@ -192,16 +202,22 @@ impl SaneIndex {
     }
 
     pub fn insert(&mut self, offsets: &[usize], range: Range) {
-        // Remove gaps that covered the region
-        let i = self.resolve_gap(range.clone());
+        let pos = self.find_gap(range.clone());
+        self.insert_at(pos, offsets, range);
+    }
 
-        assert!(self.index[i].len() == 1, "unmapped regions should be in their own vector");
-        assert!(!self.index[i][0].is_mapped());
+    // Returns Positions of the first and last inserted lines, or else the next and previous waypoints, or Invalid if none
+    pub fn insert_at(&mut self, pos:Position, offsets: &[usize], range: Range) -> (Position, Position) {
+        // Remove gaps that covered the region
+        let row = self.resolve_gap_at(pos, range.clone());
+
+        assert!(self.index[row].len() == 1, "unmapped regions should be in their own vector");
+        assert!(!self.index[row][0].is_mapped());
 
         // The end of the last line now being uncovered
-        let endpoint =  {
-            if i + 1 < self.index.len() {
-                self.index[i + 1].first().unwrap().cmp_offset()
+        let end_offset =  {
+            if row + 1 < self.index.len() {
+                self.index[row + 1].first().unwrap().cmp_offset()
             } else {
                 range.end
             }
@@ -209,21 +225,21 @@ impl SaneIndex {
 
         let prev_end =
             if offsets.is_empty() {
-                self.index.remove(i);
-                endpoint
+                self.index.remove(row);
+                end_offset
             } else {
                 // FIXME: Make all waypoints hold complete lines?
-                self.index[i] = offsets.iter().zip(offsets.iter().skip(1).chain(std::iter::once(&endpoint)))
+                self.index[row] = offsets.iter().zip(offsets.iter().skip(1).chain(std::iter::once(&end_offset)))
                     .map(|(start, end)| {
-                        assert!((range.contains(start) || range.end == *start) && (range.contains(end) || range.end == *end || endpoint == *end));
+                        assert!((range.contains(start) || range.end == *start) && (range.contains(end) || range.end == *end || end_offset == *end));
                         Waypoint::Mapped(*start..*end)
                     }).collect();
-                assert_eq!(self.index[i].len(), offsets.len());
+                assert_eq!(self.index[row].len(), offsets.len());
                 *offsets.first().unwrap()
             };
         // extend the previous Mapped() tail to include this region's head
-        if i > 0 {
-            let prev = &mut self.index[i - 1];
+        if row > 0 {
+            let prev = &mut self.index[row - 1];
             assert!(!prev.is_empty(), "no empty rows in the index");
             if let Some(tail) = prev.last_mut() {
                 if tail.is_mapped() {
@@ -234,6 +250,16 @@ impl SaneIndex {
 
         self.stats.lines_indexed += offsets.len();
         self.stats.bytes_indexed += range.end - range.start;
+
+        if offsets.is_empty() {
+            let next = Position::new((row, 0), self);
+            let last = self.next_back(next.clone());
+            (next, last)
+        } else {
+            let next = Position::new((row, 0), self);
+            let last = Position::new((row, offsets.len() - 1), self);
+            (next, last)
+        }
     }
 
     // Parse lines from a BufRead
