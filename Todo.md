@@ -36,6 +36,13 @@ A quick issue tracker
 - Timestamps
   - Hide/show delta column
   - goto-time command
+- Commandline with user commands for every keyboard action
+  - Activate with ':'
+  - MUST HAVE: autocompletion
+  - goto-percent, goto-offset, goto-line, goto-time, etc.
+  - highlight
+  - filter-in, filter-out, filter-clear, filter-enable, filter-disable
+  - up, down, wrap, color, etc.
 - Custom syntax highlighting
   - Designate timestamp region
   - Specify line grouping
