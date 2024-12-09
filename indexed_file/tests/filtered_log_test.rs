@@ -1,5 +1,3 @@
-/* Temporarily disable this file
-
 #[cfg(test)]
 mod filtered_log_iterator_helper {
     use indexed_file::{FilteredLog, IndexedLog, LineIndexerDataIterator, Log};
@@ -46,7 +44,7 @@ mod filtered_log_iterator_helper {
     }
 
     pub(crate) fn new_from<LOG: IndexedLog>(log: &mut LOG, offset: usize) -> LineIndexerDataIterator<LOG> {
-        LineIndexerDataIterator::new_from(log, offset)
+        LineIndexerDataIterator::range(log, offset..)
     }
 }
 
@@ -243,7 +241,7 @@ mod filtered_log_iterator_tests {
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
-        let mut it = LineIndexerDataIterator::new_from(&mut file, offset);
+        let mut it = LineIndexerDataIterator::range(&mut file, offset..);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -266,7 +264,7 @@ mod filtered_log_iterator_tests {
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
-        let mut it = LineIndexerDataIterator::new_from(&mut file, offset);
+        let mut it = LineIndexerDataIterator::range(&mut file, offset..);
 
         // Iterate forwards and backwards simultaneously
         let mut count = 0;
@@ -295,17 +293,17 @@ mod filtered_log_iterator_tests {
         assert_eq!(count, harness.lines);
     }
 
-    #[test]
-    fn test_iterator_timeout() {
-        let (_harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+    // #[test]
+    // fn test_iterator_timeout() {
+    //     let (_harness, mut file) = Harness::default();
+    //     file.search_regex("000").unwrap();
 
-        let mut pos = file.seek(0).set_timeout(0);
-        assert!(file.next(&mut pos).is_checkpoint());
+    //     let mut pos = file.seek(0).set_timeout(0);
+    //     assert!(file.next(&mut pos).is_checkpoint());
 
-        let mut pos = file.seek(0);
-        assert!(file.next(&mut pos).is_some());
-    }
+    //     let mut pos = file.seek(0);
+    //     assert!(file.next(&mut pos).is_some());
+    // }
 
     #[test]
     fn test_iterator_from_offset_indexed() {
@@ -321,7 +319,7 @@ mod filtered_log_iterator_tests {
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
-        let mut it = LineIndexerDataIterator::new_from(&mut file, offset);
+        let mut it = LineIndexerDataIterator::range(&mut file, offset..);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -343,17 +341,17 @@ mod filtered_log_iterator_tests {
         file.search_regex("000").unwrap();
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, 0).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, 0..).rev() {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        for _ in LineIndexerDataIterator::new_from(&mut file, 1).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, 1..).rev() {
             count += 1;
         }
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
-        let mut it = LineIndexerDataIterator::new_from(&mut file, 0);
+        let mut it = LineIndexerDataIterator::range(&mut file, 0..);
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -376,12 +374,12 @@ mod filtered_log_iterator_tests {
         let out_of_range = harness.patt_len * harness.lines;
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range) {
+        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..) {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        for line in LineIndexerDataIterator::new_from(&mut file, out_of_range).rev() {
+        for line in LineIndexerDataIterator::range(&mut file, out_of_range..).rev() {
             count += 1;
         }
         assert_eq!(count, harness.lines, "Whole file is reached from end");
@@ -396,17 +394,15 @@ mod filtered_log_iterator_tests {
         let out_of_range = harness.patt_len * harness.lines + 2;
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..).rev() {
             count += 1;
         }
         assert_eq!(count, harness.lines, "All lines iterable before out-of-range");
 
         count = 0;
-        for _ in LineIndexerDataIterator::new_from(&mut file, out_of_range) {
+        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..) {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");
      }
 }
-
-     */

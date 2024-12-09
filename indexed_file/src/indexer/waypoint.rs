@@ -51,6 +51,12 @@ pub enum Position {
     Existing(IndexIndex, usize, Waypoint),
 }
 
+impl Position {
+    pub fn new(ndx: IndexIndex, index: &SaneIndex) -> Self {
+        let waypoint = index.value(ndx);
+        Position::Existing(ndx, waypoint.cmp_offset(), waypoint.clone())
+    }
+}
 // Implement a printer for Position
 impl std::fmt::Display for Position {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,6 +71,27 @@ impl Position {
     #[inline]
     pub fn is_invalid(&self) -> bool {
         matches!(self, Position::Virtual(VirtualPosition::Invalid))
+    }
+
+    // True if this position is at an unmapped waypoint.
+    // False if virtual or mapped.
+    #[inline]
+    pub fn is_unmapped(&self) -> bool {
+        matches!(self, Position::Existing(_, _, Waypoint::Unmapped(_)))
+    }
+
+    #[inline]
+    // True if this position is at a mapped waypoint.
+    pub fn is_mapped(&self) -> bool {
+        matches!(self, Position::Existing(_, _, Waypoint::Mapped(_)))
+    }
+
+    #[inline]
+    pub fn region(&self) -> &Range {
+        match self {
+            Position::Existing(_, _, waypoint) => waypoint.region(),
+            _ => panic!("No range on virtual position"),
+        }
     }
 
     pub(crate) fn clip(&mut self, eof: usize) {
@@ -199,7 +226,7 @@ impl Position {
         }
     }
 
-    fn least_offset(&self) -> usize {
+    pub(crate) fn least_offset(&self) -> usize {
         match self {
             Position::Virtual(virt) => virt.offset().unwrap_or(usize::MAX),
             Position::Existing(_, _, waypoint) => waypoint.cmp_offset(),

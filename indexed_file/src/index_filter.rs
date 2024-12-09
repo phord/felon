@@ -1,6 +1,9 @@
 use log::trace;
 use regex::Regex;
+use std::ops::Range;
 
+use crate::{indexer::sane_index::SaneIndex, LogLine};
+use crate::indexer::waypoint::Position;
 
 /**
  * Basic EventualIndex that accumulates matching line offsets. Can be used for search or filter, despite the name.
@@ -24,7 +27,7 @@ pub struct IndexFilter {
     include: bool,
 
     /// Memoized index of matching lines
-    index: EventualIndex,
+    index: SaneIndex,
 }
 
 #[inline]
@@ -54,7 +57,7 @@ impl IndexFilter {
         IndexFilter {
             f,
             include,
-            index: EventualIndex::new(),
+            index: SaneIndex::new(),
         }
     }
 
@@ -64,38 +67,30 @@ impl IndexFilter {
     }
 
     // Evaluate a new line for inclusion in the index
-    // returns the next gap or the indexed line, if it matched
-    pub fn eval(&mut self, gap: &Location, range: &std::ops::Range<usize>, line: &LogLine) -> (Location, bool) {
-        let found = if self.is_match(trim_newline(line.line.as_str())) {
-            Some(line.offset)
-        } else { None };
-
-        ( self.index.insert(gap, range, found), found.is_some())
+    pub fn eval(&mut self, line: &LogLine) -> bool {
+        self.is_match(trim_newline(line.line.as_str()))
     }
 
-    // Resolve any virtuals into gaps or indexed
-    #[inline]
-    pub fn resolve(&self, find: Location, end_of_file: usize) -> Location {
-        self.index.resolve(find, end_of_file)
+    // Resolve the gap at Position with the range as given, and the found logline, if any.
+    // Returns the postion of the first and last inserted lines, or the next/prev waypoints if no new lines
+    pub fn insert(&mut self, pos: Position, range: Range<usize>, offsets: &[usize]) -> (Position, Position) {
+        assert!(pos.is_unmapped());
+        self.index.insert_at(pos, offsets, range)
     }
 
     // Step to the next indexed line or gap
     #[inline]
-    pub fn next(&self, find: Location) -> Location {
+    pub fn next(&self, find: Position) -> Position {
         self.index.next(find)
     }
 
     #[inline]
     pub fn count_lines(&self) -> usize {
-        todo!("self.index.count_lines()");
+        self.index.count_lines()
     }
-
-    // Count the size of the indexed regions
+    #[inline]
     pub fn indexed_bytes(&self) -> usize {
         self.index.indexed_bytes()
     }
 
-    pub fn find_gap(&mut self, eof: usize) -> Location {
-        self.index.find_gap(eof)
-    }
 }
