@@ -58,7 +58,8 @@ pub fn tail_cmd() {
             .last()
             .unwrap();
 
-        for line in log.iter_lines_range(first_line.offset..) {
+        let range = first_line.offset..;
+        for line in log.iter_lines_range(&range) {
             print!("{line}");
         }
     }

@@ -493,7 +493,8 @@ impl Display {
             Scroll::Up(sv) | Scroll::GotoBottom(sv) => {
                 // Partial or complete screen scroll backwards
                 let skip = sv.lines.saturating_sub(height);
-                let lines:Vec<_> = doc.get_lines_range(mode, ..sv.offset).rev().take(sv.lines).skip(skip).collect();
+                let range = ..sv.offset;
+                let lines:Vec<_> = doc.get_lines_range(mode, &range).rev().take(sv.lines).skip(skip).collect();
                 // Reverse the lines in our vector so we can display from top to bottom
                 let lines = lines.into_iter().rev().collect::<Vec<_>>();
                 let rows = lines.len();
@@ -506,7 +507,8 @@ impl Display {
             Scroll::Down(sv) => {
                 // Partial screen scroll forwards
                 let skip = sv.lines.saturating_sub(height);
-                let mut lines = doc.get_lines_range(mode, sv.offset..).take(sv.lines + 1);
+                let range = sv.offset..;
+                let mut lines = doc.get_lines_range(mode, &range).take(sv.lines + 1);
                 if let Some(line) = lines.next() {
                     assert_eq!(line.offset, sv.offset);
                 }
@@ -523,7 +525,8 @@ impl Display {
             },
             Scroll::Repaint(sv) | Scroll::GotoTop(sv) => {
                 // Repainting whole screen, no scrolling
-                let lines = doc.get_lines_range(mode, sv.offset..).take(sv.lines.min(height));
+                let range = sv.offset..;
+                let lines = doc.get_lines_range(mode, &range).take(sv.lines.min(height));
                 let skip = sv.lines.saturating_sub(height);
                 let lines:Vec<_> = lines.skip(skip).collect();
                 let rows = lines.len();

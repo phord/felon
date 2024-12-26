@@ -38,7 +38,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         todo!()
     }
 
-    fn resolve_location_next(&mut self, next: Position) -> (Position, Option<LogLine>) {
+    fn resolve_location_next(&mut self, next: &Position) -> (Position, Option<LogLine>) {
         assert!(next.is_unmapped());
         let range = next.region();
         let mut start = range.start;
@@ -47,8 +47,8 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         for line in it {
             let end = range.end.min(line.offset + line.line.len());
             if self.filter.eval(&line) {
-                let range = start..end;
-                let (next, _prev) = self.filter.insert(next, range, &[line.offset]);
+                let range = range.start..end;
+                let (next, _prev) = self.filter.insert(next, &range, &[line.offset]);
                 return (next, Some(line));
             }
             start = end;
@@ -56,7 +56,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
 
         // Didn't find a line in the gap.  Erase the gap and continue.
         let range = start..range.end;
-        let (next, _prev) = self.filter.insert(next, range, &[]);
+        let (next, _prev) = self.filter.insert(next, &range, &[]);
         (next, None)
     }
 

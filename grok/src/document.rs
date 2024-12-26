@@ -16,7 +16,7 @@ pub struct Document {
 
 impl Document {
 
-    pub fn get_lines_range<R>(&mut self, mode: LineViewMode, range: R) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    pub fn get_lines_range<'a, R>(&'a mut self, mode: LineViewMode, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
     where R: std::ops::RangeBounds<usize> {
         self.log
             .iter_view_from(mode, range)

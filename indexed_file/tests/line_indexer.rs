@@ -160,7 +160,8 @@ mod logfile_data_iterator_tests {
         let mut file = Log::from(file);
 
         // A few bytes before the middle of the file
-        let mut it = LineIndexerDataIterator::range(&mut file, patt_len * lines / 2 - patt_len / 2..);
+        let range = patt_len * lines / 2 - patt_len / 2..;
+        let mut it = LineIndexerDataIterator::range(&mut file, &range);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -188,7 +189,8 @@ mod logfile_data_iterator_tests {
 
         // A few bytes after the middle of the file
         todo!("duplicate iterator for reading in the other direction");
-        let mut it = LineIndexerDataIterator::range(&mut file, patt_len * lines / 2 - patt_len / 2..);
+        let range = patt_len * lines / 2 - patt_len / 2..;
+        let mut it = LineIndexerDataIterator::range(&mut file, &range);
 
         // Iterate forwards and backwards simultaneously
         let mut lineset = HashSet::new();
@@ -234,7 +236,8 @@ mod logfile_data_iterator_tests {
 
         // A few bytes before the middle of the file
         let start = patt_len * lines / 2 - patt_len / 2;
-        let mut it = LineIndexerDataIterator::range(&mut file, start..);
+let range=start..;
+        let mut it = LineIndexerDataIterator::range(&mut file,  &range);
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
@@ -258,17 +261,20 @@ mod logfile_data_iterator_tests {
         let file = new_mock_file(patt, patt_len * lines, 100);
         let mut file = Log::from(file);
         let mut count = 0;
-        for _ in LineIndexerDataIterator::range(&mut file, ..=0).rev() {
+        let range = ..=0;
+        for _ in LineIndexerDataIterator::range(&mut file, &range).rev() {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable before offset 0");
 
-        for _ in LineIndexerDataIterator::range(&mut file, ..=1).rev() {
+        let range = ..=1;
+        for _ in LineIndexerDataIterator::range(&mut file, &range).rev() {
             count += 1;
         }
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
-        let mut it = LineIndexerDataIterator::range(&mut file, 0..);
+        let range=0..;
+        let mut it = LineIndexerDataIterator::range(&mut file,  &range);
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -293,12 +299,14 @@ mod logfile_data_iterator_tests {
         let out_of_range = patt_len * lines;
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..) {
+        let range = out_of_range..;
+        for _ in LineIndexerDataIterator::range(&mut file, &range) {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        for _ in LineIndexerDataIterator::range(&mut file, ..out_of_range).rev() {
+        let range = ..out_of_range;
+        for _ in LineIndexerDataIterator::range(&mut file, &range).rev() {
             count += 1;
         }
         assert_eq!(count, lines, "Whole file is reached from end");
@@ -316,13 +324,15 @@ mod logfile_data_iterator_tests {
         let out_of_range = patt_len * lines + 2;
 
         let mut count = 0;
-        for _ in LineIndexerDataIterator::range(&mut file, ..out_of_range).rev() {
+        let range = ..out_of_range;
+        for _ in LineIndexerDataIterator::range(&mut file, &range).rev() {
             count += 1;
         }
         assert_eq!(count, lines, "All lines iterable before out-of-range");
 
         count = 0;
-        for _ in LineIndexerDataIterator::range(&mut file, out_of_range..) {
+        let range = out_of_range..;
+        for _ in LineIndexerDataIterator::range(&mut file, &range) {
             count += 1;
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");

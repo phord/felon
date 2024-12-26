@@ -80,7 +80,7 @@ pub trait IndexedLog {
     }
 
     // Used in FilteredLog to stream from inner
-    fn iter_lines_range<R>(&mut self, range: R) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    fn iter_lines_range<'a, R>(&'a mut self, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
     where R: std::ops::RangeBounds<usize>,
         Self: Sized {
         self.iter_view_from(LineViewMode::WholeLine, range)
@@ -93,7 +93,7 @@ pub trait IndexedLog {
     }
 
     // Used in FilteredLog and Document (grok)
-    fn iter_view_from<R>(&mut self, mode: LineViewMode, range: R) -> impl DoubleEndedIterator<Item = LogLine> + '_
+    fn iter_view_from<'a, R>(&'a mut self, mode: LineViewMode, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
     where
         R: std::ops::RangeBounds<usize>,
         Self: Sized {

@@ -281,7 +281,7 @@ impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
             rev: SubLineHelper::new(),
         }
     }
-    pub fn range<R>(log: &'a mut LOG, mode: LineViewMode, offset: R) -> Self
+    pub fn range<R>(log: &'a mut LOG, mode: LineViewMode, offset: &'a R) -> Self
     where
         R: std::ops::RangeBounds<usize>,
     {

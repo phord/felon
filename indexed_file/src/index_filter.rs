@@ -72,8 +72,7 @@ impl IndexFilter {
     }
 
     // Resolve the gap at Position with the range as given, and the found logline, if any.
-    // Returns the postion of the first and last inserted lines, or the next/prev waypoints if no new lines
-    pub fn insert(&mut self, pos: Position, range: Range<usize>, offsets: &[usize]) -> (Position, Position) {
+    pub fn insert(&mut self, pos: &Position, range: &Range<usize>, offsets: &[usize]) -> (Position, Position) {
         assert!(pos.is_unmapped());
         self.index.insert_at(pos, offsets, range)
     }

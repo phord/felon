@@ -107,7 +107,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
         }
     }
 
-    pub fn range<R>(log: &'a mut LOG, offset: R) -> Self
+    pub fn range<R>(log: &'a mut LOG, offset: &'a R) -> Self
     where
         R: std::ops::RangeBounds<usize>,
     {

@@ -363,12 +363,12 @@ fn test_position_next() {
     use VirtualPosition::*;
     use SaneIndex;
     let mut index = SaneIndex::new();
-    index.insert(&[0], 0..13);
-    index.insert(&[13], 13..14);
-    index.insert(&[14], 14..30);
-    index.insert(&[30], 30..51);
-    index.insert(&[51], 51..52);
-    index.insert(&[], 52..67);
+    index.insert(&[0], &(0..13));
+    index.insert(&[13], &(13..14));
+    index.insert(&[14], &(14..30));
+    index.insert(&[30], &(30..51));
+    index.insert(&[51], &(51..52));
+    index.insert(&[], &(52..67));
     assert_eq!(index.iter().collect::<Vec<_>>(),
             vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..67), Unmapped(67..usize::MAX)]);
 
@@ -388,12 +388,12 @@ fn test_position_prev() {
     use VirtualPosition::*;
     use SaneIndex;
     let mut index = SaneIndex::new();
-    index.insert(&[0], 0..13);
-    index.insert(&[13], 13..14);
-    index.insert(&[14], 14..30);
-    index.insert(&[30], 30..51);
-    index.insert(&[51], 51..52);
-    index.insert(&[], 52..67);
+    index.insert(&[0], &(0..13));
+    index.insert(&[13], &(13..14));
+    index.insert(&[14], &(14..30));
+    index.insert(&[30], &(30..51));
+    index.insert(&[51], &(51..52));
+    index.insert(&[], &(52..67));
     assert_eq!(index.iter().collect::<Vec<_>>(),
             vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..67), Unmapped(67..usize::MAX)]);
 
@@ -413,12 +413,12 @@ fn test_position_prev_unmapped() {
     use VirtualPosition::*;
     use SaneIndex;
     let mut index = SaneIndex::new();
-    index.insert(&[0], 0..13);
-    index.insert(&[13], 13..14);
-    index.insert(&[14], 14..30);
-    index.insert(&[30], 30..51);
-    index.insert(&[51], 51..52);
-    index.insert(&[], 52..67);
+    index.insert(&[0], &(0..13));
+    index.insert(&[13], &(13..14));
+    index.insert(&[14], &(14..30));
+    index.insert(&[30], &(30..51));
+    index.insert(&[51], &(51..52));
+    index.insert(&[], &(52..67));
     assert_eq!(index.iter().collect::<Vec<_>>(),
             vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..67), Unmapped(67..usize::MAX)]);
 

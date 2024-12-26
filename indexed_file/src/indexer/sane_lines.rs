@@ -102,7 +102,7 @@ fn sane_index_out_of_range() {
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let cursor = CursorLogFile::new(file.to_vec());
     let mut log = Log::from(cursor);
-    let mut log = log.iter_lines_range(100..);
+    let mut log = log.iter_lines_range(&(100..));
     assert_eq!(log.next(), None);
 }
 
@@ -113,7 +113,7 @@ fn sane_index_rev_out_of_range() {
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let cursor = CursorLogFile::new(file.to_vec());
     let mut log = Log::from(cursor);
-    let mut log = log.iter_lines_range(..100);
+    let mut log = log.iter_lines_range(&(..100));
     assert!(log.next_back().is_some());
 }
 
@@ -123,7 +123,7 @@ fn sane_index_rev_line_zero() {
     let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
     let cursor = CursorLogFile::new(file.to_vec());
     let mut log = Log::from(cursor);
-    let mut log = log.iter_lines_range(..5);
+    let mut log = log.iter_lines_range(&(..5));
     assert!(log.next_back().is_some());
     assert!(log.next_back().is_none());
 }
