@@ -6,6 +6,7 @@ use crate::{index_filter::{IndexFilter, SearchType}, indexer::IndexedLog, LogLin
 pub struct FilteredLog<LOG> {
     filter: IndexFilter,
     log: LOG,
+    inner_pos: Position,
 }
 
 impl<LOG: IndexedLog> FilteredLog<LOG> {
@@ -13,6 +14,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         Self {
             filter: IndexFilter::default(),
             log,
+            inner_pos: Position::invalid(),
         }
     }
 
@@ -34,52 +36,140 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         Ok(())
     }
 
-    fn resolve_location_next_back(&mut self, next: Position) -> (Position, Option<LogLine>) {
-        todo!()
-    }
-
-    fn resolve_location_next(&mut self, next: &Position) -> (Position, Option<LogLine>) {
+    /// Find the previous matching line in an unmapped region. Uses inner_pos to track position in log.
+    /// Returns the found line and the next-back position from it.
+    fn resolve_location_next_back(&mut self, next: &Position) -> (Position, Option<LogLine>) {
         assert!(next.is_unmapped());
-        let range = next.region();
-        let mut start = range.start;
+        let gap = next.region();
+        let mut next = next.clone();
 
-        let it = self.log.iter_lines_range(start..range.end);
-        for line in it {
-            let end = range.end.min(line.offset + line.line.len());
-            if self.filter.eval(&line) {
-                let range = range.start..end;
-                let (next, _prev) = self.filter.insert(next, &range, &[line.offset]);
-                return (next, Some(line));
+        loop {
+            let (pos, line) = self.log.next_back(self.inner_pos.clone());
+            self.inner_pos = pos;
+            if line.is_none() { break; }
+            let line = line.unwrap();
+            if line.offset + line.line.len() < gap.start {
+                break;
             }
-            start = end;
+            let range = line.offset..line.offset + line.line.len();
+            if self.filter.eval(&line) {
+                next = self.filter.insert(&next, &range);
+                next = self.filter.next_back(next);
+                return (next, Some(line));
+            } else {
+                next = self.filter.erase(&next, &range);
+                // erase() may give us the _next_ position which is not what we want; step back one to get the previous one.
+                if next.least_offset() > range.start {
+                    next = self.filter.next_back(next);
+                    assert!(next.least_offset() <= range.start);
+                }
+            }
         }
 
-        // Didn't find a line in the gap.  Erase the gap and continue.
-        let range = start..range.end;
-        let (next, _prev) = self.filter.insert(next, &range, &[]);
         (next, None)
     }
 
+    // Search an unmapped region for the next line that matches our filter.  Uses inner_pos to track position in log.
+    // Returns the found line and the next position from it.
+    fn resolve_location_next(&mut self, next: &Position) -> (Position, Option<LogLine>) {
+        assert!(next.is_unmapped());
+        let offset = self.inner_pos.least_offset();
+        let gap = next.region();
+        let range = gap.start.max(offset)..gap.end.min(self.log.len());
+        let mut next = next.clone();
+
+        loop {
+            let (pos, line) = self.log.next(self.inner_pos.clone());
+            self.inner_pos = pos;
+            if line.is_none() { break; }
+            let line = line.unwrap();
+            let range = line.offset..line.offset + line.line.len();
+            if self.filter.eval(&line) {
+                next = self.filter.insert(&next, &range);
+                next = self.filter.next(next);
+                return (next, Some(line));
+            } else {
+                next = self.filter.erase(&next, &range);
+            }
+        }
+
+        if range.is_empty() {
+            // EOF: no more lines
+            assert_eq!(range.end, self.log.len());
+            (Position::invalid(), None)
+        } else {
+            (next, None)
+        }
+    }
+
+    // Update an inner Position to navigate the log file while resolving unmapped filtered regions
+    fn seek_inner(&mut self, pos: usize) {
+        // Ignore it if the caller tries to set us but we're already tracking them
+        if self.inner_pos.is_virtual() || !self.inner_pos.region().contains(&pos) {
+            self.inner_pos = Position::from(pos);
+        }
+    }
+
+    /// Find the next line that matches our filter, memoizing the position in our index.
     fn find_next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
         let end = self.log.len();
-        let mut next = pos;
+
+        // Resolve to an existing pos
+        // TODO: Do this one time in the iterator constructor
+        let offset = pos.least_offset().min(end);
+        let mut next = self.filter.resolve(pos);
 
         // Search until we run off the end, exceed the range, or find a line
         while !next.is_invalid() && next.least_offset() < end {
-            next = self.filter.next(next);
             if next.is_mapped() {
                 let offset = next.region().start;
-                return (next, self.log.read_line(offset));
+                return (self.filter.next(next), self.log.read_line(offset));
             } else if next.is_unmapped() {
-                let (p, line) = self.resolve_location_next(next);
+                self.seek_inner(offset);
+                let (p, line) = self.resolve_location_next(&next);
                 if line.is_some() {
                     return (p, line);
-                } // else continue
+                }
                 next = p;
-            } else if next.is_invalid() {
-                return (next, None);
             } else {
-                panic!("Position should be mapped or unmapped");
+                assert!(next.is_invalid(), "Position should be mapped, unmapped or invalid {:?}", next);
+            }
+        }
+        (next, None)
+    }
+
+    /// Find the previous line that matches our filter, memoizing the position in our index.
+    fn find_next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+
+        // TODO: Dedup with find_next:  next_back, resolve_location_next_back are the only differences
+
+        // Resolve to an existing pos
+        let offset = pos.most_offset().min(self.log.len().saturating_sub(1));
+        let mut next = self.filter.resolve(pos);
+        if next.least_offset() >= self.log.len() {
+            // Force position into valid range
+            next = self.filter.next_back(next);
+        }
+
+        // Search until we run off the end, exceed the range, or find a line
+        while !next.is_invalid() {
+            if next.is_mapped() {
+                let offset = next.region().start;
+                return (self.filter.next_back(next), self.log.read_line(offset));
+            } else if next.is_unmapped() {
+                self.seek_inner(offset);
+                let (p, line) = self.resolve_location_next_back(&next);
+                if line.is_some() {
+                    return (p, line);
+                }
+                if next == p {
+                    // Start of file?
+                    assert!(next.least_offset() == 0);
+                    break;
+                }
+                next = p;
+            } else {
+                assert!(next.is_invalid(), "Position should be mapped, unmapped or invalid");
             }
         }
         (next, None)
@@ -91,13 +181,14 @@ use crate::indexer::waypoint::Position;
 impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
     // FIXME: next/next_back should take a range.end to search over
+    //    fn next(&mut self, pos: Position, range: &Range) -> (Position, Option<LogLine>) {
     fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
         self.find_next(pos)
     }
 
     #[inline]
     fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
-        self.log.next(pos)
+        self.find_next_back(pos)
     }
 
     #[inline]

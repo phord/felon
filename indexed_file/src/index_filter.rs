@@ -71,16 +71,36 @@ impl IndexFilter {
         self.is_match(trim_newline(line.line.as_str()))
     }
 
-    // Resolve the gap at Position with the range as given, and the found logline, if any.
-    pub fn insert(&mut self, pos: &Position, range: &Range<usize>, offsets: &[usize]) -> (Position, Position) {
+    // Resolve the gap at Position by inserting a new waypoint at the range given
+    // Returns the Position of the inserted line
+    pub fn insert(&mut self, pos: &Position, range: &Range<usize>) -> Position {
         assert!(pos.is_unmapped());
-        self.index.insert_at(pos, offsets, range)
+        self.index.insert_one(pos, range)
     }
 
-    // Step to the next indexed line or gap
+    /// Erase the gap at the given position and range.
+    /// Returns the position of the next waypoint
+    pub fn erase(&mut self, pos: &Position, range: &Range<usize>) -> Position {
+        assert!(pos.is_unmapped());
+        self.index.erase_gap(pos, range)
+    }
+
+    /// Step to the next indexed line or gap
     #[inline]
     pub fn next(&self, find: Position) -> Position {
         self.index.next(find)
+    }
+
+    /// Step to the prev indexed line or gap
+    #[inline]
+    pub fn next_back(&self, find: Position) -> Position {
+        self.index.next_back(find)
+    }
+
+    /// Resolve Position to an Existing value in the index
+    #[inline]
+    pub fn resolve(&self, pos: Position) -> Position {
+        pos.resolve(&self.index)
     }
 
     #[inline]

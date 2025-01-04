@@ -135,7 +135,7 @@ mod subline_iterator_tests {
 
     #[test]
     fn test_iterator_fwd_rev_meet() {
-        let (harness, mut file) =  Harness::new_small(10);
+        let (harness, mut file) =  Harness::new_small(100);
         let mut it = file.iter_offsets();
         let prev = it.next().unwrap();
         let mut prev = prev;
@@ -159,7 +159,7 @@ mod subline_iterator_tests {
         prev = it.next().unwrap();      // Fetch last line offset
         assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
 
-        for _ in 0..harness.lines/2 - 1 {
+        for _x in 0..harness.lines/2 - 1 {
             let i = it.next().unwrap();
             // count += 1;
             // println!("{count} {i}");
@@ -430,8 +430,7 @@ mod sub_line_iterator_tests {
         let count = sub_line_iterator_helper::new_from(&mut file, &range).rev().count();
         assert_eq!(count, 1, "First line is reachable from offset 1");
 
-        let range =  ..=1;
-        let mut it = sub_line_iterator_helper::new_from(&mut file,&range);
+        let mut it = sub_line_iterator_helper::new_from(&mut file,&(0..));
 
         // Verify we see the first line
         let line = it.next().unwrap();
@@ -679,7 +678,6 @@ mod sub_line_wrap_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        dbg!(offset);
         let expected_offset = harness.expected_bol(offset, width);
         assert_eq!(prev, expected_offset);
         assert_eq!(line, harness.expected_line(offset, width));
@@ -710,8 +708,7 @@ mod sub_line_wrap_tests {
         let count = it.rev().count();
         assert_eq!(count, 2, "First two lines are reachable from offset 'width'");
 
-        let range = ..0;
-        let mut it = wrapped_new_range(&mut file, width, &range);
+        let mut it = wrapped_new_range(&mut file, width, &(0..));
 
         // Verify we see the first line
         let line = it.next().unwrap();

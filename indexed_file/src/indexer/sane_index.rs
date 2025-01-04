@@ -26,7 +26,7 @@ use super::waypoint::{Position, VirtualPosition, Waypoint};
 ///
 /// Suppose we mapped the middle section of the file first.
 /// Initially the file is unmapped:     [ Unmapped(0..IMAX) ]
-/// We scan bytes 10 to 39:             [ Unmapped(0..10), Mapped(13..14), Mapped(14..30), Mapped(30..51), Unmapped(40..IMAX) ]
+/// We scan bytes 10 to 39:             [ Unmapped(0..10), Mapped(13..14), Mapped(14..30), Mapped(30..39), Unmapped(40..IMAX) ]
 ///
 /// Note we always assume there is a line at Mapped(0..13).  But it may not be inserted in every index.
 
@@ -39,7 +39,7 @@ type Range = std::ops::Range<usize>;
 
 type IndexVec = Vec<Vec<Waypoint>>;
 pub type IndexIndex = (usize, usize);
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct IndexStats {
     bytes_indexed: usize,
     lines_indexed: usize,
@@ -109,19 +109,27 @@ impl SaneIndex {
 
     /// Find the index holding the given offset, or where it would be inserted if none found.
     pub(crate) fn search(&self, offset: usize) -> IndexIndex {
-        let target = &Waypoint::Mapped(offset..offset);
-        let find = self.index.binary_search_by_key(&target, |v| v.first().unwrap());
+        if self.index.is_empty() {
+            // This returns a pointer past the end when index.is_empty().  Is it bad?
+            return (0, 0);
+        }
+        let find = self.index.binary_search_by(|v| {v.first().unwrap().cmp_offset().cmp(&offset)});
         let ndx  = match find {
             // Found the matching index in the first element of the row.  What luck!
             Ok(i) => (i, 0),
             // Found the row where the index should exist (at i-1)
             Err(i) => {
                 let i = i.saturating_sub(1);
-                match self.index[i].binary_search(target) {
+                match self.index[i].binary_search_by(|v| v.cmp_offset().cmp(&offset)) {
                     Ok(j) => (i, j),
                     Err(j) => {
                         if j == self.index[i].len() {
-                            (i + 1, 0)
+                            if i + 1 < self.index.len() {
+                                (i + 1, 0)
+                            } else {
+                                // Never return pointer past end.  is this right???  It breaks a couple of literal tests...
+                                (i, j-1)
+                            }
                         } else {
                             (i, j)
                         }
@@ -144,20 +152,17 @@ impl SaneIndex {
     }
 
     pub(crate) fn next(&self, pos: Position) -> Position {
-        let mut pos = pos;
-        pos.next(self);
-        pos
+        pos.next(self)
     }
 
     pub(crate) fn next_back(&self, pos: Position) -> Position {
-        let mut pos = pos;
-        pos.next_back(self);
-        pos
+        pos.next_back(self)
     }
 
-    /// Find the Unmapped region that contains the gap and split it;
-    /// return the index of the row that can be overwritten
+    /// Find the Unmapped region that contains the given gap;
+    /// Returns a Position
     fn find_gap(&mut self, gap: &Range) -> Position {
+        // FIXME: Make a faster version that takes/returns Position in case we know where we are
         let mut ndx = self.search(gap.start);
         if self.value(ndx).is_mapped() {
             if let Some(next) = self.index_next(ndx) {
@@ -170,14 +175,15 @@ impl SaneIndex {
         }
         assert!(self.index_valid(ndx));
 
-        Position::Existing(ndx, /*arbitrary*/ gap.start, self.value(ndx).clone())
+        Position::Existing(ndx, self.value(ndx).clone())
     }
 
     // Resolves gap which must be in a Position::Existing(Mapped)
-    // Returns the index of the row that can be overwritten
-    fn resolve_gap_at(&mut self, pos: Position, gap: Range) -> usize {
+    // Splits the gap if it's in the middle of the range and returns the index of the 2nd gap;
+    // otherwise, shrinks the gap and returns the index of the adjacent row where a new waypoint can be appended.
+    fn resolve_gap_at(&mut self, pos: &Position, gap: &Range) -> usize {
         let (ndx, unmapped) = match pos {
-            Position::Existing(ndx, _, waypoint) => (ndx, waypoint),
+            Position::Existing(ndx, waypoint) => (ndx, waypoint),
             _ => panic!("Can only resolve gaps at unmapped positions"),
         };
 
@@ -185,123 +191,151 @@ impl SaneIndex {
         assert!(unmapped.end_offset() >= gap.end);
         assert!(unmapped.cmp_offset() <= gap.start);
 
-        let (mut i, j) = ndx;
-        assert!(j == 0, "unmapped regions should be in their own vector");
-        assert!(self.index[i].len() == 1, "unmapped regions should be in their own vector");
+        let (i, j) = ndx;
+        assert!(*j == 0, "unmapped regions should be in their own vector");
+        assert!(self.index[*i].len() == 1, "unmapped regions should be in their own vector");
+
+        // Given a gap in the index, split it across 1 to 3 ranges compared to our range.
+        // Left and/or Right may be None if the gap and range ends align.
+        //   [--------- Actual Gap ---------]
+        //          [ --- Range --- ]
+        //   [ Left |     Middle    | Right ]
+        //             ^^removed^^
+        // Four possibilities:
+        //    Removed part  Action      Returns        Val points to   To insert cells
+        // 1. Left edge     shrink gap  row            Remainder       Append to row - 1
+        // 2. Right edge    shrink gap  row            Remainder       Prepend to row + 1
+        // 3. Middle        split gap   row+1          Right half      Insert row
+        // 4. Whole gap     remove gap  row            empty row       Use empty row
 
         let (left, middle) = unmapped.split_at(gap.start);
-        let (_, right) = middle.unwrap().split_at(gap.end);
-        if let Some(left) = left {
-            self.index.insert(i, vec![left]);
-            i += 1;
-        }
-        if let Some(right) = right {
-            self.index.insert(i + 1, vec![right]);
-        }
-        i
-    }
-
-    pub fn insert(&mut self, offsets: &[usize], range: &Range) {
-        let pos = self.find_gap(range);
-        self.insert_at(&pos, offsets, range);
-    }
-
-    // Returns Positions of the first and last inserted lines, or else the next and previous waypoints, or Invalid if none
-    pub fn insert_at(&mut self, pos: &Position, offsets: &[usize], range: &Range) -> (Position, Position) {
-        // Remove gaps that covered the region
-        let row = self.resolve_gap_at(pos, range);
-
-        assert!(self.index[row].len() == 1, "unmapped regions should be in their own vector");
-        assert!(!self.index[row][0].is_mapped());
-
-        // The end of the last line now being uncovered
-        let end_offset =  {
-            if row + 1 < self.index.len() {
-                self.index[row + 1].first().unwrap().cmp_offset()
+        let right =
+            if let Some(middle) = middle {
+                let (_, right) = middle.split_at(gap.end);
+                right
             } else {
-                range.end
-            }
-        };
-
-        let prev_end =
-            if offsets.is_empty() {
-                self.index.remove(row);
-                end_offset
-            } else {
-                // FIXME: Make all waypoints hold complete lines?
-                self.index[row] = offsets.iter().zip(offsets.iter().skip(1).chain(std::iter::once(&end_offset)))
-                    .map(|(start, end)| {
-                        assert!((range.contains(start) || range.end == *start) && (range.contains(end) || range.end == *end || end_offset == *end));
-                        Waypoint::Mapped(*start..*end)
-                    }).collect();
-                assert_eq!(self.index[row].len(), offsets.len());
-                *offsets.first().unwrap()
+                unreachable!("We should always find a middle unless our gaps don't overlap");
+                None
             };
-        // extend the previous Mapped() tail to include this region's head
-        if row > 0 {
-            let prev = &mut self.index[row - 1];
-            assert!(!prev.is_empty(), "no empty rows in the index");
-            if let Some(tail) = prev.last_mut() {
-                if tail.is_mapped() {
-                    *tail = Waypoint::Mapped(tail.cmp_offset()..prev_end);
-                }
-            }
-        }
-
-        self.stats.lines_indexed += offsets.len();
-        self.stats.bytes_indexed += range.end - range.start;
-
-        if offsets.is_empty() {
-            let next = Position::new((row, 0), self);
-            let last = self.next_back(next.clone());
-            (next, last)
+        if left.is_none() && right.is_none() {
+            // This gap is completely removed.  Clear the row and return the empty row.
+            // Note: We could remove the row and let the caller insert into the next row instead.
+            // TODO: Should we?
+            self.index[*i].pop();
+            *i
+        } else if left.is_some() && right.is_some() {
+            // Split into two gaps on either side of our range.
+            // 1. Insert new row with left-gap before our position
+            self.index.insert(*i, vec![left.unwrap()]);
+            // 2. Replace original gap with our right-gap
+            *self.index[i + 1].get_mut(0).unwrap() = right.unwrap();
+            // Next line should go before the 2nd half
+            i + 1
+        } else if let Some(left) = left {
+            // Replace the old gap with just the left part
+            *self.index[*i].get_mut(0).unwrap() = left;
+            // The new line should go in the next slot
+            *i
         } else {
-            let next = Position::new((row, 0), self);
-            let last = Position::new((row, offsets.len() - 1), self);
-            (next, last)
+            assert!(right.is_some());
+            // Replace the old gap with just the right part
+            *self.index[*i].get_mut(0).unwrap() = right.unwrap();
+            // The new line should go in the previous slot
+            *i
         }
     }
 
-    // Parse lines from a BufRead
-    pub fn parse_bufread<R: BufRead>(&mut self, source: &mut R, range: &Range) -> std::io::Result<usize> {
-        /* We want to do this, except it takes ownership of the source:
-            let mut pos = offset;
-            let newlines = source.lines()
-                .map(|x| { pos += x.len() + 1; pos });
-            self.line_offsets.extend(newlines);
-            */
-        let mut pos = range.start;
-        let end = range.end;
-        while pos < end {
-            let bytes =
-                match source.fill_buf() {
-                    Ok(buf) => {
-                        if buf.is_empty() {
-                            break       // EOF
-                        }
-                        let len = buf.len().min(end - pos);
-                        self.parse_chunk(pos, &buf[..len]);
-                        len
-                    },
-                    Err(e) => {
-                        return std::io::Result::Err(e)
-                    },
+    // Insert one new waypoint covering given range. New waypoint must be contained in a gap.
+    // Returns position of new waypoint
+    // Prefer to call insert_one directly
+    pub fn insert(&mut self, range: &Range) -> Position {
+        let pos = self.find_gap(range);
+        self.insert_one(&pos, range)
+    }
+
+    // Erase a gap covering a given range.
+    // Prefer to call erase_gap directly
+    // Returns position of next waypoint
+    pub fn erase(&mut self, range: &Range) -> Position {
+        let pos = self.find_gap(range);
+        self.erase_gap(&pos, range)
+    }
+
+    // Clear the gap at the given Position. Returns the a guide indicating where replacements should be inserted, if desired
+    fn clear_gap(&mut self, pos: &Position, range: &Range) -> usize {
+        let pos = pos.resolve(self);
+        // Find exact gap that covers the region. We will shrink it or replace it.
+        let gap_range = pos.region();
+        let gap_range = gap_range.start.max(range.start)..gap_range.end.min(range.end);
+        assert!(!gap_range.is_empty());
+        if !gap_range.is_empty() {
+            self.stats.bytes_indexed += gap_range.end - gap_range.start;
+        }
+        self.resolve_gap_at(&pos, &gap_range)
+    }
+
+    // Remove the gap at the given Position. No lines are to be added.  Returns ptr to remaining gap, or row after removed gap.
+    pub fn erase_gap(&mut self, pos: &Position, range: &Range) -> Position {
+        let row = self.clear_gap(pos, range);
+        if self.index[row].is_empty() {
+            self.index.remove(row);
+
+        }
+        if row == self.index.len() {
+            Position::Virtual(VirtualPosition::End)
+        } else {
+            Position::Existing((row, 0), self.index[row][0].clone())
+        }
+    }
+
+    // Insert a new waypoint at the given position (in a Unmapped range).  Returns the Position of the new waypoint
+    pub fn insert_one(&mut self, pos: &Position, range: &Range) -> Position {
+        let row = self.clear_gap(pos, range);
+        self.stats.lines_indexed += 1;
+
+        // Returned slot is remainder of gap, if any.  We need to insert before or after that gap.
+        // Find row on other side of gap make sure we can insert there.  If it's unmapped, we need to add a row.
+        let row =
+            if let Some(first) = self.index[row].first() {
+                assert!(!first.is_mapped(), "Expect pointer to remainder of gap");
+                let other = if range.start < first.cmp_offset() {
+                    row.saturating_sub(1)
+                } else {
+                    assert!(range.start >= first.end_offset());
+                    row + 1
                 };
-            pos += bytes;
-            source.consume(bytes);
-        }
-        Ok(pos - range.start)
-    }
+                if row == other || !self.index[other].first().unwrap().is_mapped() {
+                    // We have to insert an empty row
+                    self.index.insert(row.max(other), vec![]);
+                    row.max(other)
+                } else {
+                    other
+                }
+            } else {
+                row
+            };
 
-    pub fn parse_chunk(&mut self, offset: usize, chunk: &[u8]) {
-        let mut offsets: Vec<usize> = chunk.iter().enumerate()
-            .filter(|(_, byte)| **byte == b'\n')
-            .map(|(i, _)| offset + i + 1)
-            .collect();
-        if offset == 0 {
-            offsets.insert(0, 0);
-        }
-        self.insert(&offsets, &(offset..offset + chunk.len()));
+        // The waypoint to insert
+        let waypoint = Waypoint::Mapped(range.start..range.end);
+        let waypoint_pos = waypoint.clone();
+
+        // Now we are either appending or prepending to the list
+        let col =
+            if let Some(first) = self.index[row].first() {
+                if first < &waypoint {
+                    // Must be appending
+                    assert!(self.index[row].last().unwrap() < &waypoint);
+                    self.index[row].push(waypoint);
+                    self.index[row].len() - 1
+                } else {
+                    self.index[row].insert(0, waypoint);
+                    0
+                }
+            } else {
+                self.index[row].push(waypoint);
+                0
+            };
+        Position::Existing((row, col), waypoint_pos)
     }
 
     pub(crate) fn iter(&self) -> SaneIter {
@@ -317,7 +351,7 @@ pub struct SaneIter<'a> {
 impl<'a> SaneIter<'a> {
     fn new(index: &'a SaneIndex) -> Self {
         SaneIter {
-            pos: Position::Virtual(VirtualPosition::Start),
+            pos: Position::Virtual(VirtualPosition::Start).resolve(index),
             index,
         }
     }
@@ -327,9 +361,10 @@ impl<'a> Iterator for SaneIter<'a> {
     type Item = Waypoint;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.index.next(self.pos.clone()) {
-            Position::Existing(i, target, waypoint) => {
-                self.pos = Position::Existing(i, target, waypoint.clone());
+        let p = self.pos.clone();
+        self.pos = self.pos.next(self.index);
+        match p {
+            Position::Existing(_, waypoint) => {
                 Some(waypoint)
             },
             _ => {
@@ -344,110 +379,30 @@ impl<'a> Iterator for SaneIter<'a> {
 #[test]
 fn sane_index_basic() {
     let mut index = SaneIndex::new();
-    index.insert(&[0], &(0..13));
+    index.insert(&(0..13));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Unmapped(13..IMAX)]);
-    index.insert(&[13], &(13..14));
+    index.insert(&(13..14));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Unmapped(14..IMAX)]);
-    index.insert(&[14], &(14..30));
+    index.insert(&(14..30));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Unmapped(30..IMAX)]);
-    index.insert(&[30], &(30..51));
+    index.insert(&(30..51));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Unmapped(51..IMAX)]);
-    index.insert(&[51], &(51..52));
+    index.insert(&(51..52));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Mapped(51..52), Waypoint::Unmapped(52..IMAX)]);
-    index.insert(&[], &(52..67));
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Mapped(51..67), Waypoint::Unmapped(67..IMAX)]);
-    assert_eq!(index.index.len(), 6);
+    index.erase(&(52..67));
+    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Mapped(30..51), Waypoint::Mapped(51..52), Waypoint::Unmapped(67..IMAX)]);
+    assert_eq!(index.index.len(), 2);
 }
 
 #[test]
 fn sane_index_basic_rev() {
     let mut index = SaneIndex::new();
-    index.insert(&[], &(52..67));
+    index.erase(&(52..67));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..52), Waypoint::Unmapped(67..IMAX)]);
-    index.insert(&[13], &(13..14));
+    index.insert(&(13..14));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..13), Waypoint::Mapped(13..14), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
-    index.insert(&[], &(0..13));
+    index.erase(&(0..13));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13..14), Waypoint::Unmapped(14..52), Waypoint::Unmapped(67..IMAX)]);
-    index.insert(&[14], &(14..30));
+    index.insert(&(14..30));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(13..14), Waypoint::Mapped(14..30), Waypoint::Unmapped(30..52), Waypoint::Unmapped(67..IMAX)]);
-}
-
-
-#[test]
-fn sane_index_parse_basic() {
-    use Waypoint::*;
-    let mut index = SaneIndex::new();
-    let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    index.parse_chunk(0, file.as_bytes());
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
-}
-
-#[test]
-fn sane_index_parse_chunks() {
-    use Waypoint::*;
-    let mut index = SaneIndex::new();
-    let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let start = 35;
-    index.parse_chunk(start, file[start..].as_bytes());
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Unmapped(0..start), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
-    index.parse_chunk(0, file[..start].as_bytes());
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
-}
-
-#[test]
-fn sane_index_parse_chunks_random_bytes() {
-    use Waypoint::*;
-    use rand::thread_rng;
-    use rand::seq::SliceRandom;
-
-    let mut index = SaneIndex::new();
-    let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut rando:Vec<usize> = (0..=66).collect::<Vec<_>>();
-    rando.shuffle(&mut thread_rng());
-    for i in rando {
-        index.parse_chunk(i, file[i..i+1].as_bytes());
-    }
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
-}
-
-
-#[test]
-fn sane_index_parse_chunks_random_chunks() {
-    use Waypoint::*;
-    use rand::thread_rng;
-    use rand::seq::SliceRandom;
-
-    let mut index = SaneIndex::new();
-    let file = "Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut rando:Vec<usize> = (1..=66).collect::<Vec<_>>();
-    rando.shuffle(&mut thread_rng());
-    let mut start = 0;
-
-    // Collect 1/3 of the byte offsets from the file.
-    let mut cuts:Vec<&usize> = rando.iter().take(rando.len()/3).collect();
-
-    // Always ensure that the last byte is included.
-    cuts.push(&67);
-    cuts.sort();
-    let mut cuts = cuts.iter().map(|i| { let s = start; start = **i; s..**i }).collect::<Vec<_>>();
-
-    // Resolve the ranges in random order
-    cuts.shuffle(&mut thread_rng());
-    for i in cuts {
-        index.parse_chunk(i.start, file[i].as_bytes());
-    }
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
-}
-
-#[test]
-fn sane_index_full_bufread() {
-    use Waypoint::*;
-
-    let file = b"Hello, world\n\nThis is a test.\nThis is only a test.\n\nEnd of message\n";
-    let mut cursor = std::io::Cursor::new(file);
-
-    let mut index = SaneIndex::new();
-
-    index.parse_bufread(&mut cursor, &(0..100)).unwrap();
-    assert_eq!(index.iter().collect::<Vec<_>>(), vec![Mapped(0..13), Mapped(13..14), Mapped(14..30), Mapped(30..51), Mapped(51..52), Mapped(52..67), Mapped(67..67), Unmapped(67..IMAX)]);
 }
