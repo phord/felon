@@ -32,11 +32,10 @@ pub trait IndexedLog {
     fn next(&mut self, pos: Position) -> (Position, Option<LogLine>);
     fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>);
 
-    /// Resolve the gap in the index by reading the log from the source.
-    /// Returns number of bytes indexed during this operation.
-    /// FIXME: Make gap an Option<>, where None means to find any remaining gaps and work on them.
-    fn resolve_gap(&mut self, gap: std::ops::Range<usize>) -> std::io::Result<usize> {
-        todo!("resolve_gap");
+    /// Resolve any gap in the index by reading the log from the source.
+    /// Returns number of bytes indexed during this operation. 0 if no more gaps.
+    fn resolve_gaps(&mut self) -> std::io::Result<usize> {
+        todo!("resolve_gaps");
     }
 
     /// Set a time limit for operations that may take too long
@@ -69,7 +68,6 @@ pub trait IndexedLog {
     // TEST ONLY - Called from iter_offsets
     fn iter(&mut self) -> impl DoubleEndedIterator<Item = usize> + '_
     where Self: Sized {
-
         LineIndexerIterator::new(self)
     }
 

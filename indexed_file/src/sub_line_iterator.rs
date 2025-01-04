@@ -344,7 +344,7 @@ impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
     fn next(&mut self) -> Option<Self::Item> {
         // self.adjust_first_helpers();
         let ret = self.fwd.sub_next(&self.mode)
-            .or_else(|| {self.fwd.next( &self.mode, self.inner.next()) });
+            .or_else(|| self.fwd.next( &self.mode, self.inner.next()));
         if self.rev.le(&self.fwd) {
             // exhausted
             None

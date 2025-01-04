@@ -159,25 +159,6 @@ impl SaneIndex {
         pos.next_back(self)
     }
 
-    /// Find the Unmapped region that contains the given gap;
-    /// Returns a Position
-    fn find_gap(&mut self, gap: &Range) -> Position {
-        // FIXME: Make a faster version that takes/returns Position in case we know where we are
-        let mut ndx = self.search(gap.start);
-        if self.value(ndx).is_mapped() {
-            if let Some(next) = self.index_next(ndx) {
-                ndx = next;
-            }
-        } else if let Some(prev) = self.index_prev(ndx) {
-            if self.value(prev).contains(gap.start) {
-                ndx = prev;
-            }
-        }
-        assert!(self.index_valid(ndx));
-
-        Position::Existing(ndx, self.value(ndx).clone())
-    }
-
     // Resolves gap which must be in a Position::Existing(Mapped)
     // Splits the gap if it's in the middle of the range and returns the index of the 2nd gap;
     // otherwise, shrinks the gap and returns the index of the adjacent row where a new waypoint can be appended.
@@ -245,9 +226,29 @@ impl SaneIndex {
         }
     }
 
+    /// Find the Unmapped region that contains the given gap;
+    /// Returns a Position
+    #[cfg(test)]
+    fn find_gap(&mut self, gap: &Range) -> Position {
+        let mut ndx = self.search(gap.start);
+        if self.value(ndx).is_mapped() {
+            if let Some(next) = self.index_next(ndx) {
+                ndx = next;
+            }
+        } else if let Some(prev) = self.index_prev(ndx) {
+            if self.value(prev).contains(gap.start) {
+                ndx = prev;
+            }
+        }
+        assert!(self.index_valid(ndx));
+
+        Position::Existing(ndx, self.value(ndx).clone())
+    }
+
     // Insert one new waypoint covering given range. New waypoint must be contained in a gap.
     // Returns position of new waypoint
-    // Prefer to call insert_one directly
+    // This is only used in tests. Prod code calls insert_one directly
+    #[cfg(test)]
     pub fn insert(&mut self, range: &Range) -> Position {
         let pos = self.find_gap(range);
         self.insert_one(&pos, range)
@@ -256,6 +257,8 @@ impl SaneIndex {
     // Erase a gap covering a given range.
     // Prefer to call erase_gap directly
     // Returns position of next waypoint
+    // This is only used in tests. Prod code calls erase_gap directly
+    #[cfg(test)]
     pub fn erase(&mut self, range: &Range) -> Position {
         let pos = self.find_gap(range);
         self.erase_gap(&pos, range)
