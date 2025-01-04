@@ -30,6 +30,7 @@ pub struct LineIndexerIterator<'a, LOG> {
     log: &'a mut LOG,
     pos: Position,
     pos_back: Position,
+    range: std::ops::Range<usize>,
 }
 
 impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
@@ -38,6 +39,7 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
             pos: Position::Virtual(Start),
             pos_back: Position::Virtual(End),
             log,
+            range: 0..usize::MAX,
         }
     }
 
@@ -45,9 +47,11 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     where
         R: std::ops::RangeBounds<usize>,
     {
-        let pos = log.seek(value_or(offset.start_bound(), 0));
-        let pos_back = log.seek(value_or(offset.end_bound(), usize::MAX));
-        Self { log, pos, pos_back }
+        let start = start_offset(offset.start_bound());
+        let end = end_offset(offset.end_bound());
+        let pos = log.seek(start);
+        let pos_back = log.seek(end);
+        Self { log, pos, pos_back, range: start..end }
     }
 }
 
@@ -57,12 +61,14 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     fn next(&mut self) -> Option<Self::Item> {
         let (pos, line) = self.log.next(self.pos.clone());
         self.pos = pos;
-        if !self.pos.lt(&self.pos_back) {
-            None
-        } else if let Some(line) = line {
-            Some(line.offset)
+        if let Some(line) = line {
+            if self.range.contains(&line.offset) {
+                self.range = self.range.start.max(line.offset.saturating_add(1))..self.range.end;
+                Some(line.offset)
+            } else {
+                None
+            }
         } else {
-            // FIXME: invalidate iterators?
             None
         }
     }
@@ -73,10 +79,13 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let (pos_back, line) = self.log.next_back(self.pos_back.clone());
         self.pos_back = pos_back;
-        if !self.pos.lt(&self.pos_back) {
-            None
-        } else if let Some(line) = line {
-            Some(line.offset)
+        if let Some(line) = line {
+            if self.range.contains(&line.offset) {
+                self.range = self.range.start..self.range.end.min(line.offset);
+                Some(line.offset)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -88,13 +97,24 @@ pub struct LineIndexerDataIterator<'a, LOG: IndexedLog> {
     log: &'a mut LOG,
     pos: Position,
     pos_back: Position,
+    range: std::ops::Range<usize>,
 }
 
-fn value_or(bound: Bound<&usize>, def: usize) -> usize {
+// returns the byte at the start of our range, inclusive
+fn start_offset(bound: Bound<&usize>) -> usize {
     match bound {
         Bound::Included(val) => *val,
-        Bound::Excluded(val) => val.saturating_sub(1), // FIXME: How to handle ..0?
-        Bound::Unbounded => def,
+        Bound::Excluded(val) => val.saturating_add(1),
+        Bound::Unbounded => 0,
+    }
+}
+
+// End returns the byte after our range, exclusive
+fn end_offset(bound: Bound<&usize>) -> usize {
+    match bound {
+        Bound::Included(val) => val.saturating_add(1),
+        Bound::Excluded(val) => *val,
+        Bound::Unbounded => usize::MAX,
     }
 }
 
@@ -104,6 +124,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
             pos: Position::Virtual(Start),
             pos_back: Position::Virtual(End),
             log,
+            range: 0..usize::MAX,
         }
     }
 
@@ -111,19 +132,36 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
     where
         R: std::ops::RangeBounds<usize>,
     {
-        let pos = log.seek(value_or(offset.start_bound(), 0));
-        let pos_back = log.seek(value_or(offset.end_bound(), usize::MAX));
-        Self { log, pos, pos_back }
+        let start = start_offset(offset.start_bound());
+        let end = end_offset(offset.end_bound());
+        let pos = log.seek(start);
+        let pos_back = log.seek(end);
+        let range = start..end;
+        Self { log, pos, pos_back, range}
+    }
+
+    fn in_range(&self, line: &LogLine) -> bool {
+        // determine if logline overlaps our range
+        let line_start = line.offset;
+        let line_end = line.offset + line.line.len();
+        let range_start = self.range.start;
+        let range_end = self.range.end;
+
+        // Line is in range if the start is before range-end (exclusive) and the range-start is before the end (exclusive)
+        line_start < range_end && range_start < line_end
     }
 }
 
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if !self.pos.lt(&self.pos_back) {
-            return None;
-        }
         let (pos, line) = self.log.next_back(self.pos_back.clone());
+        if let Some(line) = &line {
+            // FIXME: if line is stripped in the future, this range check is wrong.
+            if !self.in_range(line) {
+                return None;
+            }
+        }
         self.pos_back = pos;
         line
     }
@@ -134,10 +172,12 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.pos.lt(&self.pos_back) {
-            return None;
-        }
         let (pos, line) = self.log.next(self.pos.clone());
+        if let Some(line) = &line {
+            if !self.in_range(line) {
+                return None;
+            }
+        }
         self.pos = pos;
         line
     }
