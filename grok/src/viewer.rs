@@ -46,7 +46,7 @@ impl Viewer {
                     500
                 }
             } else {
-                0
+                50000
             };
 
         self.display.refresh_screen(&mut self.doc)?;
