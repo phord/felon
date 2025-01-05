@@ -103,6 +103,12 @@ impl IndexFilter {
         pos.resolve(&self.index)
     }
 
+    /// Resolve Position to an Existing value in the index going backwards
+    #[inline]
+    pub fn resolve_back(&self, pos: Position) -> Position {
+        pos.resolve_back(&self.index)
+    }
+
     #[inline]
     pub fn count_lines(&self) -> usize {
         self.index.count_lines()

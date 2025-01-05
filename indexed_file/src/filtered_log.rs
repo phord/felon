@@ -105,7 +105,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     // Update an inner Position to navigate the log file while resolving unmapped filtered regions
     fn seek_inner(&mut self, pos: usize) {
         // Ignore it if the caller tries to set us but we're already tracking them
-        if self.inner_pos.is_virtual() || !self.inner_pos.region().contains(&pos) {
+        if self.inner_pos.is_virtual() || !(self.inner_pos.region().contains(&pos) || self.inner_pos.most_offset() == pos) {
             self.inner_pos = Position::from(pos);
         }
     }
@@ -145,7 +145,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
 
         // Resolve to an existing pos
         let offset = pos.most_offset().min(self.log.len().saturating_sub(1));
-        let mut next = self.filter.resolve(pos);
+        let mut next = self.filter.resolve_back(pos);
         if next.least_offset() >= self.log.len() {
             // Force position into valid range
             next = self.filter.next_back(next);
