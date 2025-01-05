@@ -687,6 +687,32 @@ mod sub_line_wrap_tests {
     }
 
     #[test]
+    fn test_iterator_from_offset_indexed_rev() {
+        let (harness, mut file) =  Harness::new_small(6000);
+        let width = 10;
+
+        // Index the whole file
+        let count = wrapped_new_range(&mut file, width, &(..)).count();
+        assert_eq!(count, harness.total_len(width));
+
+        // A few bytes before the middle of the file
+        let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let range = ..offset;
+        let mut it = wrapped_new_range(&mut file, width, &range).rev();
+
+        // Get first line and verify we get the expected position and line
+        let line = it.next().unwrap();
+        let (line, prev) = (line.line, line.offset);
+
+        let expected_offset = harness.expected_bol(offset, width);
+        assert_eq!(prev, expected_offset);
+        assert_eq!(line, harness.expected_line(offset, width));
+
+        let count = it.count();
+        assert_eq!(count, harness.total_len(width) / 2 - 2);
+    }
+
+    #[test]
     fn test_iterator_from_offset_start() {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;

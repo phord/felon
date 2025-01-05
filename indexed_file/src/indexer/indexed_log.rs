@@ -6,7 +6,7 @@ use super::waypoint::{Position, VirtualPosition};
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
     fn seek(&mut self, pos: usize) -> Position {
-        Position::Virtual(VirtualPosition::Offset(pos))
+        Position::from(pos)
     }
 
     // Read the line at offset, if any, and return the iterator result and the number of bytes consumed.

@@ -116,20 +116,6 @@ impl Position {
         }
     }
 
-    pub(crate) fn clip(&mut self, eof: usize) {
-        match self {
-            Position::Virtual(VirtualPosition::Offset(offset)) => {
-                if *offset >= eof {
-                    *self = Position::Virtual(VirtualPosition::Offset(eof.saturating_sub(1)))
-                }
-            },
-            Position::Virtual(VirtualPosition::End) => {
-                *self = Position::Virtual(VirtualPosition::Offset(eof.saturating_sub(1)))
-            }
-            _ => {},
-        }
-    }
-
     /// Resolve a virtual position to a real position, or Invalid
     pub(crate) fn resolve(&self, index: &SaneIndex) -> Position{
         match self.clone() {
@@ -163,6 +149,7 @@ impl Position {
             Position::Virtual(ref virt) => {
                 if let Some(offset) = virt.offset() {
                     let mut i = index.search(offset);
+                    // offset is exclusive when seeking backwards.  If we found a waypoint at offset, we need to step back one.
                     if !index.index_valid(i) || offset <= index.value(i).cmp_offset() {
                         if let Some(ndx) = index.index_prev(i) {
                             i = ndx;
