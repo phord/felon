@@ -3,6 +3,9 @@ use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
 use super::waypoint::Position;
 
+// next/next_back return Err on timeout
+pub type GetLine = Result<(Position, Option<LogLine>), ()>;
+
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
     fn seek(&mut self, pos: usize) -> Position {
@@ -21,8 +24,8 @@ pub trait IndexedLog {
     /// Note: Unlike DoubleEndedIterator next_back, there is no rev() to reverse the iterator;
     ///    and "consumed" lines can still be read again.
     ///
-    fn next(&mut self, pos: &Position) -> (Position, Option<LogLine>);
-    fn next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>);
+    fn next(&mut self, pos: &Position) -> GetLine;
+    fn next_back(&mut self, pos: &Position) -> GetLine;
 
     /// Resolve any gap in the index by reading the log from the source.
     /// Returns number of bytes indexed during this operation. 0 if no more gaps.
@@ -31,8 +34,13 @@ pub trait IndexedLog {
     }
 
     /// Set a time limit for operations that may take too long
-    fn set_timeout(&mut self, limit: Option<Duration>) -> Instant {
+    fn set_timeout(&mut self, _limit: Option<Duration>) {
        todo!("force_time_limit");
+    }
+
+    /// Determine if previous operation exited due to timeout
+    fn timed_out(&mut self) -> bool {
+        false
     }
 
     /// Length of the log in total bytes

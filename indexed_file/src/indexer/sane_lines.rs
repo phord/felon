@@ -24,17 +24,23 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
     type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.indexer.next(&self.pos);
-        self.pos = pos;
-        line
+        if let Ok((pos, line)) = self.indexer.next(&self.pos) {
+            self.pos = pos;
+            line
+        } else {
+            None
+        }
     }
 }
 
 impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.indexer.next_back(&self.pos_back);
-        self.pos_back = pos;
-        line
+        if let Ok((pos, line)) = self.indexer.next_back(&self.pos_back) {
+            self.pos_back = pos;
+            line
+        } else {
+            None
+        }
     }
 }
 

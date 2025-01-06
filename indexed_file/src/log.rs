@@ -3,7 +3,7 @@ use crate::indexer::waypoint::Position;
 use crate::time_stamper::TimeStamper;
 use crate::LogLine;
 use std::path::PathBuf;
-use crate::indexer::IndexedLog;
+use crate::indexer::{GetLine, IndexedLog};
 
 use crate::files::{LogBase, LogSource, new_text_file};
 
@@ -69,12 +69,12 @@ impl Log {
 impl IndexedLog for Log {
 
     #[inline]
-    fn next(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
+    fn next(&mut self, pos: &Position) -> GetLine {
         self.file.next(pos)
     }
 
     #[inline]
-    fn next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
+    fn next_back(&mut self, pos: &Position) -> GetLine {
         self.file.next_back(pos)
     }
 
