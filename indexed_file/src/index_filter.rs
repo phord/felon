@@ -87,25 +87,25 @@ impl IndexFilter {
 
     /// Step to the next indexed line or gap
     #[inline]
-    pub fn next(&self, find: Position) -> Position {
+    pub fn next(&self, find: &Position) -> Position {
         self.index.next(find)
     }
 
     /// Step to the prev indexed line or gap
     #[inline]
-    pub fn next_back(&self, find: Position) -> Position {
+    pub fn next_back(&self, find: &Position) -> Position {
         self.index.next_back(find)
     }
 
     /// Resolve Position to an Existing value in the index
     #[inline]
-    pub fn resolve(&self, pos: Position) -> Position {
+    pub fn resolve(&self, pos: &Position) -> Position {
         pos.resolve(&self.index)
     }
 
     /// Resolve Position to an Existing value in the index going backwards
     #[inline]
-    pub fn resolve_back(&self, pos: Position) -> Position {
+    pub fn resolve_back(&self, pos: &Position) -> Position {
         pos.resolve_back(&self.index)
     }
 

@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
-use super::waypoint::{Position, VirtualPosition};
+use super::waypoint::Position;
 
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
@@ -20,17 +20,9 @@ pub trait IndexedLog {
     /// If line is None, we're at the start/end of the file or we reached some limit (max time)
     /// Note: Unlike DoubleEndedIterator next_back, there is no rev() to reverse the iterator;
     ///    and "consumed" lines can still be read again.
-    ///       For example,
-    ///         let pos = log.seek(offset);
-    ///         let (pos, a) = log.next(pos);
-    ///         let (pos, b) = log.next(pos);
-    ///         let (pos, c) = log.next_back(pos);
-    ///         let (pos, d) = log.next_back(pos);
-    ///         assert!(b == c);
-    ///         assert!(a == d);
     ///
-    fn next(&mut self, pos: Position) -> (Position, Option<LogLine>);
-    fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>);
+    fn next(&mut self, pos: &Position) -> (Position, Option<LogLine>);
+    fn next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>);
 
     /// Resolve any gap in the index by reading the log from the source.
     /// Returns number of bytes indexed during this operation. 0 if no more gaps.

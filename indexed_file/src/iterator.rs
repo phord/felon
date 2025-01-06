@@ -59,7 +59,7 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.log.next(self.pos.clone());
+        let (pos, line) = self.log.next(&self.pos);
         self.pos = pos;
         if let Some(line) = line {
             if self.range.contains(&line.offset) {
@@ -77,7 +77,7 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
-        let (pos_back, line) = self.log.next_back(self.pos_back.clone());
+        let (pos_back, line) = self.log.next_back(&self.pos_back);
         self.pos_back = pos_back;
         if let Some(line) = line {
             if self.range.contains(&line.offset) {
@@ -155,7 +155,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
 impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.log.next_back(self.pos_back.clone());
+        let (pos, line) = self.log.next_back(&self.pos_back);
         if let Some(line) = &line {
             // FIXME: if line is stripped in the future, this range check is wrong.
             if !self.in_range(line) {
@@ -172,7 +172,7 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.log.next(self.pos.clone());
+        let (pos, line) = self.log.next(&self.pos);
         if let Some(line) = &line {
             if !self.in_range(line) {
                 return None;

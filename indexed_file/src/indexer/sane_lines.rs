@@ -1,6 +1,6 @@
 /// SaneLines combines a SaneIndex with a LogFile to provide an iterator over lines in a log file.
 
-use crate::{indexer::{sane_index::SaneIndex, sane_indexer::SaneIndexer}, Log, LogLine};
+use crate::LogLine;
 
 use super::{waypoint::{Position, VirtualPosition}, IndexedLog};
 
@@ -24,7 +24,7 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
     type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.indexer.next(self.pos.clone());
+        let (pos, line) = self.indexer.next(&self.pos);
         self.pos = pos;
         line
     }
@@ -32,12 +32,15 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
 
 impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        let (pos, line) = self.indexer.next_back(self.pos_back.clone());
+        let (pos, line) = self.indexer.next_back(&self.pos_back);
         self.pos_back = pos;
         line
     }
 }
 
+
+#[cfg(test)]
+use crate::{indexer::sane_indexer::SaneIndexer, Log};
 
 #[test]
 fn sane_index_iter() {

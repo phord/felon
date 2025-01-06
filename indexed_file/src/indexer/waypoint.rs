@@ -118,7 +118,7 @@ impl Position {
 
     /// Resolve a virtual position to a real position, or Invalid
     pub(crate) fn resolve(&self, index: &SaneIndex) -> Position{
-        match self.clone() {
+        match self {
             Position::Virtual(ref virt) => {
                 if let Some(offset) = virt.offset() {
                     let i = index.search(offset);
@@ -132,7 +132,7 @@ impl Position {
                 }
             },
             Position::Existing(i, waypoint) => {
-                if !index.index_valid(i) || index.value(i) != &waypoint {
+                if !index.index_valid(*i) || index.value(*i) != waypoint {
                     log::info!("Waypoint moved; searching new location: {}", self);
                     Position::Virtual(VirtualPosition::Offset(self.least_offset())).resolve(index)
                 } else {
@@ -145,7 +145,7 @@ impl Position {
     /// Resolve backwards a virtual position to a real position, or Invalid
     // TODO: dedup this with resolve
     pub(crate) fn resolve_back(&self, index: &SaneIndex) -> Position {
-        match self.clone() {
+        match self {
             Position::Virtual(ref virt) => {
                 if let Some(offset) = virt.offset() {
                     let mut i = index.search(offset);
@@ -161,11 +161,11 @@ impl Position {
                         Position::invalid()
                     }
                 } else {
-                    self.clone()
+                    Position::invalid()
                 }
             },
             Position::Existing(i, waypoint) => {
-                if !index.index_valid(i) || index.value(i) != &waypoint {
+                if !index.index_valid(*i) || index.value(*i) != waypoint {
                     log::info!("Waypoint moved; searching new location: {}", self);
                     Position::Virtual(VirtualPosition::Offset(self.least_offset())).resolve_back(index)
                 } else {
@@ -194,7 +194,7 @@ impl Position {
                 Position::invalid()
             }
         } else {
-            self.clone()
+            Position::invalid()
         }
     }
 
@@ -208,7 +208,7 @@ impl Position {
                 Position::invalid()
             }
         } else {
-            self.clone()
+            Position::invalid()
         }
 
     }
@@ -245,7 +245,7 @@ impl Position {
 impl Clone for Waypoint {
     fn clone(&self) -> Self {
         match self {
-            Waypoint::Mapped(offset) => Waypoint::Mapped(offset.clone()),
+            Waypoint::Mapped(range) => Waypoint::Mapped(range.clone()),
             Waypoint::Unmapped(range) => Waypoint::Unmapped(range.clone()),
         }
     }

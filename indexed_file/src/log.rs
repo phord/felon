@@ -69,12 +69,12 @@ impl Log {
 impl IndexedLog for Log {
 
     #[inline]
-    fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn next(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         self.file.next(pos)
     }
 
     #[inline]
-    fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         self.file.next_back(pos)
     }
 

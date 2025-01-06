@@ -151,11 +151,11 @@ impl SaneIndex {
         ndx
     }
 
-    pub(crate) fn next(&self, pos: Position) -> Position {
+    pub(crate) fn next(&self, pos: &Position) -> Position {
         pos.next(self)
     }
 
-    pub(crate) fn next_back(&self, pos: Position) -> Position {
+    pub(crate) fn next_back(&self, pos: &Position) -> Position {
         pos.next_back(self)
     }
 

@@ -44,7 +44,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         let mut next = next.clone();
 
         loop {
-            let (pos, line) = self.log.next_back(self.inner_pos.clone());
+            let (pos, line) = self.log.next_back(&self.inner_pos);
             self.inner_pos = pos;
             if line.is_none() { break; }
             let line = line.unwrap();
@@ -54,13 +54,13 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             let range = line.offset..line.offset + line.line.len();
             if self.filter.eval(&line) {
                 next = self.filter.insert(&next, &range);
-                next = self.filter.next_back(next);
+                next = self.filter.next_back(&next);
                 return (next, Some(line));
             } else {
                 next = self.filter.erase(&next, &range);
                 // erase() may give us the _next_ position which is not what we want; step back one to get the previous one.
                 if next.least_offset() > range.start {
-                    next = self.filter.next_back(next);
+                    next = self.filter.next_back(&next);
                     assert!(next.least_offset() <= range.start);
                 }
             }
@@ -79,14 +79,14 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         let mut next = next.clone();
 
         loop {
-            let (pos, line) = self.log.next(self.inner_pos.clone());
+            let (pos, line) = self.log.next(&self.inner_pos);
             self.inner_pos = pos;
             if line.is_none() { break; }
             let line = line.unwrap();
             let range = line.offset..line.offset + line.line.len();
             if self.filter.eval(&line) {
                 next = self.filter.insert(&next, &range);
-                next = self.filter.next(next);
+                next = self.filter.next(&next);
                 return (next, Some(line));
             } else {
                 next = self.filter.erase(&next, &range);
@@ -111,7 +111,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     }
 
     /// Find the next line that matches our filter, memoizing the position in our index.
-    fn find_next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn find_next(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         let end = self.log.len();
 
         // Resolve to an existing pos
@@ -123,7 +123,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         while !next.is_invalid() && next.least_offset() < end {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return (self.filter.next(next), self.log.read_line(offset));
+                return (self.filter.next(&next), self.log.read_line(offset));
             } else if next.is_unmapped() {
                 self.seek_inner(offset);
                 let (p, line) = self.resolve_location_next(&next);
@@ -139,7 +139,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
     }
 
     /// Find the previous line that matches our filter, memoizing the position in our index.
-    fn find_next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn find_next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
 
         // TODO: Dedup with find_next:  next_back, resolve_location_next_back are the only differences
 
@@ -148,14 +148,14 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         let mut next = self.filter.resolve_back(pos);
         if next.least_offset() >= self.log.len() {
             // Force position into valid range
-            next = self.filter.next_back(next);
+            next = self.filter.next_back(&next);
         }
 
         // Search until we run off the end, exceed the range, or find a line
         while !next.is_invalid() {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return (self.filter.next_back(next), self.log.read_line(offset));
+                return (self.filter.next_back(&next), self.log.read_line(offset));
             } else if next.is_unmapped() {
                 self.seek_inner(offset);
                 let (p, line) = self.resolve_location_next_back(&next);
@@ -182,12 +182,12 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     #[inline]
     // FIXME: next/next_back should take a range.end to search over
     //    fn next(&mut self, pos: Position, range: &Range) -> (Position, Option<LogLine>) {
-    fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn next(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         self.find_next(pos)
     }
 
     #[inline]
-    fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         self.find_next_back(pos)
     }
 

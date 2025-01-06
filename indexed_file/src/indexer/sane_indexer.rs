@@ -63,7 +63,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     /// read and memoize a line containing a given offset from a BufRead
     /// Returns the indexed position and the Logline, if found; else None
     /// FIXME: return errors
-    fn read_line_memo(&mut self, pos: Position, offset: usize) -> (Position, Option<LogLine>) {
+    fn read_line_memo(&mut self, pos: &Position, offset: usize) -> (Position, Option<LogLine>) {
         if offset >= self.len() {
             (Position::Virtual(VirtualPosition::End), None)
         } else {
@@ -83,7 +83,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
 
     /// Reads line indicated by pos and memoizes it.
     /// Returns the memoized position and the line read.
-    pub fn read_line_at(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    pub fn read_line_at(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         // Resolve position to a target offset to read in the file
         let offset = pos.least_offset();
         if offset >= self.len() {
@@ -128,7 +128,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         // Found the start of a line in our gap. Read from here to end of gap and remember the lines.
         let mut pos = Position::Virtual(VirtualPosition::Offset(offset));
         loop {
-            let (p, line) = self.read_line_at(pos.clone());
+            let (p, line) = self.read_line_at(&pos);
             if p.is_invalid() {
                 unreachable!("What?");
                 return (p, None);
@@ -143,7 +143,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     /// Scan a chunk of space bounded by pos before the offset position to find the start of our target line
     /// Return the last line found before offset in the region.
     /// Note: offset is inclusive
-    fn scan_lines_backwards(&mut self, pos: Position, offset: usize) -> (Position, Option<LogLine>) {
+    fn scan_lines_backwards(&mut self, pos: &Position, offset: usize) -> (Position, Option<LogLine>) {
         assert!(pos.is_unmapped());
 
         // TODO: Get efficient chunk offsets from the underlying LOG type.
@@ -205,17 +205,17 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         }
     }
 
-    fn next(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn next(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         let offset = pos.least_offset().min(self.len());
         let pos = pos.resolve(&self.index);
         if offset >= self.len() {
             (Position::invalid(), None)
         } else if pos.is_mapped() || offset == pos.least_offset() {
-            let (pos, line) = self.read_line_at(pos);
+            let (pos, line) = self.read_line_at(&pos);
             (pos.next(&self.index), line)
         } else if pos.is_unmapped() {
             // Unusual case: We're reading from some offset in the middle of a gap.  Scan backwards to find the start of the line.
-            let (pos, line) = self.scan_lines_backwards(pos, offset);
+            let (pos, line) = self.scan_lines_backwards(&pos, offset);
             (pos.next(&self.index), line)
         } else {
             // Does this happen?
@@ -223,7 +223,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         }
     }
 
-    fn next_back(&mut self, pos: Position) -> (Position, Option<LogLine>) {
+    fn next_back(&mut self, pos: &Position) -> (Position, Option<LogLine>) {
         let offset = pos.most_offset().min(self.len());
         if offset == 0 {
             return (Position::invalid(), None);
@@ -238,10 +238,10 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         if pos.is_invalid() {
             (pos, None)
         } else if pos.is_mapped() {
-            self.read_line_at(pos)
+            self.read_line_at(&pos)
         } else {
             // Scan backwards, exclusive of end pos
-            self.scan_lines_backwards(pos, offset - 1)
+            self.scan_lines_backwards(&pos, offset - 1)
         };
         (pos.next_back(&self.index), line)
     }

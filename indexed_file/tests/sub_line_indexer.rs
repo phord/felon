@@ -480,7 +480,7 @@ mod sub_line_iterator_tests {
 mod sub_line_wrap_tests {
     use std::collections::HashSet;
     use crate::sub_line_iterator_helper::Harness;
-    use indexed_file::{LineViewMode, SubLineIterator, Log};
+    use indexed_file::{IndexedLog, LineViewMode, Log, SubLineIterator};
 
 
     fn wrapped_new(log: &mut Log, width: usize) -> SubLineIterator<Log> {
@@ -684,6 +684,21 @@ mod sub_line_wrap_tests {
 
         let count = it.count();
         assert_eq!(count, harness.total_len(width) / 2 + 1);
+    }
+
+    #[test]
+    fn test_indexed_log_reversible() {
+        let (_, mut file) =  Harness::new_small(100);
+
+        // index the whole file
+        let _count = file.iter_offsets().count();
+
+        let pos = file.seek(0);                  // Virtual position
+        let (pos0, _) = file.next(&pos);         // Position: 2nd line
+        let (pos1, _) = file.next(&pos0);        // Position: 3rd line
+        let (pos2, _) = file.next_back(&pos1);   // Position: 2nd line
+        let (_pos3, _) = file.next_back(&pos2);  // Position: 1st line
+        assert_eq!(pos2, pos0);
     }
 
     #[test]
