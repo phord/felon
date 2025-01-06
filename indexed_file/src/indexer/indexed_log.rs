@@ -34,14 +34,10 @@ pub trait IndexedLog {
     }
 
     /// Set a time limit for operations that may take too long
-    fn set_timeout(&mut self, _limit: Option<Duration>) {
-       todo!("force_time_limit");
-    }
+    fn set_timeout(&mut self, _limit: Option<Duration>);
 
     /// Determine if previous operation exited due to timeout
-    fn timed_out(&mut self) -> bool {
-        false
-    }
+    fn timed_out(&mut self) -> bool;
 
     /// Length of the log in total bytes
     fn len(&self) -> usize;

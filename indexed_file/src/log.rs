@@ -95,6 +95,16 @@ impl IndexedLog for Log {
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
         self.file.read_line(offset)
     }
+
+    #[inline]
+    fn set_timeout(&mut self, limit: Option<std::time::Duration>) {
+        self.file.set_timeout(limit);
+    }
+
+    #[inline]
+    fn timed_out(&mut self) -> bool {
+        self.file.timed_out()
+    }
 }
 
 // Miscellaneous

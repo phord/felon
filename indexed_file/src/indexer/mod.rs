@@ -8,3 +8,4 @@ pub(crate) mod timeout;
 
 pub use indexed_log::IndexedLog;
 pub use indexed_log::GetLine;
+pub use timeout::TimeoutWrapper;

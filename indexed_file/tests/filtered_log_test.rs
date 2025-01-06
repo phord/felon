@@ -53,6 +53,7 @@ mod filtered_log_iterator_tests {
 
     use crate::filtered_log_iterator_helper::{new, Harness};
     use indexed_file::index_filter::SearchType;
+    use indexed_file::indexer::TimeoutWrapper;
     use indexed_file::{IndexedLog, LineIndexerDataIterator, Log};
     use regex::Regex;
 
@@ -297,17 +298,38 @@ mod filtered_log_iterator_tests {
         assert_eq!(count, harness.lines);
     }
 
-    // #[test]
-    // fn test_iterator_timeout() {
-    //     let (_harness, mut file) = Harness::default();
-    //     file.search_regex("000").unwrap();
+    #[test]
+    fn test_iterator_timeout() {
+        let (harness, mut file) = Harness::default();
+        file.search_regex("000").unwrap();
 
-    //     let mut pos = file.seek(0).set_timeout(0);
-    //     assert!(file.next(&mut pos).is_checkpoint());
+        {
+            // Index half the lines.  Expect no timeout.
+            let mut wrap = TimeoutWrapper::new(&mut file, 1000);
+            let count = wrap.iter().take(harness.lines / 2).count();
+            assert_eq!(count, harness.lines / 2);
+            assert!(!wrap.timed_out());
+        }
 
-    //     let mut pos = file.seek(0);
-    //     assert!(file.next(&mut pos).is_some());
-    // }
+        {
+            // Set a timeout and then wait for it to pass.  Expect a timeout before we index more lines.
+            let mut wrap = TimeoutWrapper::new(&mut file, 1);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            let count = wrap.iter().count();
+            assert!(count < harness.lines);
+            assert!(wrap.timed_out());
+
+            // Timeout is persistent
+            let count = wrap.iter().count();
+            assert!(count < harness.lines);
+            assert!(wrap.timed_out());
+        }
+
+        // After wrapper is dropped, file iterates normally
+        let count = file.iter().count();
+        assert_eq!(count, harness.lines);
+        assert!(!file.timed_out());
+    }
 
     #[test]
     fn test_iterator_from_offset_indexed() {
