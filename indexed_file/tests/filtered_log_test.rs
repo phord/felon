@@ -305,15 +305,14 @@ mod filtered_log_iterator_tests {
 
         {
             // Index half the lines.  Expect no timeout.
-            let mut wrap = TimeoutWrapper::new(&mut file, 1000);
-            let count = wrap.iter().take(harness.lines / 2).count();
+            let count = file.with_timeout(1000).iter().take(harness.lines / 2).count();
             assert_eq!(count, harness.lines / 2);
-            assert!(!wrap.timed_out());
+            assert!(!file.timed_out());
         }
 
         {
             // Set a timeout and then wait for it to pass.  Expect a timeout before we index more lines.
-            let mut wrap = TimeoutWrapper::new(&mut file, 1);
+            let mut wrap = file.with_timeout(1);
             std::thread::sleep(std::time::Duration::from_millis(2));
             let count = wrap.iter().count();
             assert!(count < harness.lines);
@@ -323,6 +322,8 @@ mod filtered_log_iterator_tests {
             let count = wrap.iter().count();
             assert!(count < harness.lines);
             assert!(wrap.timed_out());
+            drop(wrap);
+            assert!(file.timed_out());
         }
 
         // After wrapper is dropped, file iterates normally

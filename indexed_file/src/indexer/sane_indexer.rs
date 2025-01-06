@@ -49,7 +49,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         Self {
             source: file,
             index: SaneIndex::new(),
-            timeout: Timeout::None,
+            timeout: Timeout::Inactive(false),
             stats: IndexerStats::default(),
         }
     }
@@ -205,8 +205,9 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         self.timeout.set(limit);
     }
 
+    // reports if the current timeout
     fn timed_out(&mut self) -> bool {
-        self.timeout.timed_out()
+        self.timeout.timed_out() || self.timeout.prev_timed_out()
     }
 
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
@@ -220,6 +221,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn next(&mut self, pos: &Position) -> GetLine {
+        self.timeout.active();
         let offset = pos.least_offset().min(self.len());
         let pos = pos.resolve(&self.index);
         Ok(if offset >= self.len() {
@@ -238,6 +240,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     }
 
     fn next_back(&mut self, pos: &Position) -> GetLine {
+        self.timeout.active();
         let offset = pos.most_offset().min(self.len());
         if offset == 0 {
             return Ok((Position::invalid(), None));

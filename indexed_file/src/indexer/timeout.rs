@@ -2,9 +2,9 @@
 use std::time::{Duration, Instant};
 
 pub(crate) enum Timeout {
-    None,
     Future(Instant),
     TimedOut,
+    Inactive(bool),     // bool holds status of previous timeout
 }
 
 
@@ -12,7 +12,7 @@ impl Timeout {
     pub(crate) fn set(&mut self, limit: Option<Duration>) {
         *self = match limit {
             Some(dur) => Timeout::Future(Instant::now() + dur),
-            None => Timeout::None,
+            None => Timeout::Inactive(self.timed_out()),
         }
     }
 
@@ -26,9 +26,25 @@ impl Timeout {
         self.timed_out()
     }
 
-    /// Check if a previous operation detected a timeout
+    /// Check if the current operation is timed out
     pub(crate) fn timed_out(&self) -> bool {
         matches!(self, Timeout::TimedOut)
+    }
+
+    // Check if the previous operation timed out.  Resets on the next operation.
+    pub(crate) fn prev_timed_out(&self) -> bool {
+        if let Timeout::Inactive(b) = self {
+            *b
+        } else {
+            false
+        }
+    }
+
+    // Reset the previous timeout history when we start a new action
+    pub(crate) fn active(&mut self) {
+        if let Timeout::Inactive(_) = self {
+            *self = Timeout::Inactive(false);
+        }
     }
 }
 

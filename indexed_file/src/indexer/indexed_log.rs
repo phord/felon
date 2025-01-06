@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
-use super::waypoint::Position;
+use super::{waypoint::Position, TimeoutWrapper};
 
 // next/next_back return Err on timeout
 pub type GetLine = Result<(Position, Option<LogLine>), ()>;
@@ -52,6 +52,10 @@ pub trait IndexedLog {
         self.len() == 0
     }
 
+    // Autowrap
+    fn with_timeout(&mut self, ms: usize) -> TimeoutWrapper<Self> where Self: std::marker::Sized {
+        TimeoutWrapper::new(self, ms)
+    }
 
     // Iterators
 
