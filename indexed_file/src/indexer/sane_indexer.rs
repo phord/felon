@@ -43,6 +43,8 @@ impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
     }
 }
 
+const CHUNK_SIZE:usize = 64 * 1024;
+
 impl<LOG: LogFile> SaneIndexer<LOG> {
 
     pub fn new(file: LOG) -> SaneIndexer<LOG> {
@@ -153,8 +155,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         assert!(pos.is_unmapped());
 
         // TODO: Get efficient chunk offsets from the underlying LOG type.
-        let chunk_size = 1024; // * 10;
-        let mut chunk_delta = chunk_size;
+        let mut chunk_delta = CHUNK_SIZE;
 
         // Scan one byte before this region to ensure we can use the EOL from the previous matched chunk as a baseline
         let start = pos.least_offset().saturating_sub(1);
