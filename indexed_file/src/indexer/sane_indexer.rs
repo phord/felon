@@ -32,8 +32,6 @@ pub struct SaneIndexer<LOG> {
     source: LOG,
     index: SaneIndex,
     timeout: Timeout,
-
-    stats: IndexerStats,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -50,9 +48,9 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     pub fn new(file: LOG) -> SaneIndexer<LOG> {
         Self {
             source: file,
-            index: SaneIndex::new(),
+            // FIXME: Pass filename instead of generic token
+            index: SaneIndex::new("File".to_string()),
             timeout: Timeout::Inactive(false),
-            stats: IndexerStats::default(),
         }
     }
 

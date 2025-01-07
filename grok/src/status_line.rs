@@ -26,12 +26,16 @@ impl StatusLine {
         // FIXME: Don't print the status line again if nothing changed
 
         let mut stdout = stdout();
-        let indexed = doc.indexed_bytes() as f64 / doc.len() as f64 * 100.0;
-        let message = format!("Doc:  {} bytes, {:3.2}% indexed", doc.len(), indexed);
-        // let message = format!("Showing {} of {} lines, {} filtered",
-        //                               doc.filtered_line_count(), doc.all_line_count(),
-        //                               doc.all_line_count() - doc.filtered_line_count());
-
+        let message =
+            std::iter::once(format!("Bytes: {}", doc.len()))
+            .chain(doc.info()
+                .map(|stats| {
+                    let indexed = stats.bytes_indexed as f64 / doc.len() as f64 * 100.0;
+                    format!("{}: {} lines, {:3.2}% indexed", stats.name, stats.lines_indexed, indexed)
+                })
+            )
+            .collect::<Vec<_>>()
+            .join(" | ");
 
         let width = std::cmp::min(width as usize, message.len());
         stdout.queue(cursor::MoveTo(0, height-1_u16))?;

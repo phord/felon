@@ -207,7 +207,10 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
     where Self: Sized
     {
-        std::iter::once(&self.filter.index.stats)
+        self.log.info().chain(
+            std::iter::once(&self.filter.index.stats)
+                .filter(|s| s.name != "None")
+        )
     }
 
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {

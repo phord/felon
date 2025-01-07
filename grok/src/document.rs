@@ -63,7 +63,7 @@ impl Document {
         }
     }
 
-    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    pub fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
     where Self: Sized
     {
         self.log.info()

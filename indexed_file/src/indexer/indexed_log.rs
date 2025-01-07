@@ -13,6 +13,15 @@ pub struct IndexStats {
     pub lines_indexed: usize,
 }
 
+impl IndexStats {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            ..Self::default()
+        }
+    }
+}
+
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
     fn seek(&mut self, pos: usize) -> Position {

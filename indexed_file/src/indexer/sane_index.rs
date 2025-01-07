@@ -55,8 +55,11 @@ impl Default for SaneIndex {
 }
 
 impl SaneIndex {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(name: String) -> Self {
+        SaneIndex {
+            stats: IndexStats::new(name),
+            ..SaneIndex::default()
+        }
     }
 
     pub fn index_prev(&self, idx: IndexIndex) -> Option<IndexIndex> {

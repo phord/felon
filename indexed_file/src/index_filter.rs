@@ -20,6 +20,17 @@ pub enum SearchType {
     None,
 }
 
+impl std::fmt::Display for SearchType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SearchType::Regex(re) => write!(f, "Regex({})", re),
+            SearchType::Raw(s) => write!(f, "Raw({})", s),
+            SearchType::Bookmark => write!(f, "Bookmark"),
+            SearchType::None => write!(f, "None"),
+        }
+    }
+}
+
 pub struct IndexFilter {
     f: SearchType,
 
@@ -54,10 +65,11 @@ impl Default for IndexFilter {
 
 impl IndexFilter {
     pub fn new(f: SearchType, include: bool) -> Self {
+        let name = format!("{}", f);
         IndexFilter {
             f,
             include,
-            index: SaneIndex::default(),
+            index: SaneIndex::new(name),
         }
     }
 
