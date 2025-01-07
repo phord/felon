@@ -357,7 +357,7 @@ fn test_position_next() {
     use Position::*;
     use VirtualPosition::*;
     use SaneIndex;
-    let mut index = SaneIndex::new();
+    let mut index = SaneIndex::default();
     index.insert(&(0..13));
     index.insert(&(13..14));
     index.insert(&(30..51));
@@ -387,7 +387,7 @@ fn test_position_prev() {
     use Position::*;
     use VirtualPosition::*;
     use SaneIndex;
-    let mut index = SaneIndex::new();
+    let mut index = SaneIndex::default();
     index.insert(&(0..13));
     index.insert(&(13..14));
     index.insert(&(30..51));
@@ -417,7 +417,7 @@ fn test_position_prev_unmapped() {
     use Position::*;
     use VirtualPosition::*;
     use SaneIndex;
-    let mut index = SaneIndex::new();
+    let mut index = SaneIndex::default();
     index.insert(&(0..13));
     index.insert(&(13..14));
     index.insert(&(30..51));

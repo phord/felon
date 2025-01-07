@@ -369,7 +369,7 @@ impl<'a> Iterator for SaneIter<'a> {
 
 #[test]
 fn sane_index_basic() {
-    let mut index = SaneIndex::new();
+    let mut index = SaneIndex::default();
     index.insert(&(0..13));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Mapped(0..13), Waypoint::Unmapped(13..IMAX)]);
     index.insert(&(13..14));
@@ -387,7 +387,7 @@ fn sane_index_basic() {
 
 #[test]
 fn sane_index_basic_rev() {
-    let mut index = SaneIndex::new();
+    let mut index = SaneIndex::default();
     index.erase(&(52..67));
     assert_eq!(index.iter().collect::<Vec<_>>(), vec![Waypoint::Unmapped(0..52), Waypoint::Unmapped(67..IMAX)]);
     index.insert(&(13..14));

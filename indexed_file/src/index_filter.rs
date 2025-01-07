@@ -57,7 +57,7 @@ impl IndexFilter {
         IndexFilter {
             f,
             include,
-            index: SaneIndex::new(),
+            index: SaneIndex::default(),
         }
     }
 
