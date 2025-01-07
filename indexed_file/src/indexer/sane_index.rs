@@ -1,4 +1,4 @@
-use std::io::BufRead;
+use std::collections::VecDeque;
 
 use super::waypoint::{Position, VirtualPosition, Waypoint};
 
@@ -37,7 +37,7 @@ use super::waypoint::{Position, VirtualPosition, Waypoint};
 const IMAX:usize = usize::MAX;
 type Range = std::ops::Range<usize>;
 
-type IndexVec = Vec<Vec<Waypoint>>;
+type IndexVec = Vec<VecDeque<Waypoint>>;
 pub type IndexIndex = (usize, usize);
 #[derive(Default, Debug)]
 struct IndexStats {
@@ -54,7 +54,7 @@ pub struct SaneIndex {
 impl Default for SaneIndex {
     fn default() -> Self {
         SaneIndex {
-            index: vec![vec![Waypoint::Unmapped(0..IMAX)]],
+            index: vec![VecDeque::from([Waypoint::Unmapped(0..IMAX)])],
             stats: IndexStats::default(),
         }
     }
@@ -113,7 +113,7 @@ impl SaneIndex {
             // This returns a pointer past the end when index.is_empty().  Is it bad?
             return (0, 0);
         }
-        let find = self.index.binary_search_by(|v| {v.first().unwrap().cmp_offset().cmp(&offset)});
+        let find = self.index.binary_search_by(|v| {v[0].cmp_offset().cmp(&offset)});
         let ndx  = match find {
             // Found the matching index in the first element of the row.  What luck!
             Ok(i) => (i, 0),
@@ -201,13 +201,12 @@ impl SaneIndex {
         if left.is_none() && right.is_none() {
             // This gap is completely removed.  Clear the row and return the empty row.
             // Note: We could remove the row and let the caller insert into the next row instead.
-            // TODO: Should we?
-            self.index[*i].pop();
+            self.index[*i].clear();
             *i
         } else if left.is_some() && right.is_some() {
             // Split into two gaps on either side of our range.
             // 1. Insert new row with left-gap before our position
-            self.index.insert(*i, vec![left.unwrap()]);
+            self.index.insert(*i, VecDeque::from([left.unwrap()]));
             // 2. Replace original gap with our right-gap
             *self.index[i + 1].get_mut(0).unwrap() = right.unwrap();
             // Next line should go before the 2nd half
@@ -299,17 +298,21 @@ impl SaneIndex {
         // Returned slot is remainder of gap, if any.  We need to insert before or after that gap.
         // Find row on other side of gap make sure we can insert there.  If it's unmapped, we need to add a row.
         let row =
-            if let Some(first) = self.index[row].first() {
+            if let Some(first) = self.index[row].front() {
                 assert!(!first.is_mapped(), "Expect pointer to remainder of gap");
                 let other = if range.start < first.cmp_offset() {
+                    // Inserting to the left of this gap (end of previous row)
                     row.saturating_sub(1)
                 } else {
+                    // Insert to the right of this gap (beginning of next row)
                     assert!(range.start >= first.end_offset());
                     row + 1
                 };
-                if row == other || !self.index[other].first().unwrap().is_mapped() {
+                if row == other                             // row == other == 0: need to to insert a row
+                    || !self.index[other][0].is_mapped()    // target row is unmapped; insert new row to hold mapped
+                {
                     // We have to insert an empty row
-                    self.index.insert(row.max(other), vec![]);
+                    self.index.insert(row.max(other), VecDeque::new());
                     row.max(other)
                 } else {
                     other
@@ -324,23 +327,24 @@ impl SaneIndex {
 
         // Now we are either appending or prepending to the list
         let col =
-            if let Some(first) = self.index[row].first() {
+            if let Some(first) = self.index[row].front() {
                 if first < &waypoint {
                     // Must be appending
-                    assert!(self.index[row].last().unwrap() < &waypoint);
-                    self.index[row].push(waypoint);
+                    assert!(self.index[row].back().unwrap() < &waypoint);
+                    self.index[row].push_back(waypoint);
                     self.index[row].len() - 1
                 } else {
                     self.index[row].insert(0, waypoint);
                     0
                 }
             } else {
-                self.index[row].push(waypoint);
+                self.index[row].push_back(waypoint);
                 0
             };
         Position::Existing((row, col), waypoint_pos)
     }
 
+    #[cfg(test)]
     pub(crate) fn iter(&self) -> SaneIter {
         SaneIter::new(self)
     }
