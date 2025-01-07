@@ -6,6 +6,13 @@ use super::{waypoint::Position, TimeoutWrapper};
 // next/next_back return Err on timeout
 pub type GetLine = Result<(Position, Option<LogLine>), ()>;
 
+#[derive(Default, Debug)]
+pub struct IndexStats {
+    pub name: String,
+    pub bytes_indexed: usize,
+    pub lines_indexed: usize,
+}
+
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
     fn seek(&mut self, pos: usize) -> Position {
@@ -42,15 +49,13 @@ pub trait IndexedLog {
     /// Length of the log in total bytes
     fn len(&self) -> usize;
 
-    /// Actual indexed bytes in the log; gives an indication of the completeness of the index
-    fn indexed_bytes(&self) -> usize;
-
-    /// Count of known lines in the log (may be undercounted if index is incomplete)
-    fn count_lines(&self) -> usize ;
-
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Iterator to provide access to info about the different indexes
+    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    where Self: Sized ;
 
     // Autowrap
     fn with_timeout(&mut self, ms: usize) -> TimeoutWrapper<Self> where Self: std::marker::Sized {

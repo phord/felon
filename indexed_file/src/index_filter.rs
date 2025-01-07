@@ -27,7 +27,7 @@ pub struct IndexFilter {
     include: bool,
 
     /// Memoized index of matching lines
-    index: SaneIndex,
+    pub(crate) index: SaneIndex,
 }
 
 #[inline]
@@ -108,14 +108,4 @@ impl IndexFilter {
     pub fn resolve_back(&self, pos: &Position) -> Position {
         pos.resolve_back(&self.index)
     }
-
-    #[inline]
-    pub fn count_lines(&self) -> usize {
-        self.index.count_lines()
-    }
-    #[inline]
-    pub fn indexed_bytes(&self) -> usize {
-        self.index.indexed_bytes()
-    }
-
 }

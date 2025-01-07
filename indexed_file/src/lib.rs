@@ -119,7 +119,7 @@ mod tests {
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
-        assert_eq!(file.count_lines(), linecount);
+        assert_eq!(file.file.info().next().unwrap().lines_indexed, linecount);
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
 
         // assert no more lines in file
         assert_eq!(scanlines.count(), 0);
-        assert_eq!(file.count_lines(), linecount);
+        assert_eq!(file.file.info().next().unwrap().lines_indexed, linecount);
     }
 
     #[test]

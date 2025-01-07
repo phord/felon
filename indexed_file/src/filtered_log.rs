@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use regex::Regex;
 
-use crate::{index_filter::{IndexFilter, SearchType}, indexer::{timeout::Timeout, GetLine, IndexedLog}, LogLine};
+use crate::{index_filter::{IndexFilter, SearchType}, indexer::{indexed_log::IndexStats, timeout::Timeout, GetLine, IndexedLog}, LogLine};
 
 /// Applies an IndexFilter to an IndexedLog to make a filtered IndexLog that can iterate lines after applying the filter.
 pub struct FilteredLog<LOG> {
@@ -204,13 +204,10 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
         self.log.timed_out()
     }
 
-    // Count the size of the indexed regions
-    fn indexed_bytes(&self) -> usize {
-        self.filter.indexed_bytes()
-    }
-
-    fn count_lines(&self) -> usize {
-        self.filter.count_lines()
+    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    where Self: Sized
+    {
+        std::iter::once(&self.filter.index.stats)
     }
 
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {

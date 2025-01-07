@@ -51,7 +51,7 @@ impl Timeout {
 
 use crate::IndexedLog;
 
-use super::{waypoint::Position, GetLine};
+use super::{indexed_log::IndexStats, waypoint::Position, GetLine};
 
 pub struct TimeoutWrapper<'a, LOG: IndexedLog>  {
     inner: &'a mut LOG,
@@ -87,12 +87,10 @@ impl<'a, LOG: IndexedLog> IndexedLog for TimeoutWrapper<'a, LOG> {
         self.inner.len()
     }
 
-    fn indexed_bytes(&self) -> usize {
-        self.inner.indexed_bytes()
-    }
-
-    fn count_lines(&self) -> usize  {
-        self.inner.count_lines()
+    fn info<'b>(&'b self) -> impl Iterator<Item = &'b IndexStats> + 'b
+    where Self: Sized
+    {
+        self.inner.info()
     }
 
     fn set_timeout(&mut self, limit: Option<Duration>) {

@@ -7,7 +7,7 @@ use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{files, FilteredLog, IndexedLog, LineViewMode, Log, LogLine};
+use indexed_file::{files, indexer::indexed_log::IndexStats, FilteredLog, IndexedLog, LineViewMode, Log, LogLine};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
@@ -38,10 +38,6 @@ impl Document {
         }
     }
 
-    pub fn all_line_count(&self) -> usize {
-        self.log.count_lines()
-    }
-
     fn hash_color(&self, text: &str) -> Color {
         let mut hasher = FnvHasher::default();
         hasher.write(text.as_bytes());
@@ -60,7 +56,17 @@ impl Document {
     }
 
     pub fn indexed_bytes(&self) -> usize {
-        self.log.indexed_bytes()
+        if let Some(stats) = self.info().next() {
+            stats.bytes_indexed
+        } else {
+            0
+        }
+    }
+
+    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    where Self: Sized
+    {
+        self.log.info()
     }
 
     /// Index more of the file in the background.

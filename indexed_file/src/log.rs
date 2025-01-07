@@ -1,3 +1,4 @@
+use crate::indexer::indexed_log::IndexStats;
 use crate::indexer::sane_indexer::SaneIndexer;
 use crate::indexer::waypoint::Position;
 use crate::time_stamper::TimeStamper;
@@ -83,12 +84,10 @@ impl IndexedLog for Log {
         self.file.len()
     }
 
-    fn count_lines(&self) -> usize {
-        self.file.count_lines()
-    }
-
-    fn indexed_bytes(&self) -> usize {
-        self.file.indexed_bytes()
+    fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
+    where Self: Sized
+    {
+        self.file.info()
     }
 
     #[inline]

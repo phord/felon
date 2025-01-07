@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::files::LogFile;
 use crate::LogLine;
 
-use super::indexed_log::IndexedLog;
+use super::indexed_log::{IndexStats, IndexedLog};
 use super::sane_index::SaneIndex;
 use super::timeout::Timeout;
 use super::waypoint::{Position, VirtualPosition};
@@ -269,14 +269,10 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         self.source.len()
     }
 
-    #[inline]
-    fn indexed_bytes(&self) -> usize {
-        self.index.indexed_bytes()
-    }
-
-    #[inline]
-    fn count_lines(&self) -> usize {
-        self.index.count_lines()
+    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    where Self: Sized
+    {
+        std::iter::once(&self.index.stats)
     }
 
 }

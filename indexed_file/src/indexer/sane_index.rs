@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use super::waypoint::{Position, VirtualPosition, Waypoint};
+use super::{indexed_log::IndexStats, waypoint::{Position, VirtualPosition, Waypoint}};
 
 
 /// SaneIndex
@@ -39,16 +39,10 @@ type Range = std::ops::Range<usize>;
 
 type IndexVec = Vec<VecDeque<Waypoint>>;
 pub type IndexIndex = (usize, usize);
-#[derive(Default, Debug)]
-struct IndexStats {
-    bytes_indexed: usize,
-    lines_indexed: usize,
-}
-
 
 pub struct SaneIndex {
     pub(crate) index: IndexVec,
-    stats: IndexStats,
+    pub(crate) stats: IndexStats,
 }
 
 impl Default for SaneIndex {
@@ -63,16 +57,6 @@ impl Default for SaneIndex {
 impl SaneIndex {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    #[inline]
-    pub fn indexed_bytes(&self) -> usize {
-        self.stats.bytes_indexed
-    }
-
-    #[inline]
-    pub fn count_lines(&self) -> usize {
-        self.stats.lines_indexed
     }
 
     pub fn index_prev(&self, idx: IndexIndex) -> Option<IndexIndex> {
