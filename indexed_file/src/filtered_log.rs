@@ -50,10 +50,10 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             self.inner_pos = pos;
             if line.is_none() { break; }
             let line = line.unwrap();
+            let range = line.offset..line.offset + line.line.len();
             if line.offset + line.line.len() < gap.start {
                 break;
             }
-            let range = line.offset..line.offset + line.line.len();
             if self.filter.eval(&line) {
                 next = self.filter.insert(&next, &range);
                 next = self.filter.next_back(&next);
@@ -115,7 +115,6 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
 
         // Resolve to an existing pos
         // TODO: Do this one time in the iterator constructor
-        let offset = pos.least_offset().min(end);
         let mut next = self.filter.resolve(pos);
 
         // Search until we run off the end, exceed the range, or find a line
@@ -124,6 +123,9 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
                 let offset = next.region().start;
                 return Ok((self.filter.next(&next), self.log.read_line(offset)));
             } else if next.is_unmapped() {
+                // Recover the target position from the original Virtual::Offset, or whatever
+                let offset = pos.least_offset().min(end);
+                let offset = next.least_offset().max(offset);
                 self.seek_inner(offset);
                 let (p, line) = self.resolve_location_next(&next)?;
                 if line.is_some() {
@@ -143,7 +145,6 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         // TODO: Dedup with find_next:  next_back, resolve_location_next_back are the only differences
 
         // Resolve to an existing pos
-        let offset = pos.most_offset().min(self.log.len().saturating_sub(1));
         let mut next = self.filter.resolve_back(pos);
         if next.least_offset() >= self.log.len() {
             // Force position into valid range
@@ -156,6 +157,8 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
                 let offset = next.region().start;
                 return Ok((self.filter.next_back(&next), self.log.read_line(offset)));
             } else if next.is_unmapped() {
+                let offset = pos.most_offset().min(self.log.len().saturating_sub(1));
+                let offset = next.most_offset().min(offset);
                 self.seek_inner(offset);
                 let (p, line) = self.resolve_location_next_back(&next)?;
                 if line.is_some() {
