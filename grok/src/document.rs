@@ -55,14 +55,6 @@ impl Document {
         self.log.len()
     }
 
-    pub fn indexed_bytes(&self) -> usize {
-        if let Some(stats) = self.info().next() {
-            stats.bytes_indexed
-        } else {
-            0
-        }
-    }
-
     pub fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
     where Self: Sized
     {

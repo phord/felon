@@ -3,7 +3,6 @@
 use std::io::Cursor;
 use std::io::Seek;
 use std::io::Write;
-use crate::IndexedLog;
 
 use super::Stream;
 
@@ -32,6 +31,9 @@ impl CursorUtil for CursorLogFile {
         Ok(c)
     }
 }
+
+#[cfg(test)]
+use crate::IndexedLog;
 
 #[test]
 fn mock_cursor() {
