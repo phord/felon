@@ -84,7 +84,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
                     panic!("Read error?");
                 }
             }
-            GetLine::Hit(pos, next)
+            GetLine::Hit(pos, next.unwrap_or_default())
         }
     }
 

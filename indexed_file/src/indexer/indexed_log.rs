@@ -5,7 +5,7 @@ use super::{waypoint::Position, TimeoutWrapper};
 
 // Result of fetching a line: got it, or timeout
 pub enum GetLine {
-    Hit(Position, Option<LogLine>),
+    Hit(Position, LogLine),
     Miss(Position),
     Timeout,
 }

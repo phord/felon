@@ -3,7 +3,7 @@ use crate::indexer::{
 };
 use std::ops::Bound;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
 pub struct LogLine {
     pub line: String,
     pub offset: usize,
@@ -60,13 +60,9 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     fn next(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.log.next(&self.pos) {
             self.pos = pos;
-            if let Some(line) = line {
-                if self.range.contains(&line.offset) {
-                    self.range = self.range.start.max(line.offset.saturating_add(1))..self.range.end;
-                    Some(line.offset)
-                } else {
-                    None
-                }
+            if self.range.contains(&line.offset) {
+                self.range = self.range.start.max(line.offset.saturating_add(1))..self.range.end;
+                Some(line.offset)
             } else {
                 None
             }
@@ -81,13 +77,9 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos_back, line) = self.log.next_back(&self.pos_back) {
             self.pos_back = pos_back;
-            if let Some(line) = line {
-                if self.range.contains(&line.offset) {
-                    self.range = self.range.start..self.range.end.min(line.offset);
-                    Some(line.offset)
-                } else {
-                    None
-                }
+            if self.range.contains(&line.offset) {
+                self.range = self.range.start..self.range.end.min(line.offset);
+                Some(line.offset)
             } else {
                 None
             }
@@ -161,14 +153,12 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LO
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.log.next_back(&self.pos_back) {
-            if let Some(line) = &line {
-                // FIXME: if line is stripped in the future, this range check is wrong.
-                if !self.in_range(line) {
-                    return None;
-                }
+            // FIXME: if line is stripped in the future, this range check is wrong.
+            if !self.in_range(&line) {
+                return None;
             }
             self.pos_back = pos;
-            line
+            Some(line)
         } else {
             None
         }
@@ -181,13 +171,11 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.log.next(&self.pos) {
-            if let Some(line) = &line {
-                if !self.in_range(line) {
-                    return None;
-                }
+            if !self.in_range(&line) {
+                return None;
             }
             self.pos = pos;
-            line
+            Some(line)
         } else {
             None
         }

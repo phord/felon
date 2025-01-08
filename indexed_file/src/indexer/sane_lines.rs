@@ -26,7 +26,7 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
     fn next(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.indexer.next(&self.pos) {
             self.pos = pos;
-            line
+            Some(line)
         } else {
             None
         }
@@ -37,7 +37,7 @@ impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.indexer.next_back(&self.pos_back) {
             self.pos_back = pos;
-            line
+            Some(line)
         } else {
             None
         }
