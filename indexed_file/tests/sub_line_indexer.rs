@@ -694,10 +694,10 @@ mod sub_line_wrap_tests {
         let _count = file.iter_offsets().count();
 
         let pos = file.seek(0);                  // Virtual position
-        let (pos0, _) = file.next(&pos).unwrap();         // Position: 2nd line
-        let (pos1, _) = file.next(&pos0).unwrap();        // Position: 3rd line
-        let (pos2, _) = file.next_back(&pos1).unwrap();   // Position: 2nd line
-        let (_pos3, _) = file.next_back(&pos2).unwrap();  // Position: 1st line
+        let pos0 = file.next(&pos).into_pos();         // Position: 2nd line
+        let pos1 = file.next(&pos0).into_pos();        // Position: 3rd line
+        let pos2 = file.next_back(&pos1).into_pos();   // Position: 2nd line
+        let _pos3 = file.next_back(&pos2).into_pos();  // Position: 1st line
         assert_eq!(pos2, pos0);
     }
 

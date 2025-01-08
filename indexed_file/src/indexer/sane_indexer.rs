@@ -67,12 +67,12 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
 
     /// read and memoize a line containing a given offset from a BufRead
     /// Returns the indexed position and the Logline, if found; else None
-    /// FIXME: return errors
+    /// FIXME: return errors from read_line
     fn read_line_memo(&mut self, pos: &Position, offset: usize) -> GetLine {
         if self.timeout.is_timed_out() {
-            Err(())
+            GetLine::Timeout
         } else if offset >= self.len() {
-            Ok((Position::Virtual(VirtualPosition::End), None))
+            GetLine::Miss(Position::Virtual(VirtualPosition::End))
         } else {
             let next = self.read_line_from(offset);
 
@@ -84,7 +84,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
                     panic!("Read error?");
                 }
             }
-            Ok((pos, next))
+            GetLine::Hit(pos, next)
         }
     }
 
@@ -94,7 +94,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         // Resolve position to a target offset to read in the file
         let offset = pos.least_offset();
         if offset >= self.len() {
-            return Ok((Position::Virtual(VirtualPosition::End), None));
+            return GetLine::Miss(Position::Virtual(VirtualPosition::End));
         }
         self.read_line_memo(pos, offset)
     }
@@ -122,27 +122,28 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
                 let offset = line.offset + line.line.len();
                 if offset > end {
                     // Did not find a line break in our gap. Failure.
-                    return Ok((Position::invalid(), None));
+                    return GetLine::Miss(Position::invalid());
                 }
                 offset
             } else {
                 // Did not find anything.  EOF?
                 panic!("Reading past EOF intentionally?");
-                return Ok((Position::invalid(), None));
+                return GetLine::Miss(Position::invalid());
             };
 
         // Found the start of a line in our gap. Read from here to end of gap and remember the lines.
         let mut pos = Position::Virtual(VirtualPosition::Offset(offset));
         loop {
-            let (p, line) = self.read_line_at(&pos)?;
-            if p.is_invalid() {
-                unreachable!("What?");
-                return Ok((p, None));
+            let get = self.read_line_at(&pos);
+            if let GetLine::Hit(p, _) = &get {
+                if p.most_offset() > end {
+                    return get;
+                }
+                pos = p.next(&self.index);
+            } else {
+                // No lines matched? Failure.
+                return get;
             }
-            if p.most_offset() > end {
-                return Ok((p, line));
-            }
-            pos = p.next(&self.index);
         }
     }
 
@@ -159,27 +160,31 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         let start = pos.least_offset().saturating_sub(1);
         loop {
             let try_offset = offset.saturating_sub(chunk_delta).max(start);
-            let (pos, line) = self.last_line(try_offset, offset)?;
-            if !pos.is_invalid() && pos.most_offset() >= offset {
-                // Found the line touching our endpoint
-                assert!(pos.least_offset() <= offset);
-                return Ok((pos, line));
+            let get = self.last_line(try_offset, offset);
+            if let GetLine::Hit(pos, _) = &get {
+                if !pos.is_invalid() && pos.most_offset() >= offset {
+                    // Found the line touching our endpoint
+                    assert!(pos.least_offset() <= offset);
+                    return get;
+                }
+                assert!(pos.least_offset() >= start);
+                if pos.least_offset() == start {
+                    panic!("This doesn't happen, does it?");
+                    // return Ok((pos, line));
+                }
+                if try_offset == start {
+                    // Scanned whole gap but didn't find any new line breaks.  How did we get this gap?
+                    panic!("Inconsistent index?  Gap has no line breaks.");
+                }
+                if chunk_delta > offset {
+                    // Scanned whole gap but didn't find any new line breaks.  How did we get this gap?
+                    panic!("Inconsistent index?  Gap has no line breaks.");
+                }
+                // No lines found.  Scan a larger chunk.
+                chunk_delta *= 2;
+            } else {
+                return get;
             }
-            assert!(pos.least_offset() >= start);
-            if pos.least_offset() == start {
-                panic!("This doesn't happen, does it?");
-                // return Ok((pos, line));
-            }
-            if try_offset == start {
-                // Scanned whole gap but didn't find any new line breaks.  How did we get this gap?
-                panic!("Inconsistent index?  Gap has no line breaks.");
-            }
-            if chunk_delta > offset {
-                // Scanned whole gap but didn't find any new line breaks.  How did we get this gap?
-                panic!("Inconsistent index?  Gap has no line breaks.");
-            }
-            // No lines found.  Scan a larger chunk.
-            chunk_delta *= 2;
         }
     }
 }
@@ -196,6 +201,23 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         }
         self.read_line(offset)
     }
+
+    fn advance_pos(&self, get: GetLine) -> GetLine {
+        match get {
+            GetLine::Hit(pos, line) => GetLine::Hit(pos.next(&self.index), line),
+            GetLine::Miss(pos) => GetLine::Miss(pos.next(&self.index)),
+            _ => get,
+        }
+    }
+
+    fn advance_pos_back(&self, get: GetLine) -> GetLine {
+        match get {
+            GetLine::Hit(pos, line) => GetLine::Hit(pos.next_back(&self.index), line),
+            GetLine::Miss(pos) => GetLine::Miss(pos.next_back(&self.index)),
+            _ => get,
+        }
+    }
+
 }
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
@@ -223,26 +245,26 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         self.timeout.active();
         let offset = pos.least_offset().min(self.len());
         let pos = pos.resolve(&self.index);
-        Ok(if offset >= self.len() {
-            (Position::invalid(), None)
-        } else if pos.is_mapped() || offset == pos.least_offset() {
-            let (pos, line) = self.read_line_at(&pos)?;
-            (pos.next(&self.index), line)
-        } else if pos.is_unmapped() {
-            // Unusual case: We're reading from some offset in the middle of a gap.  Scan backwards to find the start of the line.
-            let (pos, line) = self.scan_lines_backwards(&pos, offset)?;
-            (pos.next(&self.index), line)
-        } else {
-            // Does this happen?
-            (pos, None)
-        })
+        let get =
+            if offset >= self.len() {
+                GetLine::Miss(Position::invalid())
+            } else if pos.is_mapped() || offset == pos.least_offset() {
+                self.read_line_at(&pos)
+            } else if pos.is_unmapped() {
+                // Unusual case: We're reading from some offset in the middle of a gap.  Scan backwards to find the start of the line.
+                self.scan_lines_backwards(&pos, offset)
+            } else {
+                // Does this happen?
+                GetLine::Miss(pos)
+            };
+        self.advance_pos(get)
     }
 
     fn next_back(&mut self, pos: &Position) -> GetLine {
         self.timeout.active();
         let offset = pos.most_offset().min(self.len());
         if offset == 0 {
-            return Ok((Position::invalid(), None));
+            return GetLine::Miss(Position::invalid());
         }
         let mut pos = pos.resolve_back(&self.index);
         if pos.least_offset() >= self.len() {
@@ -250,16 +272,16 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
             assert!(pos.least_offset() < self.len())
         }
 
-        let (pos, line) =
+        let get =
         if pos.is_invalid() {
-            (pos, None)
+            GetLine::Miss(pos)
         } else if pos.is_mapped() {
-            self.read_line_at(&pos)?
+            self.read_line_at(&pos)
         } else {
             // Scan backwards, exclusive of end pos
-            self.scan_lines_backwards(&pos, offset - 1)?
+            self.scan_lines_backwards(&pos, offset - 1)
         };
-        Ok((pos.next_back(&self.index), line))
+        self.advance_pos_back(get)
     }
 
     #[inline]

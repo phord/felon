@@ -3,8 +3,22 @@ use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
 use super::{waypoint::Position, TimeoutWrapper};
 
-// next/next_back return Err on timeout
-pub type GetLine = Result<(Position, Option<LogLine>), ()>;
+// Result of fetching a line: got it, or timeout
+pub enum GetLine {
+    Hit(Position, Option<LogLine>),
+    Miss(Position),
+    Timeout,
+}
+
+impl GetLine {
+    pub fn into_pos(self) -> Position {
+        match self {
+            GetLine::Hit(pos, _) => pos,
+            GetLine::Miss(pos) => pos,
+            GetLine::Timeout => Position::invalid(),
+        }
+    }
+}
 
 #[derive(Default, Debug)]
 pub struct IndexStats {
@@ -63,7 +77,7 @@ pub trait IndexedLog {
     }
 
     /// Iterator to provide access to info about the different indexes
-    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    fn info(&self) -> impl Iterator<Item = &'_ IndexStats> + '_
     where Self: Sized ;
 
     // Autowrap

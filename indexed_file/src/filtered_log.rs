@@ -46,29 +46,24 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         let mut next = next.clone();
 
         loop {
-            let (pos, line) = self.log.next_back(&self.inner_pos)?;
-            self.inner_pos = pos;
-            if line.is_none() { break; }
-            let line = line.unwrap();
-            let range = line.offset..line.offset + line.line.len();
-            if line.offset + line.line.len() < gap.start {
-                break;
-            }
-            if self.filter.eval(&line) {
-                next = self.filter.insert(&next, &range);
-                next = self.filter.next_back(&next);
-                return Ok((next, Some(line)));
-            } else {
-                next = self.filter.erase(&next, &range);
-                // erase() may give us the _next_ position which is not what we want; step back one to get the previous one.
-                if next.least_offset() > range.start {
+            let get = self.log.next_back(&self.inner_pos);
+            if let GetLine::Hit(pos, line) = get {
+                self.inner_pos = pos;
+                let line = line.unwrap();
+                let range = line.offset..line.offset + line.line.len();
+                if line.offset + line.line.len() < gap.start {
+                    return GetLine::Miss(next);
+                } else if self.filter.eval(&line) {
+                    next = self.filter.insert(&next, &range);
                     next = self.filter.next_back(&next);
-                    assert!(next.least_offset() <= range.start);
+                    return GetLine::Hit(next, Some(line));
+                } else {
+                    next = self.filter.erase_back(&next, &range);
                 }
+            } else {
+                return get;
             }
         }
-
-        Ok((next, None))
     }
 
     // Search an unmapped region for the next line that matches our filter.  Uses inner_pos to track position in log.
@@ -80,25 +75,26 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
 
         if gap.start.max(self.inner_pos.least_offset()) >= gap.end.min(self.log.len()) {
             // EOF: no more lines
-            return Ok((Position::invalid(), None));
+            return GetLine::Miss(Position::invalid());
         }
 
         loop {
-            let (pos, line) = self.log.next(&self.inner_pos)?;
-            self.inner_pos = pos;
-            if line.is_none() { break; }
-            let line = line.unwrap();
-            let range = line.offset..line.offset + line.line.len();
-            if self.filter.eval(&line) {
-                next = self.filter.insert(&next, &range);
-                next = self.filter.next(&next);
-                return Ok((next, Some(line)));
+            let get = self.log.next(&self.inner_pos);
+            if let GetLine::Hit(pos, line) = get {
+                self.inner_pos = pos;
+                let line = line.unwrap();
+                let range = line.offset..line.offset + line.line.len();
+                if self.filter.eval(&line) {
+                    next = self.filter.insert(&next, &range);
+                    next = self.filter.next(&next);
+                    return GetLine::Hit(next, Some(line));
+                } else {
+                    next = self.filter.erase(&next, &range);
+                }
             } else {
-                next = self.filter.erase(&next, &range);
+                return get;
             }
         }
-
-        Ok((next, None))
     }
 
     // Update an inner Position to navigate the log file while resolving unmapped filtered regions
@@ -121,22 +117,22 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         while !next.is_invalid() && next.least_offset() < end {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return Ok((self.filter.next(&next), self.log.read_line(offset)));
+                return GetLine::Hit(self.filter.next(&next), self.log.read_line(offset));
             } else if next.is_unmapped() {
                 // Recover the target position from the original Virtual::Offset, or whatever
                 let offset = pos.least_offset().min(end);
                 let offset = next.least_offset().max(offset);
                 self.seek_inner(offset);
-                let (p, line) = self.resolve_location_next(&next)?;
-                if line.is_some() {
-                    return Ok((p, line));
+                let get = self.resolve_location_next(&next);
+                match get {
+                    GetLine::Miss(p) => next = p,  // Resolved gap with no matches; keep searching
+                    _ => return get,
                 }
-                next = p;
             } else {
                 assert!(next.is_invalid(), "Position should be mapped, unmapped or invalid {:?}", next);
             }
         }
-        Ok((next, None))
+        GetLine::Miss(next)
     }
 
     /// Find the previous line that matches our filter, memoizing the position in our index.
@@ -155,26 +151,29 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         while !next.is_invalid() {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return Ok((self.filter.next_back(&next), self.log.read_line(offset)));
+                return GetLine::Hit(self.filter.next_back(&next), self.log.read_line(offset));
             } else if next.is_unmapped() {
                 let offset = pos.most_offset().min(self.log.len().saturating_sub(1));
                 let offset = next.most_offset().min(offset);
                 self.seek_inner(offset);
-                let (p, line) = self.resolve_location_next_back(&next)?;
-                if line.is_some() {
-                    return Ok((p, line));
+                let get = self.resolve_location_next_back(&next);
+                match get {
+                    GetLine::Miss(p) => {
+                        // Resolved gap with no matches; keep searching unless we hit the start of file
+                        if next == p {
+                            // Start of file?
+                            assert!(next.least_offset() == 0);
+                            break;
+                        }
+                        next = p;
+                    },
+                    _ => return get,
                 }
-                if next == p {
-                    // Start of file?
-                    assert!(next.least_offset() == 0);
-                    break;
-                }
-                next = p;
             } else {
                 assert!(next.is_invalid(), "Position should be mapped, unmapped or invalid");
             }
         }
-        Ok((next, None))
+        GetLine::Miss(next)
     }
 }
 

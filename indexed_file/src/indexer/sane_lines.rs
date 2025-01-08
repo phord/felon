@@ -2,7 +2,7 @@
 
 use crate::LogLine;
 
-use super::{waypoint::{Position, VirtualPosition}, IndexedLog};
+use super::{waypoint::{Position, VirtualPosition}, GetLine, IndexedLog};
 
 pub struct SaneLines<'a, R> {
     indexer: &'a mut R,
@@ -24,7 +24,7 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
     type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Ok((pos, line)) = self.indexer.next(&self.pos) {
+        if let GetLine::Hit(pos, line) = self.indexer.next(&self.pos) {
             self.pos = pos;
             line
         } else {
@@ -35,7 +35,7 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
 
 impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        if let Ok((pos, line)) = self.indexer.next_back(&self.pos_back) {
+        if let GetLine::Hit(pos, line) = self.indexer.next_back(&self.pos_back) {
             self.pos_back = pos;
             line
         } else {
