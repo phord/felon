@@ -2,8 +2,8 @@
 use std::time::{Duration, Instant};
 
 pub(crate) enum Timeout {
-    Future(Instant),
-    TimedOut,
+    Future(Instant),    // Tracks when we should time out
+    TimedOut,           // Remembers that we timed out
     Inactive(bool),     // bool holds status of previous timeout
 }
 

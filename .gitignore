@@ -6,3 +6,4 @@ indexed_file/resources/test
 Cargo.lock
 foo
 notes.md
+profile.json
