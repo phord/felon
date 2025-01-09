@@ -440,4 +440,22 @@ mod filtered_log_iterator_tests {
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");
      }
+
+
+     #[test]
+     fn test_filtered_gap_filler() {
+        let (harness, mut file) = Harness::default();
+        file.search_regex("00$").unwrap();
+
+        let pos = file.seek(0);
+        file.resolve_gaps(pos);
+
+        // First stats block is for the base log
+        assert_eq!(file.info().next().unwrap().lines_indexed, harness.lines);
+
+        // Second stats block is for the filtered log
+        assert_eq!(file.info().nth(1).unwrap().lines_indexed, harness.lines / 100);
+     }
+
+
 }

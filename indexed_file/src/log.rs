@@ -104,6 +104,10 @@ impl IndexedLog for Log {
     fn timed_out(&mut self) -> bool {
         self.file.timed_out()
     }
+
+    fn resolve_gaps(&mut self, pos: Position) -> Position {
+        self.file.resolve_gaps(pos)
+    }
 }
 
 // Miscellaneous

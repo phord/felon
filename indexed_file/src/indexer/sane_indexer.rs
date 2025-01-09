@@ -54,6 +54,10 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         }
     }
 
+    fn timed_out(&mut self) -> bool {
+        self.timeout.is_timed_out()
+    }
+
     /// Read the line starting from offset to EOL
     fn read_line_from(&mut self, offset: usize) -> Option<LogLine> {
         // Find the line containing offset, if any
@@ -69,8 +73,8 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     /// Returns the indexed position and the Logline, if found; else None
     /// FIXME: return errors from read_line
     fn read_line_memo(&mut self, pos: &Position, offset: usize) -> GetLine {
-        if self.timeout.is_timed_out() {
-            GetLine::Timeout
+        if self.timed_out() {
+            GetLine::Timeout(pos.clone())
         } else if offset >= self.len() {
             GetLine::Miss(Position::Virtual(VirtualPosition::End))
         } else {
@@ -239,6 +243,22 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         } else {
             None
         }
+    }
+
+    fn resolve_gaps(&mut self, pos: Position) -> Position {
+        let mut pos = self.index.seek_gap(pos);
+        while pos.is_unmapped() {
+            // Resolve unmapped region
+            match self.read_line_at(&pos) {
+                GetLine::Hit(p, _) =>     // Found a line.  Advance to the remaining gap, if any.
+                        { assert!(p.is_mapped()); pos = p.advance(&self.index)},
+                GetLine::Miss(p) =>       // End of file
+                        return p,
+                GetLine::Timeout(p) =>    // Timeout.  Return the position we stopped at.
+                        return p,
+            }
+        }
+        Position::invalid()
     }
 
     fn next(&mut self, pos: &Position) -> GetLine {

@@ -64,20 +64,10 @@ impl Document {
     /// Index more of the file in the background.
     /// Returns true if more lines were indexed.
     pub fn fill_gaps(&mut self, timeout: u64) -> bool {
-        false
-        // todo!("gap filler");
-        // let mut pos = self.log.find_gap().set_timeout(timeout);
-        // if !pos.tracker.is_gap() {
-        //     false
-        // } else {
-        //     let mut count = 0;
-        //     while !pos.elapsed() {
-        //         self.log.next(&mut pos);
-        //         count += 1;
-        //     }
-        //     log::trace!("Filled {} gap lines", count);
-        //     true
-        // }
+        // TODO: remember position so we can resume from it
+        let pos = self.log.seek(0);
+        let pos = self.log.with_timeout(timeout as usize).resolve_gaps(pos);
+        !pos.is_invalid()
     }
 
     pub fn line_colors(&self, line: &str) -> StyledLine {

@@ -39,14 +39,10 @@ impl Viewer {
     pub fn run(&mut self) -> crossterm::Result<bool> {
 
         let event_timeout =
-            if self.fill_timeout < 40 {
-                if self.fill_timeout > 0 && self.doc.fill_gaps(self.fill_timeout) {
-                    0
-                } else {
-                    500
-                }
+            if self.fill_timeout > 0 && self.doc.fill_gaps(self.fill_timeout.min(40)) {
+                0
             } else {
-                50000
+                500
             };
 
         self.display.refresh_screen(&mut self.doc)?;

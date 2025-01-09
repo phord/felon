@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
 
 use super::{waypoint::Position, TimeoutWrapper};
@@ -7,7 +7,7 @@ use super::{waypoint::Position, TimeoutWrapper};
 pub enum GetLine {
     Hit(Position, LogLine),
     Miss(Position),
-    Timeout,
+    Timeout(Position),
 }
 
 impl GetLine {
@@ -15,7 +15,7 @@ impl GetLine {
         match self {
             GetLine::Hit(pos, _) => pos,
             GetLine::Miss(pos) => pos,
-            GetLine::Timeout => Position::invalid(),
+            GetLine::Timeout(pos) => pos,
         }
     }
 }
@@ -38,14 +38,11 @@ impl IndexStats {
 
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
-    fn seek(&mut self, pos: usize) -> Position {
+    fn seek(&self, pos: usize) -> Position {
         Position::from(pos)
     }
 
-    // Read the line at offset, if any, and return the iterator result and the number of bytes consumed.
-    // Note the length of the line may be modified to fit utf-8 charset, so the bytes consumed may be
-    // different than the string length. The new file position will be the offset + the bytes consumed.
-    // FIXME: We should return the new offset, not the bytes consumed.
+    // Read the line at offset into a LogLine
     fn read_line(&mut self, offset: usize) -> Option<LogLine>;
 
     /// Read the next/prev line from the file
@@ -58,10 +55,8 @@ pub trait IndexedLog {
     fn next_back(&mut self, pos: &Position) -> GetLine;
 
     /// Resolve any gap in the index by reading the log from the source.
-    /// Returns number of bytes indexed during this operation. 0 if no more gaps.
-    fn resolve_gaps(&mut self) -> std::io::Result<usize> {
-        todo!("resolve_gaps");
-    }
+    /// Return Position where we stopped if we timed out
+    fn resolve_gaps(&mut self, pos: Position) -> Position;
 
     /// Set a time limit for operations that may take too long
     fn set_timeout(&mut self, _limit: Option<Duration>);

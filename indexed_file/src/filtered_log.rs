@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use regex::Regex;
 
-use crate::{index_filter::{IndexFilter, SearchType}, indexer::{indexed_log::IndexStats, timeout::Timeout, GetLine, IndexedLog}, LogLine};
+use crate::{index_filter::{IndexFilter, SearchType}, indexer::{indexed_log::IndexStats, GetLine, IndexedLog}, LogLine};
 
 /// Applies an IndexFilter to an IndexedLog to make a filtered IndexLog that can iterate lines after applying the filter.
 pub struct FilteredLog<LOG> {
@@ -103,6 +103,13 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         }
     }
 
+    /// Map the next (first) line in an unmapped region, beginning at/after the given offset
+    fn explore_unmapped_next(&mut self, pos: &Position, offset: usize) -> GetLine {
+        let offset = pos.least_offset().max(offset);
+        self.seek_inner(offset);
+        self.resolve_location_next(pos)
+    }
+
     /// Find the next line that matches our filter, memoizing the position in our index.
     fn find_next(&mut self, pos: &Position) -> GetLine {
         let end = self.log.len();
@@ -119,9 +126,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             } else if next.is_unmapped() {
                 // Recover the target position from the original Virtual::Offset, or whatever
                 let offset = pos.least_offset().min(end);
-                let offset = next.least_offset().max(offset);
-                self.seek_inner(offset);
-                let get = self.resolve_location_next(&next);
+                let get = self.explore_unmapped_next(&next, offset);
                 match get {
                     GetLine::Miss(p) => next = p,  // Resolved gap with no matches; keep searching
                     _ => return get,
@@ -173,11 +178,26 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         }
         GetLine::Miss(next)
     }
+
+
 }
 
 use crate::indexer::waypoint::Position;
 // Navigation
 impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
+    fn resolve_gaps(&mut self, pos: Position) -> Position {
+        let mut pos = self.filter.index.seek_gap(pos);
+        while pos.is_unmapped() {
+            match self.explore_unmapped_next(&pos, 0) {
+                GetLine::Hit(p, _) => pos = p,
+                GetLine::Miss(p) => pos = self.filter.index.seek_gap(p),
+                GetLine::Timeout(p) => return p,
+            }
+        }
+        // No more gaps
+        Position::invalid()
+    }
+
     #[inline]
     fn next(&mut self, pos: &Position) -> GetLine {
         self.find_next(pos)
@@ -201,7 +221,7 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
         self.log.timed_out()
     }
 
-    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
     where Self: Sized
     {
         self.log.info().chain(

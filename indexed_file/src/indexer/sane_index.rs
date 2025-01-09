@@ -94,6 +94,21 @@ impl SaneIndex {
         &self.index[i][j]
     }
 
+    pub(crate) fn seek_gap(&self, pos: Position) -> Position {
+        let pos = pos.resolve(self);
+
+        if let Position::Existing((row, _), _) = pos {
+            for (i, row) in self.index[row..].iter().enumerate() {
+                if !row.front().unwrap().is_mapped() {
+                    return Position::Existing((i, 0), row[0].clone());
+                }
+            }
+        }
+
+        // Didn't find any more gaps
+        Position::invalid()
+    }
+
     /// Find the index holding the given offset, or where it would be inserted if none found.
     pub(crate) fn search(&self, offset: usize) -> IndexIndex {
         if self.index.is_empty() {
