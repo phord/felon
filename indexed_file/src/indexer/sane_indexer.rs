@@ -45,27 +45,18 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         self.timeout.is_timed_out()
     }
 
-    /// Read the line starting from offset to EOL
-    fn read_line_from(&mut self, offset: usize) -> Option<LogLine> {
-        // Find the line containing offset, if any
-        let line = self.source.read_line_at(offset).unwrap();
-        if !line.is_empty() {
-            Some(LogLine::new(line, offset))
-        } else {
-            None
-        }
-    }
-
     /// read and memoize a line containing a given offset from a BufRead
-    /// Returns the indexed position and the Logline, if found; else None
+    /// Returns Hit(found_line), Miss(EOF), or Timeout(pos)
     /// FIXME: return errors from read_line
-    fn read_line_memo(&mut self, pos: &Position, offset: usize) -> GetLine {
+    fn get_line_memo(&mut self, pos: &Position) -> GetLine {
+        // Resolve position to a target offset to read in the file
+        let offset = pos.least_offset();
         if self.timed_out() {
             GetLine::Timeout(pos.clone())
         } else if offset >= self.len() {
             GetLine::Miss(Position::Virtual(VirtualPosition::End))
         } else {
-            let next = self.read_line_from(offset);
+            let next = self.read_line(offset);
 
             let mut pos = pos.resolve(&self.index);
             if pos.is_unmapped() {
@@ -77,17 +68,6 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
             }
             GetLine::Hit(pos, next.unwrap_or_default())
         }
-    }
-
-    /// Reads line indicated by pos and memoizes it.
-    /// Returns the memoized position and the line read.
-    pub fn read_line_at(&mut self, pos: &Position) -> GetLine {
-        // Resolve position to a target offset to read in the file
-        let offset = pos.least_offset();
-        if offset >= self.len() {
-            return GetLine::Miss(Position::Virtual(VirtualPosition::End));
-        }
-        self.read_line_memo(pos, offset)
     }
 
     // Find the last line in the range [start, end], memoizing all complete lines we see.
@@ -108,7 +88,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
             if start == 0 {
                 // If we start at zero, there are no throwaway lines
                 0
-            } else if let Some(line) = self.read_line_from(start) {
+            } else if let Some(line) = self.read_line(start) {
                 // Found a partial line, but we only need to know where it ends to establish a foothold
                 let offset = line.offset + line.line.len();
                 if offset > end {
@@ -125,7 +105,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         // Found the start of a line in our gap. Read from here to end of gap and remember the lines.
         let mut pos = Position::Virtual(VirtualPosition::Offset(offset));
         loop {
-            let get = self.read_line_at(&pos);
+            let get = self.get_line_memo(&pos);
             if let GetLine::Hit(p, _) = &get {
                 if p.most_offset() > end {
                     return get;
@@ -186,13 +166,6 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         self.source.wait_for_end()
     }
 
-    fn get_line(&mut self, offset: usize) -> Option<LogLine> {
-        if offset >= self.len() {
-            return None;
-        }
-        self.read_line(offset)
-    }
-
     fn advance_pos(&self, get: GetLine) -> GetLine {
         match get {
             GetLine::Hit(pos, line) => GetLine::Hit(pos.next(&self.index), line),
@@ -217,16 +190,18 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         self.timeout.set(limit);
     }
 
-    // reports if the current timeout
+    // reports if the current operation is timed out
     fn timed_out(&mut self) -> bool {
         self.timeout.timed_out() || self.timeout.prev_timed_out()
     }
 
+    /// Read the line starting from offset to EOL
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
-        // TODO: return errors?
+        // Find the line containing offset, if any
         let line = self.source.read_line_at(offset).unwrap();
         if !line.is_empty() {
-            Some(LogLine::new(line, offset))
+            let line = LogLine::new(line, offset);
+            Some(line)
         } else {
             None
         }
@@ -236,7 +211,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         let mut pos = self.index.seek_gap(pos);
         while pos.is_unmapped() {
             // Resolve unmapped region
-            match self.read_line_at(&pos) {
+            match self.get_line_memo(&pos) {
                 GetLine::Hit(p, _) =>     // Found a line.  Advance to the remaining gap, if any.
                         { assert!(p.is_mapped()); pos = p.advance(&self.index)},
                 GetLine::Miss(p) =>       // End of file
@@ -256,7 +231,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
             if offset >= self.len() {
                 GetLine::Miss(Position::invalid())
             } else if pos.is_mapped() || offset == pos.least_offset() {
-                self.read_line_at(&pos)
+                self.get_line_memo(&pos)
             } else if pos.is_unmapped() {
                 // Unusual case: We're reading from some offset in the middle of a gap.  Scan backwards to find the start of the line.
                 self.scan_lines_backwards(&pos, offset)
@@ -283,7 +258,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         if pos.is_invalid() {
             GetLine::Miss(pos)
         } else if pos.is_mapped() {
-            self.read_line_at(&pos)
+            self.get_line_memo(&pos)
         } else {
             // Scan backwards, exclusive of end pos
             self.scan_lines_backwards(&pos, offset - 1)

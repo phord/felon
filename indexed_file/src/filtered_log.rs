@@ -122,7 +122,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         while !next.is_invalid() && next.least_offset() < end {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return GetLine::Hit(self.filter.next(&next), self.log.read_line(offset).unwrap_or_default());
+                return GetLine::Hit(self.filter.next(&next), self.read_line(offset).unwrap_or_default());
             } else if next.is_unmapped() {
                 // Recover the target position from the original Virtual::Offset, or whatever
                 let offset = pos.least_offset().min(end);
@@ -154,7 +154,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         while !next.is_invalid() {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return GetLine::Hit(self.filter.next_back(&next), self.log.read_line(offset).unwrap_or_default());
+                return GetLine::Hit(self.filter.next_back(&next), self.read_line(offset).unwrap_or_default());
             } else if next.is_unmapped() {
                 let offset = pos.most_offset().min(self.log.len().saturating_sub(1));
                 let offset = next.most_offset().min(offset);
