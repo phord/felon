@@ -2,7 +2,8 @@ use crate::config::Config;
 use document::MergedLogs;
 use indexed_file::{files, IndexedLog, Log};
 use indexed_file::files::ZstdLogFile;
-use std::io::{BufRead, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;
 
 
@@ -23,9 +24,18 @@ pub fn cat_cmd() {
     for file in get_files_from_cfg() {
         logs.push(Log::open(file).unwrap());
     }
+
+    use std::io::Write;
+    // locking stdout saves time vs. many calls to printf!() macro
+    let stdout = std::io::stdout();
+    let lock = stdout.lock();
+
+    // Buffered writes approximately double the speed
+    let mut out = BufWriter::new(lock);
+
     // TODO: Print lines with colors
     for line in logs.iter_lines() {
-        print!("{line}");
+        write!(out, "{}", line).expect("stdout doesn't fail");
     }
 }
 
@@ -139,6 +149,21 @@ pub fn itercat_cmd() {
     let mut out = std::io::stdout();
     for file in get_files_from_cfg() {
         let file = files::new_text_file(file).expect("File failed to open");
+        for line in file.lines() {
+            let line = line.unwrap();
+            let _ = out.write(line.as_bytes()).expect("No errors");
+            let _ = out.write(b"\n").expect("No errors");
+        }
+    }
+}
+
+// Iterate using BufRead::lines() without my LogFile wrapper
+#[allow(dead_code)]
+pub fn brcat_cmd() {
+    let mut out = std::io::stdout();
+    for file in get_files_from_cfg() {
+        let file = File::open(file.unwrap()).unwrap();
+        let file = BufReader::new(file);
         for line in file.lines() {
             let line = line.unwrap();
             let _ = out.write(line.as_bytes()).expect("No errors");

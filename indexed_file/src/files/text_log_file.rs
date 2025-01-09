@@ -1,20 +1,52 @@
 // Reader of regular text files
 
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, Read, Seek};
 
 use crate::files::Stream;
 
-pub type TextLogFile = BufReader<File>;
+pub struct TextLogFile {
+    file: BufReader<File>,
+    len: usize,
+}
+
+impl TextLogFile {
+    pub fn new(file: BufReader<File>) -> std::io::Result<TextLogFile> {
+        let len = file.get_ref().metadata()?.len() as usize;
+        Ok(TextLogFile { file, len })
+    }
+}
 
 impl Stream for TextLogFile {
     #[inline(always)]
     fn get_length(&self) -> usize {
-        self.get_ref().metadata().unwrap().len() as usize
+        self.len
     }
     // Wait on any data at all; Returns true if file is still open
     #[inline(always)]
     fn wait(&mut self) -> bool {
         true
+    }
+}
+
+impl BufRead for TextLogFile {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        self.file.fill_buf()
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.file.consume(amt);
+    }
+}
+
+impl Read for TextLogFile {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.file.read(buf)
+    }
+}
+
+impl Seek for TextLogFile {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)
     }
 }

@@ -20,7 +20,7 @@ pub use sub_line_iterator::{SubLineIterator, LineViewMode};
 #[cfg(test)]
 mod tests {
     use crate::{IndexedLog, Log};
-    use crate::files::{LogSource, new_text_file};
+    use crate::files::{new_text_file, LogSource, TextLogFile};
     use std::path::PathBuf;
 
     fn open_log_file(filename: &str) -> std::io::Result<LogSource> {
@@ -31,6 +31,7 @@ mod tests {
     fn open_log_file_lines(path: PathBuf) -> Log {
         let file = File::open(&path).unwrap();
         let file = BufReader::new(file);
+        let file = TextLogFile::new(file).unwrap();
         Log::from(file)
     }
 

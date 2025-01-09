@@ -2,6 +2,7 @@
 
 use std::fs::File;
 use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::PathBuf;
@@ -90,7 +91,8 @@ pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogSource> 
                 Ok(file.to_src())
             } else {
                 let file = File::open(&input_file).unwrap();
-                let file = TextLogFile::new(file);
+                let file = BufReader::new(file);
+                let file = TextLogFile::new(file)?;
                 Ok(file.to_src())
             }
         } else {

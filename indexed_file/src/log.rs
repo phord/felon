@@ -14,6 +14,7 @@ use crate::files::{LogBase, LogSource, new_text_file};
 pub struct Log {
     pub(crate) file: SaneIndexer<LogSource>,
     pub(crate) format: TimeStamper,
+    cached_len: usize,
 }
 
 impl<LOG: LogBase + 'static> From<LOG> for Log {
@@ -28,9 +29,11 @@ impl From<LogSource> for Log {
     fn from(src: LogSource) -> Self {
         log::trace!("Instantiate log via From<LogSource>");
         let src = SaneIndexer::new(src);
+        let cached_len = src.len();
         Self {
             file: src,
             format: TimeStamper::default(),
+            cached_len,
         }
     }
 }
@@ -38,9 +41,11 @@ impl From<LogSource> for Log {
 // Constructors
 impl Log {
     pub fn new(src: SaneIndexer<LogSource>) -> Self {
+        let cached_len = src.len();
         Self {
             file: src,
             format: TimeStamper::default(),
+            cached_len,
         }
     }
 
@@ -48,18 +53,22 @@ impl Log {
     pub fn from_source(file: LogSource) -> Self {
         log::trace!("Instantiate log from LogSource");
         let src = SaneIndexer::new(file);
+        let cached_len = src.len();
         Self {
             file: src,
             format: TimeStamper::default(),
+            cached_len,
         }
     }
 
     pub fn open(file: Option<PathBuf>) -> std::io::Result<Self> {
         log::trace!("Instantiate log from file {:?}", file);
         let src = new_text_file(file)?;
+        let cached_len = src.len();
         let log = Log {
             file: SaneIndexer::new(src),
             format: TimeStamper::default(),
+            cached_len,
         };
         Ok(log)
     }
@@ -81,7 +90,7 @@ impl IndexedLog for Log {
 
     #[inline]
     fn len(&self) -> usize {
-        self.file.len()
+        self.cached_len
     }
 
     fn info(&self) -> impl Iterator<Item = &IndexStats> + '_

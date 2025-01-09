@@ -11,22 +11,6 @@ use super::timeout::Timeout;
 use super::waypoint::{Position, VirtualPosition};
 use super::GetLine;
 
-struct IndexerStats {
-    stale: bool,
-    bytes_indexed: usize,
-    lines_indexed: usize,
-}
-
-impl Default for IndexerStats {
-    fn default() -> Self {
-        Self {
-            stale: true,
-            bytes_indexed: 0,
-            lines_indexed: 0,
-        }
-    }
-}
-
 pub struct SaneIndexer<LOG> {
     // pub file_path: PathBuf,
     source: LOG,
@@ -46,10 +30,13 @@ const CHUNK_SIZE:usize = 64 * 1024;
 impl<LOG: LogFile> SaneIndexer<LOG> {
 
     pub fn new(file: LOG) -> SaneIndexer<LOG> {
+        let len = file.len();
+        // FIXME: Pass filename instead of generic token
+        let mut index = SaneIndex::new("File".to_string());
+        index.stats.bytes_total = len;
         Self {
             source: file,
-            // FIXME: Pass filename instead of generic token
-            index: SaneIndex::new("File".to_string()),
+            index,
             timeout: Timeout::Inactive(false),
         }
     }
@@ -306,10 +293,10 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
     #[inline]
     fn len(&self) -> usize {
-        self.source.len()
+        self.index.stats.bytes_total
     }
 
-    fn info<'a>(&'a self) -> impl Iterator<Item = &'a IndexStats> + 'a
+    fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
     where Self: Sized
     {
         std::iter::once(&self.index.stats)

@@ -371,6 +371,7 @@ mod logfile_data_iterator_tests {
         }
         assert_eq!(count, lines);
     }
+
     #[test]
     fn test_iterator_from_offset_end_of_file() {
         let patt = "filler\n";

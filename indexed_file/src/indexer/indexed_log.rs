@@ -25,6 +25,7 @@ pub struct IndexStats {
     pub name: String,
     pub bytes_indexed: usize,
     pub lines_indexed: usize,
+    pub bytes_total: usize,
 }
 
 impl IndexStats {
