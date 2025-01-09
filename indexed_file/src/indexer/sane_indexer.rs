@@ -1,7 +1,12 @@
 // Wrapper to discover and iterate log lines from a LogFile while memoizing parsed line offsets
 
+extern crate lru;
+
 use std::fmt;
 use std::time::Duration;
+use std::num::NonZeroUsize;
+use lru::LruCache;
+
 use crate::files::LogFile;
 use crate::LogLine;
 
@@ -16,6 +21,7 @@ pub struct SaneIndexer<LOG> {
     source: LOG,
     index: SaneIndex,
     timeout: Timeout,
+    line_cache: LruCache<usize, LogLine>,
 }
 
 impl<LOG: LogFile> fmt::Debug for SaneIndexer<LOG> {
@@ -38,6 +44,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
             source: file,
             index,
             timeout: Timeout::Inactive(false),
+            line_cache: LruCache::new(NonZeroUsize::new(1000).unwrap()),
         }
     }
 
@@ -198,9 +205,14 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     /// Read the line starting from offset to EOL
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
         // Find the line containing offset, if any
+        let line = self.line_cache.get(&offset);
+        if let Some(line) = line {
+            return Some(line.clone());
+        }
         let line = self.source.read_line_at(offset).unwrap();
         if !line.is_empty() {
             let line = LogLine::new(line, offset);
+            self.line_cache.put(offset, line.clone());
             Some(line)
         } else {
             None

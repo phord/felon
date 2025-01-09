@@ -3,7 +3,7 @@ use crate::indexer::{
 };
 use std::ops::Bound;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Default, Clone)]
 pub struct LogLine {
     pub line: String,
     pub offset: usize,
