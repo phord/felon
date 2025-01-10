@@ -106,7 +106,7 @@ impl SaneIndex {
         }
 
         // Didn't find any more gaps
-        Position::invalid()
+        Position::Virtual(VirtualPosition::End)
     }
 
     /// Find the index holding the given offset, or where it would be inserted if none found.

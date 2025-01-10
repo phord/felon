@@ -450,5 +450,72 @@ mod filtered_log_iterator_tests {
         assert_eq!(file.info().nth(1).unwrap().lines_indexed, harness.lines / 100);
      }
 
+     #[test]
+     fn test_filtered_gap_filler_partial() {
+        // Resolve gaps when some of the gaps are already resolved
+        let (harness, mut file) = Harness::default();
+        file.search_regex("0$").unwrap();
+
+        let size = harness.lines * harness.patt_len;
+        let offsets = (0..harness.lines/100).map(|_| rand::random::<usize>() % size).collect::<Vec<_>>();
+
+        // In case of failure, copy the random vector from the log here and uncomment this line to continue debugging:
+        // let offsets = vec![30431, 47575, 3525, 185, 44166, 41886, 34670, 21278, 33469, 28364, 42469, 14464, 11461, 52506, 21765, 17043, 22367, 18331, 42082, 46408, 5961, 9943, 50902, 6684, 37820, 17028, 35756, 47341, 46853, 50429, 7729, 21521, 46755, 49777, 16002, 1483, 7347, 4243, 4860, 20703, 48702, 12057, 42099, 2624, 15159, 47419, 1596, 4940, 51691, 12911, 27690, 25517, 39068, 53378, 13010, 4652, 2462, 44391, 2575, 21026];
+        println!("let offsets = vec!{:?};", offsets);
+
+        // read some random lines to start
+        for offset in offsets {
+            let _l = LineIndexerDataIterator::range(&mut file, &(offset..)).next();
+            // println!("Read line at offset {}: {:?}", offset, l);
+        }
+
+        // Now resolve the remaining gaps.  A single call should resolve all remaining gaps.
+        let pos = file.seek(0);
+        file.resolve_gaps(&pos);
+
+        // Verify indexes are complete
+        // First stats block is for the base log
+        assert_eq!(file.info().next().unwrap().lines_indexed, harness.lines);
+
+        // Second stats block is for the filtered log
+        assert_eq!(file.info().nth(1).unwrap().lines_indexed, harness.lines / 10);
+
+        // Dump the index
+        // let mut pos = file.seek(0);
+        // for _ in 0..1000 {
+        //     match file.next(&pos) {
+        //         GetLine::Hit(p, line) => {
+        //             println!(" HIT: {:?} {:?}", p, line);
+        //             pos = p
+        //         },
+        //         GetLine::Miss(p) => {
+        //             println!("MISS: {:?}", p);
+        //             pos = p;
+        //         },
+        //         GetLine::Timeout(p) => {
+        //             println!("Timeout {:?}", p);
+        //             break;
+        //         },
+        //     }
+        //     if pos.is_virtual(){
+        //         break;
+        //     }
+        // }
+
+        let mut prev = 0;
+        for line in file.iter_lines() {
+            // println!("{} {:?}", line.offset - prev, line);
+            if prev > 0 {
+                assert_eq!(line.offset - prev, harness.patt_len * 10);
+            }
+            prev = line.offset;
+        }
+
+        // First stats block is for the base log
+        assert_eq!(file.info().next().unwrap().lines_indexed, harness.lines);
+
+        // Second stats block is for the filtered log
+        assert_eq!(file.info().nth(1).unwrap().lines_indexed, harness.lines / 10);
+     }
 
 }

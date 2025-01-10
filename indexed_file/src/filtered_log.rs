@@ -65,7 +65,8 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
         }
     }
 
-    // Search an unmapped region for the next line that matches our filter.  Uses inner_pos to track position in log.
+    // Search an unmapped region for the next line that matches our filter.
+    // Uses inner_pos to track position in inner log.
     // Returns the found line and the next position from it.
     fn resolve_location_next(&mut self, next: &Position) -> GetLine {
         assert!(next.is_unmapped());
@@ -77,11 +78,21 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
             return GetLine::Miss(Position::invalid());
         }
 
-        loop {
+        while next.is_unmapped() {
+            let gap = next.region();
             let get = self.log.next(&self.inner_pos);
             if let GetLine::Hit(pos, line) = get {
                 self.inner_pos = pos;
                 let range = line.offset..line.offset + line.line.len();
+                if range.end <= gap.start {
+                    // Inner starts by scanning the line that ends at the start of our gap
+                    continue;
+                }
+                assert!(range.start >= gap.start);
+                if range.start >= gap.end {
+                    // We walked off the end of our gap and onto the next gap.  We're done for now.
+                    break;
+                }
                 if self.filter.eval(&line) {
                     next = self.filter.insert(&next, &range);
                     next = self.filter.next(&next);
@@ -93,6 +104,7 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
                 return get;
             }
         }
+        GetLine::Miss(next)
     }
 
     // Update an inner Position to navigate the log file while resolving unmapped filtered regions
@@ -185,13 +197,16 @@ impl<LOG: IndexedLog> FilteredLog<LOG> {
 use crate::indexer::waypoint::Position;
 // Navigation
 impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
-    fn resolve_gaps(&mut self, pos: Position) -> Position {
-        let mut pos = self.filter.index.seek_gap(pos);
-        while pos.is_unmapped() {
-            match self.explore_unmapped_next(&pos, 0) {
-                GetLine::Hit(p, _) => pos = p,
-                GetLine::Miss(p) => pos = self.filter.index.seek_gap(p),
-                GetLine::Timeout(p) => return p,
+    fn resolve_gaps(&mut self, pos: &Position) -> Position {
+        let mut pos = pos.clone();
+        while pos.least_offset() < self.len() {
+            pos = self.filter.index.seek_gap(&pos);
+            while pos.is_unmapped() {
+                match self.explore_unmapped_next(&pos, 0) {
+                    GetLine::Hit(p, _) => pos = p,
+                    GetLine::Miss(p) => pos = p,
+                    GetLine::Timeout(p) => return p,
+                }
             }
         }
         // No more gaps
