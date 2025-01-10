@@ -441,7 +441,7 @@ mod filtered_log_iterator_tests {
         file.search_regex("00$").unwrap();
 
         let pos = file.seek(0);
-        file.resolve_gaps(pos);
+        file.resolve_gaps(&pos);
 
         // First stats block is for the base log
         assert_eq!(file.info().next().unwrap().lines_indexed, harness.lines);

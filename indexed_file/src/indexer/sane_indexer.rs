@@ -219,7 +219,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         }
     }
 
-    fn resolve_gaps(&mut self, pos: Position) -> Position {
+    fn resolve_gaps(&mut self, pos: &Position) -> Position {
         let mut pos = self.index.seek_gap(pos);
         while pos.is_unmapped() {
             // Resolve unmapped region

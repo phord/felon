@@ -101,7 +101,7 @@ impl<'a, LOG: IndexedLog> IndexedLog for TimeoutWrapper<'a, LOG> {
         self.inner.timed_out()
     }
 
-    fn resolve_gaps(&mut self, pos: Position) -> Position {
+    fn resolve_gaps(&mut self, pos: &Position) -> Position {
         self.inner.resolve_gaps(pos)
     }
 }

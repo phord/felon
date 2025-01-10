@@ -66,7 +66,7 @@ impl Document {
     pub fn fill_gaps(&mut self, timeout: u64) -> bool {
         // TODO: remember position so we can resume from it
         let pos = self.log.seek(0);
-        let pos = self.log.with_timeout(timeout as usize).resolve_gaps(pos);
+        let pos = self.log.with_timeout(timeout as usize).resolve_gaps(&pos);
         !pos.is_invalid()
     }
 

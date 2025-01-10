@@ -94,7 +94,7 @@ impl SaneIndex {
         &self.index[i][j]
     }
 
-    pub(crate) fn seek_gap(&self, pos: Position) -> Position {
+    pub(crate) fn seek_gap(&self, pos: &Position) -> Position {
         let pos = pos.resolve(self);
 
         if let Position::Existing((row, _), _) = pos {

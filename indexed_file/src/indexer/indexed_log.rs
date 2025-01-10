@@ -57,7 +57,7 @@ pub trait IndexedLog {
 
     /// Resolve any gap in the index by reading the log from the source.
     /// Return Position where we stopped if we timed out
-    fn resolve_gaps(&mut self, pos: Position) -> Position;
+    fn resolve_gaps(&mut self, pos: &Position) -> Position;
 
     /// Set a time limit for operations that may take too long
     fn set_timeout(&mut self, _limit: Option<Duration>);
