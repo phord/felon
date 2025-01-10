@@ -615,19 +615,14 @@ mod sub_line_wrap_tests {
     }
 
     #[test]
-    #[ignore]   // middle-out doesn't work on conforming iterators
     fn test_iterator_middle_out() {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
-        // A few bytes after the middle of the file
-        let offset = harness.patt_len * harness.lines / 2 + harness.patt_len / 2;
-        todo!();
-        let range = offset..offset;
-        let mut it = wrapped_new_range(&mut file, width, &range);
+        let mut it = wrapped_new_range(&mut file, width, &(..));
 
-        let mut fwd_offset = harness.expected_bol(offset, width);
-        let mut rev_offset = fwd_offset;
+        let mut fwd_offset = harness.expected_bol(0, width);
+        let mut rev_offset = harness.expected_bol(harness.lines * harness.patt_len, width);
 
         // Iterate forwards and backwards simultaneously
         let mut lineset = HashSet::new();

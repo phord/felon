@@ -49,8 +49,8 @@ impl SubLineHelper {
         self.consumed.unwrap()
     }
 
-    fn le(&self, other: &Self) -> bool {
-        self.consumed.is_some() && other.consumed.is_some() && self.offset() <= other.offset()
+    fn lt(&self, other: &Self) -> bool {
+        self.consumed.is_some() && other.consumed.is_some() && self.offset() < other.offset()
     }
 
     // Returns subbuffer of line with given width if any remains; else None
@@ -77,13 +77,14 @@ impl SubLineHelper {
             LineViewMode::Wrap{width} => {
                 let ret = self.get_sub(self.index, width);
                 self.index += width;
-                self.mark_consumed();
                 if let Some(buffer) = &self.buffer {
                     if self.index >= buffer.line.len() {
                         // No more to give
+                        self.index = buffer.line.len();
                         self.buffer = None;
                     }
                 }
+                self.mark_consumed();
                 ret
             },
             LineViewMode::Chop{width, left} => {
@@ -94,6 +95,7 @@ impl SubLineHelper {
                 ret
             },
             LineViewMode::WholeLine => {
+                self.index = if self.buffer.is_some() {self.buffer.as_ref().unwrap().line.len() } else { 0 };
                 self.mark_consumed();
                 self.buffer.take()
             },
@@ -163,6 +165,7 @@ impl SubLineHelper {
                             // position to start of the first chunk
                             0
                         };
+                    self.start = None;
                 }
             }
         } else {
@@ -197,6 +200,7 @@ impl SubLineHelper {
                             // position to start of the last chunk
                             (buffer.line.len() + width - 1) / width * width - width
                         };
+                    self.start = None;
                 }
             }
         } else {
@@ -262,8 +266,12 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let ret = self.rev.sub_next_back(&self.mode)
-            .or_else(|| {self.rev.next_back( &self.mode, self.inner.next_back()) });
-        if self.rev.le(&self.fwd) {
+                .or_else(|| {
+                    let prev = self.inner.next_back();
+                    let prev = if prev.is_some() { prev } else {self.rev.buffer.clone() };
+                    self.rev.next_back( &self.mode, prev)
+                });
+        if self.rev.lt(&self.fwd) {
             // exhausted
             None
         } else {
@@ -278,8 +286,12 @@ impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let ret = self.fwd.sub_next(&self.mode)
-            .or_else(|| self.fwd.next( &self.mode, self.inner.next()));
-        if self.rev.le(&self.fwd) {
+            .or_else(|| {
+                let next = self.inner.next();
+                let next = if next.is_some() { next } else {self.rev.buffer.clone() };
+                self.fwd.next( &self.mode, next)
+            });
+        if self.rev.lt(&self.fwd) {
             // exhausted
             None
         } else {
