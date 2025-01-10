@@ -33,10 +33,6 @@ mod filtered_log_iterator_helper {
         pub(crate) fn default() -> (Self, FilteredLog<Log>) {
             Self::new(6000)
         }
-
-        pub(crate) fn new_small(lines: usize) -> (Self, FilteredLog<Log>) {
-            Self::new(lines)
-        }
     }
 
     pub(crate) fn new<LOG: IndexedLog>(log: &mut LOG) -> LineIndexerDataIterator<LOG> {
@@ -52,10 +48,7 @@ mod filtered_log_iterator_tests {
     use std::collections::HashSet;
 
     use crate::filtered_log_iterator_helper::{new, Harness};
-    use indexed_file::index_filter::SearchType;
-    use indexed_file::indexer::TimeoutWrapper;
-    use indexed_file::{IndexedLog, LineIndexerDataIterator, Log};
-    use regex::Regex;
+    use indexed_file::{IndexedLog, LineIndexerDataIterator};
 
     #[test]
     fn test_iterator() {
@@ -229,7 +222,7 @@ mod filtered_log_iterator_tests {
         assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
 
         for i in it.take(harness.lines - 2) {
-            let (line, bol) = (i.line, i.offset);
+            let (_, bol) = (i.line, i.offset);
             // println!("{bol} {prev}");
             assert_eq!(prev - bol, harness.patt_len);
             // assert_eq!(line, harness.patt);
@@ -351,7 +344,7 @@ mod filtered_log_iterator_tests {
 
         // Iterate again and verify we get the expected number of lines
         let line = it.next().unwrap();
-        let (line, prev) = (line.line, line.offset);
+        let (_, prev) = (line.line, line.offset);
 
         count = 1;
         assert_eq!(prev, harness.patt_len * (harness.lines / 2 - 1));
@@ -389,7 +382,7 @@ mod filtered_log_iterator_tests {
 
         // Verify we see the first line
         let line = it.next().unwrap();
-        let (line, prev) = (line.line, line.offset);
+        let (_, prev) = (line.line, line.offset);
 
         count = 1;
         assert_eq!(prev, 0);
@@ -414,7 +407,7 @@ mod filtered_log_iterator_tests {
         }
         assert_eq!(count, 0, "No lines iterable after out-of-range");
 
-        for line in LineIndexerDataIterator::range(&mut file, &(..out_of_range)).rev() {
+        for _ in LineIndexerDataIterator::range(&mut file, &(..out_of_range)).rev() {
             count += 1;
         }
         assert_eq!(count, harness.lines, "Whole file is reached from end");

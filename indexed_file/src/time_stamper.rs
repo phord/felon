@@ -41,6 +41,7 @@ impl TimeStamper {
         }
     }
 
+    #[allow(dead_code)]
     fn parse_time(line: &str, re: &Regex) -> Option<NaiveDateTime> {
 
         let months = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec";
@@ -88,6 +89,7 @@ impl TimeStamper {
     }
 
 
+    #[allow(dead_code)]
     pub fn time(&mut self, line: &str) -> Option<NaiveDateTime> {
         // TODO: Pack this into a time factory we can hand out per file.
         // Then, try each configured timestamp matcher in turn until we find one.

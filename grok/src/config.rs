@@ -76,7 +76,7 @@ impl Config {
         // Parse remaining args as input filenames
         for ostr in pargs.finish() {
             if let Some(s) = ostr.to_str() {
-                if s.bytes().nth(0) == Some(b'-') {
+                if s.as_bytes().first() == Some(&b'-') {
                     eprintln!("Error: Unknown argument: {:?}", ostr);
                     std::process::exit(1);
                 }

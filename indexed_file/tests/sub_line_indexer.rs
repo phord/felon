@@ -359,16 +359,11 @@ mod sub_line_iterator_tests {
     }
 
     #[test]
-    #[ignore]   // middle-out doesn't work on conforming iterators
-    fn test_iterator_middle_out() {
+    fn test_iterator_towards_middle() {
         let (harness, mut file) =  Harness::new_small(1000);
         let mut count = 0;
 
-        // A few bytes after the middle of the file
-        let offset = harness.patt_len * harness.lines / 2 + harness.patt_len / 2;
-        todo!("Fix this to be towards_middle instead");
-        let range =  offset..offset;
-        let mut it = sub_line_iterator_helper::new_from(&mut file,&range);
+        let mut it = sub_line_iterator_helper::new(&mut file);
 
         // Iterate forwards and backwards simultaneously
         let mut lineset = HashSet::new();

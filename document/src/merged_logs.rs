@@ -33,6 +33,7 @@ use indexed_file::indexer::sane_indexer::SaneIndexer;
  */
 
 // A long-lived collection of Logs
+#[derive(Default)]
 pub struct MergedLogs {
     files: Vec<Log>
 }
@@ -180,10 +181,9 @@ impl<'a> DoubleEndedIterator for MergedLogsIterator<'a> {
     }
 }
 
-
 impl MergedLogs {
     pub fn new() -> Self {
-        MergedLogs { files: Vec::default() }
+        MergedLogs::default()
     }
 
     pub fn push(&mut self, log: Log) {

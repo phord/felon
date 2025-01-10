@@ -16,6 +16,7 @@ impl StatusLine {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_height(&self) -> u16 {
         1
     }

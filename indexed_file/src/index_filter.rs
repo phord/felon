@@ -1,4 +1,3 @@
-use log::trace;
 use regex::Regex;
 use std::ops::Range;
 
@@ -47,7 +46,7 @@ fn is_match_type(line: &str, typ: &SearchType) -> bool {
         SearchType::Regex(re) => re.is_match(line),
         SearchType::Raw(s) => line.contains(s),
         SearchType::None => true,
-        _ => { todo!("Unimplemented search type"); false},
+        _ => { todo!("Unimplemented search type");},
     }
 }
 

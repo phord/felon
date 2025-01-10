@@ -106,7 +106,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
             } else {
                 // Did not find anything.  EOF?
                 panic!("Reading past EOF intentionally?");
-                return GetLine::Miss(Position::invalid());
+                // return GetLine::Miss(Position::invalid());
             };
 
         // Found the start of a line in our gap. Read from here to end of gap and remember the lines.

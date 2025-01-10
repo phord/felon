@@ -13,6 +13,7 @@ use crate::files::{LogBase, LogSource, new_text_file};
  */
 pub struct Log {
     pub(crate) file: SaneIndexer<LogSource>,
+    #[allow(dead_code)]
     pub(crate) format: TimeStamper,
     cached_len: usize,
 }

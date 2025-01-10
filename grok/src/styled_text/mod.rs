@@ -41,6 +41,7 @@ impl Phrase {
 
 const TAB_SIZE: usize = 8;
 
+#[allow(dead_code)]
 enum AnsiSequences {
     Esc,    // prev was Esc
     Csi,    // inside Control Sequence Introducer
@@ -90,7 +91,8 @@ impl StyledLine {
     }
 
     // Remove ANSI escape sequences from a line of text.
-    fn sanitize_ansi(line: &str) -> String {
+    #[allow(dead_code)]
+    fn sanitize_ansi(_line: &str) -> String {
         todo!("Use the ansi_parser crate to pick out offending ANSI sequences and remove them");
     }
 
@@ -177,6 +179,7 @@ pub static RGB_BLACK: Color = Color::Rgb{r:0,g:0,b:0};
 
 #[derive(Copy, Clone)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum PattColor {
     None,       // No pattern possible for this line
 

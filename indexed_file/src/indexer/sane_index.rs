@@ -198,7 +198,6 @@ impl SaneIndex {
                 right
             } else {
                 unreachable!("We should always find a middle unless our gaps don't overlap");
-                None
             };
         if left.is_none() && right.is_none() {
             // This gap is completely removed.  Clear the row and return the empty row.
@@ -357,6 +356,7 @@ pub struct SaneIter<'a> {
     pos: Position,
 }
 
+#[cfg(test)]
 impl<'a> SaneIter<'a> {
     fn new(index: &'a SaneIndex) -> Self {
         SaneIter {

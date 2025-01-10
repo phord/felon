@@ -3,8 +3,6 @@
 // Tests for LineIndexerDataIterator
 #[cfg(test)]
 mod logfile_data_iterator_tests {
-    use std::collections::HashSet;
-
     use indexed_file::files::new_mock_file;
     use indexed_file::{Log, LineIndexerDataIterator};
 
@@ -255,48 +253,6 @@ mod logfile_data_iterator_tests {
         // Once again, indexed
         let it = LineIndexerDataIterator::range(&mut file, &range).rev();
         assert_eq!(it.count(), lines / 2);
-    }
-
-
-    #[test]
-    #[ignore]   // middle-out doesn't work on conforming iterators
-    fn test_iterator_middle_out() {
-        let patt = "filler\n";
-        let patt_len = patt.len();
-        let lines = 1000;
-        let file = new_mock_file(patt, patt_len * lines, 100);
-        let mut file = Log::from(file);
-        let mut count = 0;
-
-        // A few bytes after the middle of the file
-        todo!("duplicate iterator for reading in the other direction");
-        let range = patt_len * lines / 2 - patt_len / 2..;
-        let mut it = LineIndexerDataIterator::range(&mut file, &range);
-
-        // Iterate forwards and backwards simultaneously
-        let mut lineset = HashSet::new();
-        loop {
-            let mut done = true;
-            if let Some(line) = it.next() {
-                lineset.insert(line.offset);
-                // We don't reach the end of the file
-                assert!(line.offset < lines * patt_len);
-                assert_eq!(line.line, patt);
-                count += 1;
-                done = false;
-            }
-            if let Some(line) = it.next_back() {
-                lineset.insert(line.offset);
-                assert_eq!(line.line, patt);
-                count += 1;
-                done = false;
-            }
-            if done {
-                break;
-            }
-        }
-        assert_eq!(lines, lineset.len());
-        assert_eq!(count, lines);
     }
 
     #[test]
