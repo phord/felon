@@ -70,7 +70,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
                 if let Some(ref line) = next {
                     pos = self.index.insert_one(&pos, &(line.offset..line.offset + line.line.len()));
                 } else {
-                    panic!("Read error?");
+                    panic!("Read error? offset={}", offset);
                 }
             }
             GetLine::Hit(pos, next.unwrap_or_default())
