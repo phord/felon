@@ -8,6 +8,7 @@ pub struct Config {
     pub altscreen: bool,
     pub semantic_color: bool,
     pub color: bool,
+    pub version: bool,
     pub mouse_scroll: u16,      // Number of lines to scroll with mouse-wheel
 }
 
@@ -24,6 +25,9 @@ FLAGS:
 OPTIONS:
   -S --chop-long-lines  Chop long lines instead of wrapping
   -X                    Skip terminal config/cleanup such as using the alternate screen
+  -C --color            Use color highlighting of parsed lines
+  -c --semantic-color   Color numbers with a hashed color wheel
+  -V --version          Display version information
 
 ARGS:
   <INPUT>               Input file(s) to read
@@ -37,6 +41,7 @@ impl Config {
             altscreen: true,
             semantic_color: false,
             color: false,
+            version: false,
             mouse_scroll: 5,
         }
     }
@@ -70,8 +75,9 @@ impl Config {
     fn parse_args(&mut self, mut pargs: Arguments) {
         if pargs.contains(["-S", "--chop-long-lines"]) { self.chop = true; }
         if pargs.contains(["-X", "--no-alternate-screen"]) { self.altscreen = false; }
-        if pargs.contains(["-C", "--semantic-color"]) { self.semantic_color = true; }
+        if pargs.contains(["-c", "--semantic-color"]) { self.semantic_color = true; }
         if pargs.contains(["-C", "--color"]) { self.color = true; }
+        if pargs.contains(["-V", "--version"]) { self.version = true; }
 
         // Parse remaining args as input filenames
         for ostr in pargs.finish() {

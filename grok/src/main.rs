@@ -14,10 +14,15 @@ fn main() -> crossterm::Result<()> {
     Logger::try_with_env_or_str("trace").unwrap()
         .log_to_file(FileSpec::default().directory("/tmp"))
         .start().unwrap();
-    let cfg = Config::from_env();
+    let cfg = Config::from_env().unwrap();
     log::info!("Init config: {:?}", cfg);
 
-    let mut viewer = viewer::Viewer::new(cfg.unwrap());
+    if cfg.version {
+        println!("grok version 0.1.0");
+        std::process::exit(0);
+    }
+
+    let mut viewer = viewer::Viewer::new(cfg);
     viewer.start()?;
 
     while viewer.run()? {}
