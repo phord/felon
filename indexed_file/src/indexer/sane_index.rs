@@ -2,6 +2,11 @@ use std::collections::VecDeque;
 
 use super::{indexed_log::IndexStats, waypoint::{Position, VirtualPosition, Waypoint}};
 
+const IMAX:usize = usize::MAX;
+type Range = std::ops::Range<usize>;
+
+type IndexVec = Vec<VecDeque<Waypoint>>;
+pub type IndexIndex = (usize, usize);
 
 /// SaneIndex
 /// Holds a map of the explored regions of the file.
@@ -29,17 +34,8 @@ use super::{indexed_log::IndexStats, waypoint::{Position, VirtualPosition, Waypo
 /// We scan bytes 10 to 39:             [ Unmapped(0..10), Mapped(13..14), Mapped(14..30), Mapped(30..39), Unmapped(40..IMAX) ]
 ///
 /// Note we always assume there is a line at Mapped(0..13).  But it may not be inserted in every index.
-
-/// Updated to use a splitvec-style implementation when growing in the middle.
+///
 /// Each internal vector either has a single Unmapped(range) or more Mapped(offset) values.
-
-
-const IMAX:usize = usize::MAX;
-type Range = std::ops::Range<usize>;
-
-type IndexVec = Vec<VecDeque<Waypoint>>;
-pub type IndexIndex = (usize, usize);
-
 pub struct SaneIndex {
     pub(crate) index: IndexVec,
     pub(crate) stats: IndexStats,
@@ -366,7 +362,7 @@ impl<'a> SaneIter<'a> {
     }
 }
 
-impl<'a> Iterator for SaneIter<'a> {
+impl Iterator for SaneIter<'_> {
     type Item = Waypoint;
 
     fn next(&mut self) -> Option<Self::Item> {

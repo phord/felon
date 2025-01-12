@@ -143,7 +143,7 @@ impl<'a> MergedLogsIterator<'a> {
 }
 
 
-impl<'a> Iterator for MergedLogsIterator<'a> {
+impl Iterator for MergedLogsIterator<'_> {
     type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -162,7 +162,7 @@ impl<'a> Iterator for MergedLogsIterator<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for MergedLogsIterator<'a> {
+impl DoubleEndedIterator for MergedLogsIterator<'_> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         // Find and return the max current line from all our iterators

@@ -194,11 +194,11 @@ impl SubLineHelper {
                                 // TODO: dedup this code path
                                 // Start is outside this line; Presumably there were no lines before this one.
                                 // position to start of the last chunk
-                                (buffer.line.len() + width - 1) / width * width - width
+                                buffer.line.len().div_ceil(*width) * width - width
                             }
                         } else {
                             // position to start of the last chunk
-                            (buffer.line.len() + width - 1) / width * width - width
+                            buffer.line.len().div_ceil(*width) * width - width
                         };
                     self.start = None;
                 }
@@ -262,7 +262,7 @@ impl<'a, LOG: IndexedLog> SubLineIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
+impl<LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'_, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let ret = self.rev.sub_next_back(&self.mode)
@@ -280,7 +280,7 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for SubLineIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> Iterator for SubLineIterator<'a, LOG> {
+impl<LOG: IndexedLog> Iterator for SubLineIterator<'_, LOG> {
     type Item = LogLine;
 
     #[inline]

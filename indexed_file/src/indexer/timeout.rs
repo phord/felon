@@ -64,13 +64,13 @@ impl<'a, LOG: IndexedLog> TimeoutWrapper<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> Drop for TimeoutWrapper<'a, LOG> {
+impl<LOG: IndexedLog> Drop for TimeoutWrapper<'_, LOG> {
     fn drop(&mut self) {
         self.inner.set_timeout(None);
     }
 }
 
-impl<'a, LOG: IndexedLog> IndexedLog for TimeoutWrapper<'a, LOG> {
+impl<LOG: IndexedLog> IndexedLog for TimeoutWrapper<'_, LOG> {
     fn next(&mut self, pos: &Position) -> GetLine {
         self.inner.next(pos)
     }
@@ -87,7 +87,7 @@ impl<'a, LOG: IndexedLog> IndexedLog for TimeoutWrapper<'a, LOG> {
         self.inner.len()
     }
 
-    fn info<'b>(&'b self) -> impl Iterator<Item = &'b IndexStats> + 'b
+    fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
     where Self: Sized
     {
         self.inner.info()

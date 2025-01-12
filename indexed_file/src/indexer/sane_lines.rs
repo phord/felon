@@ -20,7 +20,7 @@ impl<'a, R: IndexedLog> SaneLines<'a, R> {
     }
 }
 
-impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
+impl<R: IndexedLog> Iterator for SaneLines<'_, R> {
     type Item = LogLine;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -33,7 +33,7 @@ impl<'a, R: IndexedLog> Iterator for SaneLines<'a, R> {
     }
 }
 
-impl<'a, R: IndexedLog> DoubleEndedIterator for SaneLines<'a, R> {
+impl<R: IndexedLog> DoubleEndedIterator for SaneLines<'_, R> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.indexer.next_back(&self.pos_back) {
             self.pos_back = pos;

@@ -28,7 +28,7 @@ mod sub_line_iterator_helper {
         }
 
         pub(crate) fn total_len(&self, width: usize) -> usize {
-            self.lines * ((self.patt_len + width - 1) / width)
+            self.lines * self.patt_len.div_ceil(width)
         }
 
         pub(crate) fn offset_into_line(&self, offset: usize) -> usize {

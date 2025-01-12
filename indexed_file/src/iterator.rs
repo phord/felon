@@ -54,7 +54,7 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
+impl<LOG: IndexedLog> Iterator for LineIndexerIterator<'_, LOG> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -72,7 +72,7 @@ impl<'a, LOG: IndexedLog> Iterator for LineIndexerIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'a, LOG> {
+impl<LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'_, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos_back, line) = self.log.next_back(&self.pos_back) {
@@ -149,7 +149,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
     }
 }
 
-impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LOG> {
+impl<LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'_, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.log.next_back(&self.pos_back) {
@@ -165,7 +165,7 @@ impl<'a, LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'a, LO
     }
 }
 
-impl<'a, LOG: IndexedLog> Iterator for LineIndexerDataIterator<'a, LOG> {
+impl<LOG: IndexedLog> Iterator for LineIndexerDataIterator<'_, LOG> {
     type Item = LogLine;
 
     #[inline]
