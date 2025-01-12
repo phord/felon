@@ -1,6 +1,6 @@
 use crossterm::terminal::ClearType;
-use indexed_file::LineViewMode;
-use std::{io, io::{stdout, Write}, cmp};
+use indexed_file::{LineViewMode, LogLine};
+use std::{cmp, io::{self, stdout, Write}, iter};
 use crossterm::{cursor, execute, queue, terminal};
 use regex::Regex;
 
@@ -475,6 +475,75 @@ impl Scroll {
 }
 
 impl Display {
+
+    fn paint(&mut self, doc: &mut Document, lines: Vec<indexed_file::LogLine>, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
+        let mut buff = ScreenBuffer::new();
+        let height = self.page_size();
+
+        // Optimize when repainting the whole screen
+        let repaint = lines.len() == height;
+
+        let (mut row, incr, count) = if repaint {
+            (0, 1, 0)
+        } else {
+            match scroll {
+                Scroll::Up(_) => (0, 0, 0),
+                Scroll::Down(_) => (height - 1, 0, 0),
+                Scroll::GotoBottom(_) | Scroll::GotoTop(_) | Scroll::Repaint(_) => (0, 1, height),
+                Scroll::None => unreachable!("Scroll::None")
+            }
+        };
+
+        // Scrolling down if we are only inserting at the top
+        let down = row == 0 && incr == 0;
+
+        // Scrolling up if we are only inserting at the bottom
+        let up = !down && incr == 0;
+
+        let reversed = lines.len() > 1 && lines[0].offset > lines[1].offset;
+
+        let mut iter = lines.iter();
+        let iter: &mut dyn Iterator<Item = &LogLine> =
+            if reversed && !down {
+                // reverse the lines because we decided not to scroll
+                &mut iter.rev()
+            } else {
+                &mut iter
+            };
+
+        let filler = count.saturating_sub(lines.len());
+        for line in iter
+                .map(|logline| logline.line.as_str())
+                .chain(iter::repeat_n("~", filler)) {
+            if down {
+                queue!(buff, terminal::ScrollDown(1)).unwrap();
+            } else if up {
+                queue!(buff, terminal::ScrollUp(1)).unwrap();
+            }
+            self.draw_line(doc, &mut buff, row, line);
+            row += incr;
+        }
+
+        // Record the displayed offsets
+        let offsets = lines.iter().map(|logline| logline.offset);
+        if down {
+            // If we scrolled down, insert the offsets in reverse at the start of the list
+            self.displayed_lines.splice(0..0, offsets.rev());
+            self.displayed_lines.truncate(height);
+        } else {
+            // Otherwise, append in order
+            let skip = (self.displayed_lines.len() + lines.len()).saturating_sub(height);
+            self.displayed_lines = self.displayed_lines[skip..].to_vec();
+            if reversed {
+                self.displayed_lines.extend(offsets.rev());
+            } else {
+                self.displayed_lines.extend(offsets);
+            }
+        }
+
+        Ok(buff)
+    }
+
     // Pull lines from an iterator and display them.  There are three modes:
     // 1. Scroll up:  Display each new line at the next lower position, and scroll up from bottom
     // 2. Scroll down:  Display each new line at the next higher position, and scroll down from top
@@ -484,27 +553,17 @@ impl Display {
     fn feed_lines(&mut self, doc: &mut Document, mode: LineViewMode, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
         log::trace!("feed_lines: {:?}", scroll);
 
-        let mut buff = ScreenBuffer::new();
-
-        let top_of_screen = 0;
         let height = self.page_size();
 
-        let (lines, mut row, mut count) = match scroll {
-            Scroll::Up(sv) | Scroll::GotoBottom(sv) => {
+        let lines= match scroll {
+            Scroll::Up(ref sv) | Scroll::GotoBottom(ref sv) => {
                 // Partial or complete screen scroll backwards
                 let skip = sv.lines.saturating_sub(height);
                 let range = ..sv.offset;
                 let lines:Vec<_> = doc.get_lines_range(mode, &range).rev().take(sv.lines).skip(skip).collect();
-                // Reverse the lines in our vector so we can display from top to bottom
-                let lines = lines.into_iter().rev().collect::<Vec<_>>();
-                let rows = lines.len();
-                queue!(buff, terminal::ScrollDown(rows as u16)).unwrap();
-                self.displayed_lines.splice(0..0, lines.iter().map(|logline| logline.offset).take(rows));
-                self.displayed_lines.truncate(height);
-                // TODO: add test for whole-screen offsets == self.displayed_lines
-                (lines, 0, 0)
+                lines
             },
-            Scroll::Down(sv) => {
+            Scroll::Down(ref sv) => {
                 // Partial screen scroll forwards
                 let skip = sv.lines.saturating_sub(height);
                 let range = sv.offset..;
@@ -512,46 +571,19 @@ impl Display {
                 if let Some(line) = lines.next() {
                     assert_eq!(line.offset, sv.offset);
                 }
-                let lines: Vec<_> = lines.skip(skip).collect();
-                let rows = lines.len();
-                queue!(buff, terminal::ScrollUp(rows as u16)).unwrap();
-                self.displayed_lines = if self.displayed_lines.len() > rows {
-                    self.displayed_lines[rows..].to_vec()
-                } else {
-                    Vec::new()
-                };
-                self.displayed_lines.extend(lines.iter().map(|logline| logline.offset).take(rows));
-                (lines, height - rows, 0)
+                lines.skip(skip).collect()
             },
-            Scroll::Repaint(sv) | Scroll::GotoTop(sv) => {
+            Scroll::Repaint(ref sv) | Scroll::GotoTop(ref sv) => {
                 // Repainting whole screen, no scrolling
+                let skip = sv.lines.saturating_sub(height);
                 let range = sv.offset..;
                 let lines = doc.get_lines_range(mode, &range).take(sv.lines.min(height));
-                let skip = sv.lines.saturating_sub(height);
-                let lines:Vec<_> = lines.skip(skip).collect();
-                let rows = lines.len();
-                // queue!(buff, terminal::Clear(ClearType::All)).unwrap();
-                self.displayed_lines = lines.iter().map(|logline| logline.offset).take(rows).collect();
-                (lines, 0, height)
+                lines.skip(skip).collect()
             },
             Scroll::None => unreachable!("Scroll::None")
         };
 
-        for logline in lines.iter(){
-            assert_eq!(self.displayed_lines[row - top_of_screen],  logline.offset);
-            self.draw_line(doc, &mut buff, row, logline.line.as_str());
-            row += 1;
-            count = count.saturating_sub(1);
-        }
-
-        while count > 0 && row < height {
-            // TODO: special color for these
-            self.draw_line(doc, &mut buff, row, "~");
-            row += 1;
-            count = count.saturating_sub(1);
-        }
-
-        Ok(buff)
+        self.paint(doc, lines, scroll)
     }
 
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
