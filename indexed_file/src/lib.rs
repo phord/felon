@@ -1,6 +1,6 @@
 pub mod files;
 pub mod index_filter;
-pub mod filtered_log;
+pub mod log_filter;
 pub mod indexer;
 pub mod log;
 pub mod log_stack;

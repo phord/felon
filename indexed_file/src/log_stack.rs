@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{filtered_log::LogFilter, index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, IndexedLog, Log};
+use crate::{log_filter::LogFilter, index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, IndexedLog, Log};
 
 /// A stack of logs with filters.
 /// Rust complicates our traits enough that it's impractical to rely on recursive log trees.
