@@ -12,7 +12,6 @@ pub(crate) mod time_stamper;
 pub use iterator::LogLine;
 pub use log_stack::LogStack;
 pub use crate::log::Log;
-pub use crate::filtered_log::FilteredLog;
 
 pub use indexer::IndexedLog;
 pub use iterator::{LineIndexerDataIterator, LineIndexerIterator};

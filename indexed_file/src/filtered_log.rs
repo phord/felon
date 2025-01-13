@@ -1,8 +1,5 @@
-use std::time::Duration;
 
-use regex::Regex;
-
-use crate::{index_filter::{IndexFilter, SearchType}, indexer::{indexed_log::IndexStats, GetLine, IndexedLog}, LogLine};
+use crate::{index_filter::{IndexFilter, SearchType}, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine, IndexedLog}};
 
 /// Applies an IndexFilter to an IndexedLog to make a filtered IndexLog that can iterate lines after applying the filter.
 #[derive(Default)]
@@ -17,12 +14,6 @@ impl LogFilter {
             filter: IndexFilter::new(search, true),
             inner_pos: Position::invalid(),
         }
-    }
-
-    /// Apply a new search to the filter
-    /// Invalidates old results
-    pub fn search(&mut self, search: SearchType, include: bool) {
-        self.filter = IndexFilter::new(search, include);
     }
 
     /// Find the previous matching line in an unmapped region. Uses inner_pos to track position in log.
@@ -203,79 +194,3 @@ impl LogFilter {
     }
 
 }
-
-pub struct FilteredLog<LOG> {
-    log: LOG,
-    filter: LogFilter,
-}
-
-impl<LOG: IndexedLog> FilteredLog<LOG> {
-    pub fn new(log: LOG, search: SearchType) -> Self {
-        Self {
-            log,
-            filter: LogFilter::new(search),
-        }
-    }
-
-    /// Apply a new search to the filter
-    /// Invalidates old results
-    pub fn search(&mut self, search: SearchType, include: bool) {
-        self.filter.search(search, include);
-    }
-
-    /// Apply a new regex search expression to the filter
-    /// Invalidates old results
-    pub fn search_regex(&mut self, re: &str) -> Result<(), regex::Error> {
-        if re.is_empty() {
-            self.search(SearchType::None, true);
-        } else {
-            self.search(SearchType::Regex(Regex::new(re)?), true);
-        }
-        Ok(())
-    }
-}
-
-use crate::indexer::waypoint::Position;
-// Navigation
-impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
-    fn resolve_gaps(&mut self, pos: &Position) -> Position {
-        self.filter.resolve_gaps(&mut self.log, pos)
-    }
-
-    #[inline]
-    fn next(&mut self, pos: &Position) -> GetLine {
-        self.filter.find_next(&mut self.log, pos)
-    }
-
-    #[inline]
-    fn next_back(&mut self, pos: &Position) -> GetLine {
-        self.filter.find_next_back(&mut self.log, pos)
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.log.len()
-    }
-
-    fn set_timeout(&mut self, limit: Option<Duration>) {
-        self.log.set_timeout(limit);
-    }
-
-    fn timed_out(&mut self) -> bool {
-        self.log.timed_out()
-    }
-
-    fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
-    where Self: Sized
-    {
-        self.log.info().chain(self.filter.info())
-                .filter(|s| s.name != "None")
-    }
-
-    fn read_line(&mut self, offset: usize) -> Option<LogLine> {
-        self.log.read_line(offset)
-    }
-}
-
-
-// TODO: Iterators?
