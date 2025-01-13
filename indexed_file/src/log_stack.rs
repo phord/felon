@@ -55,6 +55,22 @@ impl IndexedLog for LogStack {
         }
     }
 
+    fn advance(&mut self, pos: &Position) -> Position {
+        if let Some(ref mut filter) = &mut self.filter {
+            filter.advance(pos)
+        } else {
+            self.source.advance(pos)
+        }
+    }
+
+    fn advance_back(&mut self, pos: &Position) -> Position {
+        if let Some(ref mut filter) = &mut self.filter {
+            filter.advance_back(pos)
+        } else {
+            self.source.advance_back(pos)
+        }
+    }
+
     fn resolve_gaps(&mut self, pos: &Position) -> Position {
         if let Some(ref mut filter) = &mut self.filter {
             filter.resolve_gaps(&mut self.source, pos)

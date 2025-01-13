@@ -26,13 +26,12 @@ impl LogFilter {
         loop {
             let get = log.next_back(&self.inner_pos);
             if let GetLine::Hit(pos, line) = get {
-                self.inner_pos = pos;
+                self.inner_pos = log.advance_back(&pos);
                 let range = line.offset..line.offset + line.line.len();
                 if line.offset + line.line.len() < gap.start {
                     return GetLine::Miss(next);
                 } else if self.filter.eval(&line) {
                     next = self.filter.insert(&next, &range);
-                    next = self.filter.next_back(&next);
                     return GetLine::Hit(next, line);
                 } else {
                     next = self.filter.erase_back(&next, &range);
@@ -45,7 +44,7 @@ impl LogFilter {
 
     // Search an unmapped region for the next line that matches our filter.
     // Uses inner_pos to track position in inner log.
-    // Returns the found line and the next position from it.
+    // Returns the found line and its position.
     fn resolve_location_next<LOG: IndexedLog>(&mut self, log: &mut LOG, next: &Position) -> GetLine {
         assert!(next.is_unmapped());
         let gap = next.region();
@@ -60,7 +59,7 @@ impl LogFilter {
             let gap = next.region();
             let get = log.next(&self.inner_pos);
             if let GetLine::Hit(pos, line) = get {
-                self.inner_pos = pos;
+                self.inner_pos = log.advance(&pos);
                 let range = line.offset..line.offset + line.line.len();
                 if range.end <= gap.start {
                     // Inner starts by scanning the line that ends at the start of our gap
@@ -73,7 +72,6 @@ impl LogFilter {
                 }
                 if self.filter.eval(&line) {
                     next = self.filter.insert(&next, &range);
-                    next = self.filter.next(&next);
                     return GetLine::Hit(next, line);
                 } else {
                     next = self.filter.erase(&next, &range);
@@ -112,7 +110,7 @@ impl LogFilter {
         while !next.is_invalid() && next.least_offset() < end {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return GetLine::Hit(self.filter.next(&next), log.read_line(offset).unwrap_or_default());
+                return GetLine::Hit(next, log.read_line(offset).unwrap_or_default());
             } else if next.is_unmapped() {
                 // Recover the target position from the original Virtual::Offset, or whatever
                 let offset = pos.least_offset().min(end);
@@ -144,7 +142,7 @@ impl LogFilter {
         while !next.is_invalid() {
             if next.is_mapped() {
                 let offset = next.region().start;
-                return GetLine::Hit(self.filter.next_back(&next), log.read_line(offset).unwrap_or_default());
+                return GetLine::Hit(next, log.read_line(offset).unwrap_or_default());
             } else if next.is_unmapped() {
                 let offset = pos.most_offset().min(log.len().saturating_sub(1));
                 let offset = next.most_offset().min(offset);
@@ -169,6 +167,14 @@ impl LogFilter {
         GetLine::Miss(next)
     }
 
+
+    pub fn advance(&mut self, pos: &Position) -> Position {
+        self.filter.next(pos)
+    }
+
+    pub fn advance_back(&mut self, pos: &Position) -> Position {
+        self.filter.next_back(pos)
+    }
 
     pub fn resolve_gaps<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> Position {
         let mut pos = pos.clone();

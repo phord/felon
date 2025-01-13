@@ -89,6 +89,14 @@ impl IndexedLog for Log {
         self.file.next_back(pos)
     }
 
+    fn advance(&mut self, pos: &Position) -> Position {
+        self.file.advance(pos)
+    }
+
+    fn advance_back(&mut self, pos: &Position) -> Position {
+        self.file.advance_back(pos)
+    }
+
     #[inline]
     fn len(&self) -> usize {
         self.cached_len

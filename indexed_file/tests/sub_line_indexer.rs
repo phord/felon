@@ -683,12 +683,37 @@ mod sub_line_wrap_tests {
         // index the whole file
         let _count = file.iter_offsets().count();
 
-        let pos = file.seek(0);                  // Virtual position
-        let pos0 = file.next(&pos).into_pos();         // Position: 2nd line
-        let pos1 = file.next(&pos0).into_pos();        // Position: 3rd line
-        let pos2 = file.next_back(&pos1).into_pos();   // Position: 2nd line
-        let _pos3 = file.next_back(&pos2).into_pos();  // Position: 1st line
+        let pos = file.seek(0);                                 // Virtual position
+        let pos0 = file.next(&pos).into_pos();                  // Position: 1st line
+        let pos0_next = file.advance(&pos0);                    // Position: 2nd line
+        let pos1 = file.next(&pos0_next).into_pos();            // Position: 2nd line
+        let pos1_prev = file.advance_back(&pos1);               // Position: 1st line
+        let pos2 = file.next_back(&pos1_prev).into_pos();       // Position: 1st line
+        let pos3 = file.next_back(&pos2).into_pos();            // Position: 1st line
+
         assert_eq!(pos2, pos0);
+        assert_eq!(pos0_next, pos1);
+        assert_eq!(pos1_prev, pos0);
+        assert_eq!(pos2, pos3);
+    }
+
+    #[test]
+    fn test_indexed_log_unmapped_pos() {
+        let (_, mut file) =  Harness::new_small(100);
+
+        let pos = file.seek(0);                                 // Virtual position
+        let pos0 = file.next(&pos).into_pos();                  // Position: 1st line
+        let pos0_next = file.advance(&pos0);                    // Unmapped
+        let pos1 = file.next(&pos0_next).into_pos();            // Position: 2nd line
+        let pos1_prev = file.advance_back(&pos1);               // Position: 1st line
+        let pos2 = file.next_back(&pos1_prev).into_pos();       // Position: 1st line
+        let pos3 = file.next_back(&pos2).into_pos();            // Position: 1st line
+
+        assert_eq!(pos2, pos0);
+        assert!(pos0_next.is_unmapped());       // <-- Implementation detail; if this changes, remove this check
+        dbg!(pos0_next);
+        assert_eq!(pos1_prev, pos0);
+        assert_eq!(pos2, pos3);
     }
 
     #[test]

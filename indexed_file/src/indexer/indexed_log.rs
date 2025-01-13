@@ -47,13 +47,18 @@ pub trait IndexedLog {
     fn read_line(&mut self, offset: usize) -> Option<LogLine>;
 
     /// Read the next/prev line from the file
-    /// returns search results and advances the file position
-    /// If line is None, we're at the start/end of the file or we reached some limit (max time)
+    /// returns
+    ///    GetLine::Hit:     found line and it's indexed position
+    ///    GetLine::Miss:    not found
+    ///    GetLine::Timeout: we reached some limit (max time); pos is where we stopped
     /// Note: Unlike DoubleEndedIterator next_back, there is no rev() to reverse the iterator;
     ///    and "consumed" lines can still be read again.
-    ///
     fn next(&mut self, pos: &Position) -> GetLine;
     fn next_back(&mut self, pos: &Position) -> GetLine;
+
+    /// Advance the position to the next/prev waypoint
+    fn advance(&mut self, pos: &Position) -> Position;
+    fn advance_back(&mut self, pos: &Position) -> Position;
 
     /// Resolve any gap in the index by reading the log from the source.
     /// Return Position where we stopped if we timed out

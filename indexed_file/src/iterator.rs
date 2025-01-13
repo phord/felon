@@ -59,7 +59,7 @@ impl<LOG: IndexedLog> Iterator for LineIndexerIterator<'_, LOG> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos, line) = self.log.next(&self.pos) {
-            self.pos = pos;
+            self.pos = self.log.advance(&pos);
             if self.range.contains(&line.offset) {
                 self.range = self.range.start.max(line.offset.saturating_add(1))..self.range.end;
                 Some(line.offset)
@@ -76,7 +76,7 @@ impl<LOG: IndexedLog> DoubleEndedIterator for LineIndexerIterator<'_, LOG> {
     // Iterate over lines in reverse
     fn next_back(&mut self) -> Option<Self::Item> {
         if let GetLine::Hit(pos_back, line) = self.log.next_back(&self.pos_back) {
-            self.pos_back = pos_back;
+            self.pos_back = self.log.advance_back(&pos_back);
             if self.range.contains(&line.offset) {
                 self.range = self.range.start..self.range.end.min(line.offset);
                 Some(line.offset)
@@ -157,7 +157,7 @@ impl<LOG: IndexedLog> DoubleEndedIterator for LineIndexerDataIterator<'_, LOG> {
             if !self.in_range(&line) {
                 return None;
             }
-            self.pos_back = pos;
+            self.pos_back = self.log.advance_back(&pos);
             Some(line)
         } else {
             None
@@ -174,7 +174,7 @@ impl<LOG: IndexedLog> Iterator for LineIndexerDataIterator<'_, LOG> {
             if !self.in_range(&line) {
                 return None;
             }
-            self.pos = pos;
+            self.pos = self.log.advance(&pos);
             Some(line)
         } else {
             None

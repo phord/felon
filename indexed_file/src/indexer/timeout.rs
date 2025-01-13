@@ -83,6 +83,14 @@ impl<LOG: IndexedLog> IndexedLog for TimeoutWrapper<'_, LOG> {
         self.inner.next_back(pos)
     }
 
+    fn advance(&mut self, pos: &Position) -> Position {
+        self.inner.advance(pos)
+    }
+
+    fn advance_back(&mut self, pos: &Position) -> Position {
+        self.inner.advance_back(pos)
+    }
+
     fn len(&self) -> usize {
         self.inner.len()
     }

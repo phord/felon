@@ -172,23 +172,6 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     pub fn wait_for_end(&mut self) {
         self.source.wait_for_end()
     }
-
-    fn advance_pos(&self, get: GetLine) -> GetLine {
-        match get {
-            GetLine::Hit(pos, line) => GetLine::Hit(pos.next(&self.index), line),
-            GetLine::Miss(pos) => GetLine::Miss(pos.next(&self.index)),
-            _ => get,
-        }
-    }
-
-    fn advance_pos_back(&self, get: GetLine) -> GetLine {
-        match get {
-            GetLine::Hit(pos, line) => GetLine::Hit(pos.next_back(&self.index), line),
-            GetLine::Miss(pos) => GetLine::Miss(pos.next_back(&self.index)),
-            _ => get,
-        }
-    }
-
 }
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
@@ -239,19 +222,17 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         self.timeout.active();
         let offset = pos.least_offset().min(self.len());
         let pos = pos.resolve(&self.index);
-        let get =
-            if offset >= self.len() {
-                GetLine::Miss(Position::invalid())
-            } else if pos.is_mapped() || offset == pos.least_offset() {
-                self.get_line_memo(&pos)
-            } else if pos.is_unmapped() {
-                // Unusual case: We're reading from some offset in the middle of a gap.  Scan backwards to find the start of the line.
-                self.scan_lines_backwards(&pos, offset)
-            } else {
-                // Does this happen?
-                GetLine::Miss(pos)
-            };
-        self.advance_pos(get)
+        if offset >= self.len() {
+            GetLine::Miss(Position::invalid())
+        } else if pos.is_mapped() || offset == pos.least_offset() {
+            self.get_line_memo(&pos)
+        } else if pos.is_unmapped() {
+            // Unusual case: We're reading from some offset in the middle or start of a gap.  Scan backwards to find the start of the line.
+            self.scan_lines_backwards(&pos, offset)
+        } else {
+            // Does this happen?
+            GetLine::Miss(pos)
+        }
     }
 
     fn next_back(&mut self, pos: &Position) -> GetLine {
@@ -266,7 +247,6 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
             assert!(pos.least_offset() < self.len())
         }
 
-        let get =
         if pos.is_invalid() {
             GetLine::Miss(pos)
         } else if pos.is_mapped() {
@@ -274,9 +254,17 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         } else {
             // Scan backwards, exclusive of end pos
             self.scan_lines_backwards(&pos, offset - 1)
-        };
-        self.advance_pos_back(get)
+        }
     }
+
+    fn advance(&mut self, pos: &Position) -> Position {
+        pos.next(&self.index)
+    }
+
+    fn advance_back(&mut self, pos: &Position) -> Position {
+        pos.next_back(&self.index)
+    }
+
 
     #[inline]
     fn len(&self) -> usize {
