@@ -5,15 +5,16 @@ use regex::Regex;
 use crate::{index_filter::{IndexFilter, SearchType}, indexer::{indexed_log::IndexStats, GetLine, IndexedLog}, LogLine};
 
 /// Applies an IndexFilter to an IndexedLog to make a filtered IndexLog that can iterate lines after applying the filter.
-struct LogFilter {
+#[derive(Default)]
+pub(crate) struct LogFilter {
     filter: IndexFilter,
     inner_pos: Position,
 }
 
 impl LogFilter {
-    pub fn new() -> Self {
+    pub fn new(search: SearchType) -> Self {
         Self {
-            filter: IndexFilter::default(),
+            filter: IndexFilter::new(search, true),
             inner_pos: Position::invalid(),
         }
     }
@@ -21,7 +22,6 @@ impl LogFilter {
     /// Apply a new search to the filter
     /// Invalidates old results
     pub fn search(&mut self, search: SearchType, include: bool) {
-        // TODO: if search != self.filter.f {
         self.filter = IndexFilter::new(search, include);
     }
 
@@ -110,7 +110,7 @@ impl LogFilter {
     }
 
     /// Find the next line that matches our filter, memoizing the position in our index.
-    fn find_next<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
+    pub fn find_next<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
         let end = log.len();
 
         // Resolve to an existing pos
@@ -138,7 +138,7 @@ impl LogFilter {
     }
 
     /// Find the previous line that matches our filter, memoizing the position in our index.
-    fn find_next_back<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
+    pub fn find_next_back<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
 
         // TODO: Dedup with find_next:  next_back, resolve_location_next_back are the only differences
 
@@ -179,7 +179,7 @@ impl LogFilter {
     }
 
 
-    fn resolve_gaps<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> Position {
+    pub fn resolve_gaps<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> Position {
         let mut pos = pos.clone();
         while pos.least_offset() < log.len() {
             pos = self.filter.index.seek_gap(&pos);
@@ -195,6 +195,12 @@ impl LogFilter {
         Position::invalid()
     }
 
+    // IndexedLog support
+    pub fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
+    where Self: Sized
+    {
+        std::iter::once(&self.filter.index.stats)
+    }
 
 }
 
@@ -204,10 +210,10 @@ pub struct FilteredLog<LOG> {
 }
 
 impl<LOG: IndexedLog> FilteredLog<LOG> {
-    pub fn new(log: LOG) -> Self {
+    pub fn new(log: LOG, search: SearchType) -> Self {
         Self {
             log,
-            filter: LogFilter::new(),
+            filter: LogFilter::new(search),
         }
     }
 
@@ -262,10 +268,8 @@ impl<LOG: IndexedLog> IndexedLog for FilteredLog<LOG> {
     fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
     where Self: Sized
     {
-        self.log.info().chain(
-            std::iter::once(&self.filter.filter.index.stats)
+        self.log.info().chain(self.filter.info())
                 .filter(|s| s.name != "None")
-        )
     }
 
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {

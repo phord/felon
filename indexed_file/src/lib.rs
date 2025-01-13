@@ -3,12 +3,14 @@ pub mod index_filter;
 pub mod filtered_log;
 pub mod indexer;
 pub mod log;
+pub mod log_stack;
 
 pub(crate) mod iterator;
 pub(crate) mod sub_line_iterator;
 pub(crate) mod time_stamper;
 
 pub use iterator::LogLine;
+pub use log_stack::LogStack;
 pub use crate::log::Log;
 pub use crate::filtered_log::FilteredLog;
 

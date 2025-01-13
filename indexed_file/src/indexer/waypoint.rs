@@ -52,6 +52,12 @@ pub enum Position {
     Existing(IndexIndex, Waypoint),
 }
 
+impl Default for Position {
+    fn default() -> Self {
+        Position::invalid()
+    }
+}
+
 impl Position {
     pub fn new(ndx: IndexIndex, index: &SaneIndex) -> Self {
         let (i,j) = ndx;

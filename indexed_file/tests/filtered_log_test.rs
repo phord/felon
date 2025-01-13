@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod filtered_log_iterator_helper {
-    use indexed_file::{FilteredLog, IndexedLog, LineIndexerDataIterator, Log};
+    use indexed_file::{IndexedLog, LineIndexerDataIterator, Log, LogStack};
     use indexed_file::files::{CursorLogFile, CursorUtil};
 
     pub(crate) struct Harness {
@@ -9,12 +9,12 @@ mod filtered_log_iterator_helper {
     }
 
     impl Harness {
-        pub(crate) fn new(lines: usize) -> (Self, FilteredLog<Log>) {
+        pub(crate) fn new(lines: usize) -> (Self, LogStack) {
             let patt_len = 9usize;
             let base = 10usize.pow(patt_len as u32 - 2);
             let buff = CursorLogFile::from_vec((base..base+lines).collect()).unwrap();
             let file = Log::from(buff);
-            let file = FilteredLog::new(file);
+            let file = LogStack::new(file);
             let s = Self {
                 patt_len,
                 lines,
@@ -30,7 +30,7 @@ mod filtered_log_iterator_helper {
         //     &self.patt[ofs..ofs + width]
         // }
 
-        pub(crate) fn default() -> (Self, FilteredLog<Log>) {
+        pub(crate) fn default() -> (Self, LogStack) {
             Self::new(6000)
         }
     }
