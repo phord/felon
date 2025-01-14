@@ -93,10 +93,10 @@ impl SaneIndex {
     pub(crate) fn seek_gap(&self, pos: &Position) -> Position {
         let pos = pos.resolve(self);
 
-        if let Position::Existing((row, _), _) = pos {
-            for (i, row) in self.index[row..].iter().enumerate() {
+        if let Position::Existing((r, _), _) = pos {
+            for (i, row) in self.index[r..].iter().enumerate() {
                 if !row.front().unwrap().is_mapped() {
-                    return Position::Existing((i, 0), row[0].clone());
+                    return Position::Existing((i + r, 0), row[0].clone());
                 }
             }
         }
