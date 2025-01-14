@@ -278,7 +278,6 @@ impl SaneIndex {
         let row = self.clear_gap(pos, range);
         if self.index[row].is_empty() {
             self.index.remove(row);
-
         }
         if row == self.index.len() {
             Position::Virtual(VirtualPosition::End)

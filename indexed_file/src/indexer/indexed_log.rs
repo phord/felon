@@ -40,6 +40,7 @@ impl IndexStats {
 
 pub trait IndexedLog {
     /// Return a Position to read from given offset.
+    /// Always returns a generic virtual position that can be used on any index.
     fn seek(&self, pos: usize) -> Position {
         Position::from(pos)
     }
@@ -63,7 +64,7 @@ pub trait IndexedLog {
     fn advance_back(&mut self, pos: &Position) -> Position;
 
     /// Resolve any gap in the index by reading the log from the source.
-    /// Return Position where we stopped if we timed out
+    /// Return Position where we stopped if we timed out, or Invalid if we're fully indexed
     fn resolve_gaps(&mut self, pos: &Position) -> Position;
 
     /// Returns true if there are any gaps in the index
