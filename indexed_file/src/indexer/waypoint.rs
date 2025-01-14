@@ -140,6 +140,7 @@ impl Position {
             Position::Existing(i, waypoint) => {
                 if !index.index_valid(*i) || index.value(*i) != waypoint {
                     log::info!("Waypoint moved; searching new location: {}", self);
+                    panic!("Performance penalty");
                     Position::Virtual(VirtualPosition::Offset(self.least_offset())).resolve(index)
                 } else {
                     self.clone()
