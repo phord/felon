@@ -97,14 +97,14 @@ impl IndexFilter {
     }
 
     /// Erase the gap at the given position and range.
-    /// Returns the position of the previous waypoint
+    /// Returns the position of the previous waypoint, or invalid if there are no earlier ones
     pub fn erase_back(&mut self, pos: &Position, range: &Range<usize>) -> Position {
         assert!(pos.is_unmapped());
         let mut next = self.index.erase_gap(pos, range);
         // erase_gap() may give us the next position which is not what we want; step back one to get the previous one.
         if next.least_offset() > pos.least_offset() {
             next = next.next_back(&self.index);
-            assert!(next.least_offset() <= pos.least_offset());
+            assert!(next.is_virtual() || next.least_offset() <= pos.least_offset());
         }
         next
     }
