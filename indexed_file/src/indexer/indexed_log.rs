@@ -44,6 +44,7 @@ pub trait IndexedLog {
     }
 
     // Read the line at offset into a LogLine
+    // TODO: Move this into Log
     fn read_line(&mut self, offset: usize) -> Option<LogLine>;
 
     /// Read the next/prev line from the file
