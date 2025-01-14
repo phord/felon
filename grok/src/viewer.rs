@@ -66,10 +66,9 @@ impl Viewer {
             let srch = self.search.get_expr();
             log::trace!("Got search: {:?}", &srch);
             if !srch.is_empty() {
-                self.display.set_search(srch);
+                self.display.set_search(&mut self.doc, srch);
             }
             self.display.handle_command(UserCommand::SearchNext);
-            self.display.handle_command(UserCommand::RefreshDisplay);
         }
 
         if self.filter.run() {

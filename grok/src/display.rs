@@ -90,8 +90,8 @@ enum ScrollAction {
     None,   // Nothing to do
     StartOfFile(usize),
     EndOfFile(usize),
-    SearchForward,
-    SearchBackward,
+    SearchForward(usize),
+    SearchBackward(usize),
     Up(usize),
     Down(usize),
     Repaint,
@@ -136,8 +136,6 @@ pub struct Display {
     mouse_wheel_height: u16,
 
     mode: LineViewMode,
-
-    search: Option<Regex>,
 }
 
 impl Drop for Display {
@@ -167,7 +165,6 @@ impl Display {
             mode: LineViewMode::WholeLine,
             color: config.color,
             semantic_color: config.semantic_color,
-            search: None,
         }
     }
 
@@ -219,9 +216,9 @@ impl Display {
         // self.action = Action::Message;
     }
 
-    pub fn set_search(&mut self, search: &str) -> bool {
-        match Regex::new(search) {
-            Ok(re) => { self.search = Some(re); true }
+    pub fn set_search(&mut self, doc: &mut Document, search: &str) -> bool {
+        match doc.set_search(search) {
+            Ok(_) => true,
             Err(e) => {
                 log::error!("Invalid search expression: {}", e);
                 self.set_status_msg(format!("Invalid search expression: {}", e));
@@ -389,10 +386,10 @@ impl Display {
                 self.set_status_msg(format!("{:?}", cmd));
             }
             UserCommand::SearchNext => {
-                self.scroll = ScrollAction::SearchForward;
+                self.scroll = ScrollAction::SearchForward(self.get_arg() as usize);
             }
             UserCommand::SearchPrev => {
-                self.scroll = ScrollAction::SearchBackward;
+                self.scroll = ScrollAction::SearchBackward(self.get_arg() as usize);
             }
             _ => {}
         }
@@ -647,22 +644,29 @@ impl Display {
                         let begin = self.displayed_lines.last().unwrap();
                         Scroll::down(*begin, len)
                     }
-                    ScrollAction::SearchBackward => {
+                    ScrollAction::SearchBackward(repeat) => {
                         // Search backwards from the first line displayed
                         log::trace!("search backward");
-                        // todo!("Tell doc to search backwards");
-                        // Need to search backwards through the document until we find a match.
-                        // If no match, need to cancel the action.
-                        // If user cancels, need to cancel the action.
-                        // Create a FilterIndex(doc) to build the search index.
-                        let begin = self.displayed_lines.first().unwrap();
-                        Scroll::up(*begin, view_height)
+                        // FIXME: This could take some time.  Need an async operation and a busy-indicator
+                        let begin = doc.search_back(*self.displayed_lines.first().unwrap(), repeat);
+                        if let Some(begin) = begin {
+                            Scroll::repaint(begin, view_height)
+                        } else {
+                            log::trace!("search-back: no match");
+                            Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+                        }
                     }
-                    ScrollAction::SearchForward => {
+                    ScrollAction::SearchForward(repeat) => {
                         // Search forwards from the last line displayed
                         log::trace!("search forward");
-                        let begin = self.displayed_lines.last().unwrap();
-                        Scroll::down(*begin, view_height)
+                        // FIXME: This could take some time.  Need an async operation and a busy-indicator
+                        let begin = doc.search_next(*self.displayed_lines.last().unwrap(), repeat);
+                        if let Some(begin) = begin {
+                            Scroll::repaint(begin, view_height)
+                        } else {
+                            log::trace!("search-next: no match");
+                            Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+                        }
                     }
                     ScrollAction::None => Scroll::none()
                 }

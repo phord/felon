@@ -22,10 +22,31 @@ impl Document {
             .iter_view_from(mode, range)
     }
 
-    pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {
-        self.log.search_regex(filter)
+    pub fn set_search(&mut self, search: &str) -> Result<(), regex::Error> {
+        self.log.search_regex(search)
     }
 
+    pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {
+        self.log.filter_regex(filter)
+    }
+
+    pub fn search_next(&mut self, line: usize, repeat: usize) -> Option<usize> {
+        let mut pos = self.log.seek(line);
+        for _ in 0..repeat.max(1) {
+            let p= self.log.search_next(&pos);
+            pos = p;
+        }
+        pos.offset()
+    }
+
+    pub fn search_back(&mut self, line: usize, repeat: usize) -> Option<usize> {
+        let mut pos = self.log.seek(line);
+        for _ in 0..repeat.max(1) {
+            let p= self.log.search_next_back(&pos);
+            pos = p;
+        }
+        pos.offset()
+    }
 }
 
 impl Document {

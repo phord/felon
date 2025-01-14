@@ -53,7 +53,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         let mut it = new(&mut file);
         let line = it.next().unwrap();
@@ -79,7 +79,7 @@ mod filtered_log_iterator_tests {
     fn test_iterator_subset() {
         let (harness, mut file) = Harness::default();
         // Match lines from 5,000 to 5,999
-        file.search_regex("5...$").unwrap();
+        file.filter_regex("5...$").unwrap();
 
         let mut it = new(&mut file);
         let line = it.next().unwrap();
@@ -104,7 +104,7 @@ mod filtered_log_iterator_tests {
     fn test_iterator_no_match() {
         let (_harness, mut file) = Harness::default();
         // Match lines from 5,000 to 5,999
-        file.search_regex("xyz").unwrap();
+        file.filter_regex("xyz").unwrap();
 
         let mut it = new(&mut file);
         assert!(it.next().is_none());
@@ -116,7 +116,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_rev() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         let mut it = new(&mut file).rev();
         let line = it.next().unwrap();
@@ -140,7 +140,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_gaps() {
         let (harness, mut file) = Harness::default();
-        assert!(file.search_regex(r"0$").is_ok());
+        assert!(file.filter_regex(r"0$").is_ok());
 
         let mut it = new(&mut file);
         let line = it.next().unwrap();
@@ -168,7 +168,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_rev_gaps() {
         let (harness, mut file) = Harness::default();
-        assert!(file.search_regex(r"0$").is_ok());
+        assert!(file.filter_regex(r"0$").is_ok());
 
         let mut it = new(&mut file).rev();
         let line = it.next().unwrap();
@@ -196,7 +196,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_build_index() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
         let mut it = new(&mut file);
         let line = it.next().unwrap();
         let prev = line.offset;
@@ -212,7 +212,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_build_index_rev() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         let mut it = new(&mut file).rev();
         let line = it.next().unwrap();
@@ -234,7 +234,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_from_offset_unindexed() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
@@ -257,7 +257,7 @@ mod filtered_log_iterator_tests {
     #[ignore]
     fn test_iterator_middle_out() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         // A few bytes before the middle of the file
         let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
@@ -294,7 +294,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_timeout() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         {
             // Index half the lines.  Expect no timeout.
@@ -328,7 +328,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_from_offset_indexed() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         // Iterate whole file (indexed)
         let mut count = 0;
@@ -359,7 +359,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_from_offset_start() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         // FIXME: These range checks should be run on both fwd and rev, both indexed and unindexed
 
@@ -397,7 +397,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_from_offset_end_of_file() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         let out_of_range = harness.patt_len * harness.lines;
 
@@ -417,7 +417,7 @@ mod filtered_log_iterator_tests {
     #[test]
     fn test_iterator_from_offset_out_of_range() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("000").unwrap();
+        file.filter_regex("000").unwrap();
 
         let out_of_range = harness.patt_len * harness.lines + 2;
 
@@ -438,7 +438,7 @@ mod filtered_log_iterator_tests {
      #[test]
      fn test_filtered_gap_filler() {
         let (harness, mut file) = Harness::default();
-        file.search_regex("00$").unwrap();
+        file.filter_regex("00$").unwrap();
 
         let pos = file.seek(0);
         file.resolve_gaps(&pos);
@@ -454,7 +454,7 @@ mod filtered_log_iterator_tests {
      fn test_filtered_gap_filler_partial() {
         // Resolve gaps when some of the gaps are already resolved
         let (harness, mut file) = Harness::default();
-        file.search_regex("0$").unwrap();
+        file.filter_regex("0$").unwrap();
 
         let size = harness.lines * harness.patt_len;
         let offsets = (0..harness.lines/100).map(|_| rand::random::<usize>() % size).collect::<Vec<_>>();

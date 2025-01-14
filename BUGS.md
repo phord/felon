@@ -2,8 +2,14 @@
 
 [fixed] Jumping to a position that is not indexed yet displays unindexed lines, all ~.  e.g. `50P` jumps to middle, but shows nothing if not indexed yet.
 [     ] Scroll to bottom then up scrolls extra lines if file is shorter than page size.  End + PgUp (twice) shows this bug.
+[     ] Search backwards sometimes doesn't update display or displays all-tildes
+[     ] No way to turn off filter
+[     ] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
+
 
 # Todo:
+* F3/Shift-F3 to search
+* Highlight search matches
 * scroll in chunks larger than 1 line for faster speed.  Maybe 25% of page?  or 5 lines at a time?
 *
 * highlight search results

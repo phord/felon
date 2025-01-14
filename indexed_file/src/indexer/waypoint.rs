@@ -231,6 +231,15 @@ impl Position {
             .advance_back(index)
     }
 
+    /// Start of line if Position points to an existing line, else None
+    pub fn offset(&self) -> Option<usize> {
+        if self.is_mapped() {
+            Some(self.least_offset())
+        } else {
+            None
+        }
+    }
+
     /// start
     pub(crate) fn least_offset(&self) -> usize {
         match self {

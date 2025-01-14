@@ -23,14 +23,41 @@ impl  LogStack {
     }
 
     /// Apply a new regex search expression to the filter
-    /// Invalidates old results
-    pub fn search_regex(&mut self, re: &str) -> Result<(), regex::Error> {
+    /// TODO: add more filters instead of replacing the one we currently allow
+    pub fn filter_regex(&mut self, re: &str) -> Result<(), regex::Error> {
         if re.is_empty() {
             self.filter = None;
         } else {
             self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?)));
         }
         Ok(())
+    }
+
+    /// Set a new regex search expression
+    /// TODO: allow multiple active searches
+    pub fn search_regex(&mut self, re: &str) -> Result<(), regex::Error> {
+        if re.is_empty() {
+            self.search = None;
+        } else {
+            self.search = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?)));
+        }
+        Ok(())
+    }
+
+    pub fn search_next(&mut self, pos: &Position) -> Position {
+        if let Some(ref mut search) = &mut self.search {
+            search.find_next(&mut self.source, pos).into_pos()
+        } else {
+            Position::invalid()
+        }
+    }
+
+    pub fn search_next_back(&mut self, pos: &Position) -> Position {
+        if let Some(ref mut search) = &mut self.search {
+            search.find_next_back(&mut self.source, pos).into_pos()
+        } else {
+            Position::invalid()
+        }
     }
 
 }
