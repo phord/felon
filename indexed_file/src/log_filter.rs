@@ -28,7 +28,8 @@ impl LogFilter {
             if let GetLine::Hit(pos, line) = get {
                 self.inner_pos = log.advance_back(&pos);
                 let range = line.offset..line.offset + line.line.len();
-                if line.offset + line.line.len() < gap.start {
+                assert!(range.start < gap.end);
+                if range.end <= gap.start {
                     return GetLine::Miss(next);
                 } else if self.filter.eval(&line) {
                     next = self.filter.insert(&next, &range);
@@ -145,7 +146,7 @@ impl LogFilter {
                 return GetLine::Hit(next, log.read_line(offset).unwrap_or_default());
             } else if next.is_unmapped() {
                 let offset = pos.most_offset().min(log.len().saturating_sub(1));
-                let offset = next.most_offset().min(offset);
+                let offset = next.most_offset().saturating_sub(1).min(offset);
                 self.seek_inner(offset);
                 let get = self.resolve_location_next_back(log, &next);
                 match get {
