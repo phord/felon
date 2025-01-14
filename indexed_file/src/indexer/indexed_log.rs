@@ -29,9 +29,10 @@ pub struct IndexStats {
 }
 
 impl IndexStats {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, bytes_total: usize) -> Self {
         Self {
             name,
+            bytes_total,
             ..Self::default()
         }
     }
@@ -64,6 +65,9 @@ pub trait IndexedLog {
     /// Resolve any gap in the index by reading the log from the source.
     /// Return Position where we stopped if we timed out
     fn resolve_gaps(&mut self, pos: &Position) -> Position;
+
+    /// Returns true if there are any gaps in the index
+    fn has_gaps(&self) -> bool;
 
     /// Set a time limit for operations that may take too long
     fn set_timeout(&mut self, _limit: Option<Duration>);

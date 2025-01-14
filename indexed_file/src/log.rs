@@ -126,6 +126,10 @@ impl IndexedLog for Log {
     fn resolve_gaps(&mut self, pos: &Position) -> Position {
         self.file.resolve_gaps(pos)
     }
+
+    fn has_gaps(&self) -> bool {
+        self.file.has_gaps()
+    }
 }
 
 // Miscellaneous

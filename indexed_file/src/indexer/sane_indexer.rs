@@ -38,8 +38,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     pub fn new(file: LOG) -> SaneIndexer<LOG> {
         let len = file.len();
         // FIXME: Pass filename instead of generic token
-        let mut index = SaneIndex::new("File".to_string());
-        index.stats.bytes_total = len;
+        let index = SaneIndex::new("File".to_string(), len);
         Self {
             source: file,
             index,
@@ -275,6 +274,10 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     where Self: Sized
     {
         std::iter::once(&self.index.stats)
+    }
+
+    fn has_gaps(&self) -> bool {
+        self.index.stats.bytes_indexed < self.index.stats.bytes_total
     }
 
 }

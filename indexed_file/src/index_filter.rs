@@ -58,17 +58,17 @@ fn trim_newline(line: &str) -> &str {
 
 impl Default for IndexFilter {
     fn default() -> Self {
-        Self::new(SearchType::None, true)
+        Self::new(SearchType::None, 0, true)
     }
 }
 
 impl IndexFilter {
-    pub fn new(f: SearchType, include: bool) -> Self {
+    pub fn new(f: SearchType, bytes_total: usize, include: bool) -> Self {
         let name = format!("{}", f);
         IndexFilter {
             f,
             include,
-            index: SaneIndex::new(name),
+            index: SaneIndex::new(name, bytes_total),
         }
     }
 

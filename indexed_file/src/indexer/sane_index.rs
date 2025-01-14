@@ -51,9 +51,9 @@ impl Default for SaneIndex {
 }
 
 impl SaneIndex {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, bytes_total: usize) -> Self {
         SaneIndex {
-            stats: IndexStats::new(name),
+            stats: IndexStats::new(name, bytes_total),
             ..SaneIndex::default()
         }
     }

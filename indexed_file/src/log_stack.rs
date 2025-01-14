@@ -28,7 +28,7 @@ impl  LogStack {
         if re.is_empty() {
             self.filter = None;
         } else {
-            self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?)));
+            self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
         }
         Ok(())
     }
@@ -39,7 +39,7 @@ impl  LogStack {
         if re.is_empty() {
             self.search = None;
         } else {
-            self.search = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?)));
+            self.search = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
         }
         Ok(())
     }
@@ -100,11 +100,22 @@ impl IndexedLog for LogStack {
 
     fn resolve_gaps(&mut self, pos: &Position) -> Position {
         if let Some(ref mut filter) = &mut self.filter {
-            filter.resolve_gaps(&mut self.source, pos)
-        } else {
-            self.source.resolve_gaps(pos)
+            if filter.has_gaps() {
+                return filter.resolve_gaps(&mut self.source, pos)
+            }
         }
-        // TODO: resolve search gaps, too
+
+        if let Some(ref mut search) = &mut self.search {
+            if search.has_gaps() {
+                return search.resolve_gaps(&mut self.source, pos)
+            }
+        }
+
+        if self.source.has_gaps() {
+            return self.source.resolve_gaps(pos)
+        }
+
+        Position::invalid()
     }
 
     fn set_timeout(&mut self, limit: Option<std::time::Duration>) {
@@ -124,5 +135,12 @@ impl IndexedLog for LogStack {
         self.source.info()
         .chain(self.filter.iter().flat_map(|f| f.info()))
         .chain(self.search.iter().flat_map(|f| f.info()))
+    }
+
+    fn has_gaps(&self) -> bool {
+        self.source.has_gaps() ||
+            self.filter.as_ref().map(|f| f.has_gaps()).unwrap_or_else(
+                || self.search.as_ref().map(|f| f.has_gaps()).unwrap_or(false)
+            )
     }
 }

@@ -9,9 +9,9 @@ pub(crate) struct LogFilter {
 }
 
 impl LogFilter {
-    pub fn new(search: SearchType) -> Self {
+    pub fn new(search: SearchType, bytes_total: usize) -> Self {
         Self {
-            filter: IndexFilter::new(search, true),
+            filter: IndexFilter::new(search, bytes_total, true),
             inner_pos: Position::invalid(),
         }
     }
@@ -200,4 +200,7 @@ impl LogFilter {
         std::iter::once(&self.filter.index.stats)
     }
 
+    pub fn has_gaps(&self) -> bool {
+        self.filter.index.stats.bytes_indexed < self.filter.index.stats.bytes_total
+    }
 }
