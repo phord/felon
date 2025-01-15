@@ -2,6 +2,8 @@ use regex::Regex;
 
 use crate::{log_filter::LogFilter, index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, IndexedLog, Log};
 
+// TODO: Move this into Grok?  It implements some very grok-specific features.
+
 /// A stack of logs with filters.
 /// Rust complicates our traits enough that it's impractical to rely on recursive log trees.
 /// As it turns out, that's also impractical from a usability and reasoning standpoint, too.
@@ -25,6 +27,7 @@ impl  LogStack {
     /// Apply a new regex search expression to the filter
     /// TODO: add more filters instead of replacing the one we currently allow
     pub fn filter_regex(&mut self, re: &str) -> Result<(), regex::Error> {
+        // FIXME: when filter changes, invalidate the search (or merge it / make it dependent on filter)
         if re.is_empty() {
             self.filter = None;
         } else {
@@ -46,6 +49,7 @@ impl  LogStack {
 
     pub fn search_next(&mut self, pos: &Position) -> Position {
         if let Some(ref mut search) = &mut self.search {
+            // FIXME: Filter results against self.filter
             search.find_next(&mut self.source, pos).into_pos()
         } else {
             Position::invalid()
@@ -54,6 +58,7 @@ impl  LogStack {
 
     pub fn search_next_back(&mut self, pos: &Position) -> Position {
         if let Some(ref mut search) = &mut self.search {
+            // FIXME: Filter results against self.filter
             search.find_next_back(&mut self.source, pos).into_pos()
         } else {
             Position::invalid()

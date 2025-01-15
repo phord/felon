@@ -60,7 +60,7 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         if self.timed_out() {
             GetLine::Timeout(pos.clone())
         } else if offset >= self.len() {
-            GetLine::Miss(Position::Virtual(VirtualPosition::End))
+            GetLine::Miss(Position::invalid())
         } else {
             let next = self.read_line(offset);
 
