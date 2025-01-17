@@ -2,7 +2,6 @@ use crossterm::terminal::ClearType;
 use indexed_file::LogLine;
 use std::{cmp, io::{self, stdout, Write}, iter};
 use crossterm::{cursor, execute, queue, terminal};
-use regex::Regex;
 
 use crate::{config::Config, stylist::LineViewMode};
 use crate::keyboard::UserCommand;
@@ -134,8 +133,6 @@ pub struct Display {
     displayed_lines: Vec<usize>,
 
     mouse_wheel_height: u16,
-
-    mode: LineViewMode,
 }
 
 impl Drop for Display {
@@ -162,7 +159,6 @@ impl Display {
             prev: DisplayState { height: 0, width: 0},
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
-            mode: LineViewMode::WholeLine,
             color: config.color,
             semantic_color: config.semantic_color,
         }
@@ -201,9 +197,6 @@ impl Display {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
         self.width = width as usize;
         self.height = height as usize;
-
-        // FIXME: Check config for Wrap mode
-        self.mode = LineViewMode::Chop{width: self.width};
     }
 
     fn page_size(&self) -> usize {
@@ -547,24 +540,27 @@ impl Display {
     // 3. Repaint:  Display all lines from the given offset
     // pos is the offset in the file for the first line
     // Scroll distance is in screen rows.  If a read line takes multiple rows, they count as multiple lines.
-    fn feed_lines(&mut self, doc: &mut Document, mode: LineViewMode, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
+    fn feed_lines(&mut self, doc: &mut Document, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
         log::trace!("feed_lines: {:?}", scroll);
 
         let height = self.page_size();
+
+        // FIXME: Check config for Wrap mode
+        doc.set_width(self.width);
 
         let lines= match scroll {
             Scroll::Up(ref sv) | Scroll::GotoBottom(ref sv) => {
                 // Partial or complete screen scroll backwards
                 let skip = sv.lines.saturating_sub(height);
                 let range = ..sv.offset;
-                let lines:Vec<_> = doc.get_lines_range(mode, &range).rev().take(sv.lines).skip(skip).collect();
+                let lines:Vec<_> = doc.get_lines_range(&range).rev().take(sv.lines).skip(skip).collect();
                 lines
             },
             Scroll::Down(ref sv) => {
                 // Partial screen scroll forwards
                 let skip = sv.lines.saturating_sub(height);
                 let range = sv.offset..;
-                let mut lines = doc.get_lines_range(mode, &range).take(sv.lines + 1);
+                let mut lines = doc.get_lines_range(&range).take(sv.lines + 1);
                 if let Some(line) = lines.next() {
                     assert_eq!(line.offset, sv.offset);
                 }
@@ -574,7 +570,7 @@ impl Display {
                 // Repainting whole screen, no scrolling
                 let skip = sv.lines.saturating_sub(height);
                 let range = sv.offset..;
-                let lines = doc.get_lines_range(mode, &range).take(sv.lines.min(height));
+                let lines = doc.get_lines_range(&range).take(sv.lines.min(height));
                 lines.skip(skip).collect()
             },
             Scroll::None => unreachable!("Scroll::None")
@@ -680,7 +676,7 @@ impl Display {
 
         log::trace!("screen changed");
 
-        let mut buff = self.feed_lines(doc, self.mode, plan)?;
+        let mut buff = self.feed_lines(doc, plan)?;
         self.prev = disp;
 
         // DEBUG HACK

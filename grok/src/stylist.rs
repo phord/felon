@@ -66,8 +66,13 @@ impl Stylist {
             mode,
         }
     }
-}
 
+    pub fn iter_range<'a, R, T>(&'a self, log: &'a mut T, range: &'a R) -> GrokLineIterator<'a, T>
+    where R: std::ops::RangeBounds<usize>, T: IndexedLog
+    {
+        GrokLineIterator::range(log, self, range)
+    }
+}
 
 /// Holds a logline and all of it's styling information before being chopped/wrapped/etc.
 /// Supports iterating across the line following a given LineViewMode.

@@ -1,7 +1,7 @@
 /// A wrapper for a LogFileLines that applies color, filtering, caching, etc.
 
 use crossterm::style::Color;
-use crate::{config::Config, stylist::LineViewMode};
+use crate::{config::Config, stylist::{LineViewMode, Stylist}};
 use fnv::FnvHasher;
 use std::hash::Hasher;
 use lazy_static::lazy_static;
@@ -12,15 +12,14 @@ pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
     log: LogStack,
+    stylist: Stylist,
 }
 
 impl Document {
 
-    pub fn get_lines_range<'a, R>(&'a mut self, _mode: LineViewMode, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
+    pub fn get_lines_range<'a, R>(&'a mut self, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
     where R: std::ops::RangeBounds<usize> {
-        // TODO: Replace with Stylist iterator
-        self.log
-            .iter_lines_range(range)
+        self.stylist.iter_range(&mut self.log, range)
     }
 
     pub fn set_search(&mut self, search: &str) -> Result<(), regex::Error> {
@@ -57,6 +56,7 @@ impl Document {
 
         Self {
             log: LogStack::new(log),
+            stylist: Stylist::new(LineViewMode::WholeLine),
         }
     }
 
@@ -75,6 +75,10 @@ impl Document {
 
     pub fn len(&self) -> usize {
         self.log.len()
+    }
+
+    pub fn set_width(&mut self, width: usize) {
+        self.stylist.mode = LineViewMode::Chop{width};
     }
 
     pub fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
