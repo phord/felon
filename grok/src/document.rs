@@ -1,13 +1,13 @@
 /// A wrapper for a LogFileLines that applies color, filtering, caching, etc.
 
 use crossterm::style::Color;
-use crate::config::Config;
+use crate::{config::Config, stylist::LineViewMode};
 use fnv::FnvHasher;
 use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
 use crate::styled_text::{PattColor, StyledLine};
-use indexed_file::{files, indexer::indexed_log::IndexStats, IndexedLog, LineViewMode, Log, LogLine, LogStack};
+use indexed_file::{files, indexer::indexed_log::IndexStats, IndexedLog, Log, LogLine, LogStack};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents
@@ -16,10 +16,11 @@ pub struct Document {
 
 impl Document {
 
-    pub fn get_lines_range<'a, R>(&'a mut self, mode: LineViewMode, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
+    pub fn get_lines_range<'a, R>(&'a mut self, _mode: LineViewMode, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
     where R: std::ops::RangeBounds<usize> {
+        // TODO: Replace with Stylist iterator
         self.log
-            .iter_view_from(mode, range)
+            .iter_lines_range(range)
     }
 
     pub fn set_search(&mut self, search: &str) -> Result<(), regex::Error> {

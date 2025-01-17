@@ -1,5 +1,5 @@
 use std::time::Duration;
-use crate::{LineIndexerIterator, LineViewMode, LogLine, SubLineIterator};
+use crate::{LineIndexerDataIterator, LineIndexerIterator, LogLine};
 
 use super::{waypoint::Position, TimeoutWrapper};
 
@@ -109,27 +109,13 @@ pub trait IndexedLog {
     // TEST and MergedLog
     fn iter_lines(&mut self) -> impl DoubleEndedIterator<Item = LogLine> + '_
     where Self: Sized {
-        self.iter_view(LineViewMode::WholeLine)
+        LineIndexerDataIterator::new(self)
     }
 
-    // Used in FilteredLog to stream from inner
+    // Used in tests and in bin/tail
     fn iter_lines_range<'a, R>(&'a mut self, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
     where R: std::ops::RangeBounds<usize>,
         Self: Sized {
-        self.iter_view_from(LineViewMode::WholeLine, range)
-    }
-
-    // TEST and MergedLog
-    fn iter_view(&mut self, mode: LineViewMode) -> impl DoubleEndedIterator<Item = LogLine> + '_
-    where Self: Sized {
-        SubLineIterator::new(self, mode)
-    }
-
-    // Used in FilteredLog and Document (grok)
-    fn iter_view_from<'a, R>(&'a mut self, mode: LineViewMode, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
-    where
-        R: std::ops::RangeBounds<usize>,
-        Self: Sized {
-        SubLineIterator::range(self, mode, range)
+        LineIndexerDataIterator::range(self, range)
     }
 }

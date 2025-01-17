@@ -1,6 +1,6 @@
 use crate::config::Config;
 use document::MergedLogs;
-use indexed_file::{files, IndexedLog, Log};
+use indexed_file::{files, IndexedLog, LineIndexerDataIterator, Log};
 use indexed_file::files::ZstdLogFile;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
@@ -69,7 +69,7 @@ pub fn tail_cmd() {
             .unwrap();
 
         let range = first_line.offset..;
-        for line in log.iter_lines_range(&range) {
+        for line in LineIndexerDataIterator::range(&mut log, &range) {
             print!("{line}");
         }
     }

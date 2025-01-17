@@ -1,10 +1,10 @@
 use crossterm::terminal::ClearType;
-use indexed_file::{LineViewMode, LogLine};
+use indexed_file::LogLine;
 use std::{cmp, io::{self, stdout, Write}, iter};
 use crossterm::{cursor, execute, queue, terminal};
 use regex::Regex;
 
-use crate::config::Config;
+use crate::{config::Config, stylist::LineViewMode};
 use crate::keyboard::UserCommand;
 use crate::styled_text::{PattColor, RegionColor, StyledLine};
 use crate::document::Document;

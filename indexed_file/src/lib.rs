@@ -6,7 +6,6 @@ pub mod log;
 pub mod log_stack;
 
 pub(crate) mod iterator;
-pub(crate) mod sub_line_iterator;
 pub(crate) mod time_stamper;
 
 pub use iterator::LogLine;
@@ -15,7 +14,6 @@ pub use crate::log::Log;
 
 pub use indexer::IndexedLog;
 pub use iterator::{LineIndexerDataIterator, LineIndexerIterator};
-pub use sub_line_iterator::{SubLineIterator, LineViewMode};
 
 
 #[cfg(test)]
