@@ -168,6 +168,11 @@ pub enum UserCommand {
     TerminalResize,
 }
 
+// TODO: Roll this into a test
+// use crossterm::event::{Event, KeyCode, MouseButton, KeyEvent, MouseEvent, MouseEventKind, KeyModifiers};
+// use grok::keyboard::Reader;
+// assert_eq!(Reader::keycode("Ctrl+Q"), KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+
 struct Reader {
     keymap: HashMap<KeyEvent, UserCommand>,
     mousemap: HashMap<MouseEvent, UserCommand>,
@@ -198,9 +203,6 @@ impl Reader {
     }
 
     /// Convert a string representation of a key combo into a Key or Mouse Event
-    /// ```
-    /// assert_eq!(crate::Input::keycode("Ctrl+Q"), KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
-    /// ```
     fn keycode(orig: &str) -> Result<Event, String> {
         let mut modifiers = KeyModifiers::NONE;
         let mut action_key: Option<KeyCode> = None;
