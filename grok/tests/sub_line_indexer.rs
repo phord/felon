@@ -480,7 +480,7 @@ mod sub_line_wrap_tests {
     use grok::stylist::{GrokLineIterator, LineViewMode, Stylist};
     use indexed_file::{IndexedLog, Log};
 
-    static STYLIST_WRAP: Stylist = Stylist {mode: LineViewMode::Wrap { width: 10 }};
+    static STYLIST_WRAP: Stylist = Stylist {mode: LineViewMode::Chop { width: 10 }};
 
     fn wrapped_new(log: &mut Log, _width: usize) -> GrokLineIterator<Log> {
         GrokLineIterator::new(log, &STYLIST_WRAP)

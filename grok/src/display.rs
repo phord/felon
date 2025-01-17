@@ -203,7 +203,7 @@ impl Display {
         self.height = height as usize;
 
         // FIXME: Check config for Wrap mode
-        self.mode = LineViewMode::Wrap{width: self.width};
+        self.mode = LineViewMode::Chop{width: self.width};
     }
 
     fn page_size(&self) -> usize {
