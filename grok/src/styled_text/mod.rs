@@ -1,3 +1,6 @@
+pub mod stylist;
+pub use stylist::*;
+
 use crossterm::style::{Stylize, ContentStyle};
 use std::cmp;
 use crossterm::style::Color;

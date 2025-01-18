@@ -1,7 +1,7 @@
 /// A wrapper for a LogFileLines that applies color, filtering, caching, etc.
 
 use crossterm::style::Color;
-use crate::{config::Config, stylist::{LineViewMode, Stylist}};
+use crate::{config::Config, styled_text::stylist::{LineViewMode, Stylist}};
 use fnv::FnvHasher;
 use std::hash::Hasher;
 use lazy_static::lazy_static;
@@ -73,6 +73,7 @@ impl Document {
         Color::Rgb {r: red, g: green, b: blue}
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.log.len()
     }

@@ -3,7 +3,7 @@ use indexed_file::LogLine;
 use std::{cmp, io::{self, stdout, Write}, iter};
 use crossterm::{cursor, execute, queue, terminal};
 
-use crate::{config::Config, stylist::LineViewMode};
+use crate::config::Config;
 use crate::keyboard::UserCommand;
 use crate::styled_text::{PattColor, RegionColor, StyledLine};
 use crate::document::Document;

@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod sub_line_iterator_helper {
-    use grok::stylist::{GrokLineIterator, Stylist, LineViewMode};
+    use grok::styled_text::stylist::{GrokLineIterator, Stylist, LineViewMode};
     use indexed_file::{IndexedLog, Log};
     use indexed_file::files::new_mock_file;
 
@@ -477,7 +477,7 @@ mod sub_line_iterator_tests {
 mod sub_line_wrap_tests {
     use std::collections::HashSet;
     use crate::sub_line_iterator_helper::Harness;
-    use grok::stylist::{GrokLineIterator, LineViewMode, Stylist};
+    use grok::styled_text::stylist::{GrokLineIterator, LineViewMode, Stylist};
     use indexed_file::{IndexedLog, Log};
 
     static STYLIST_WRAP: Stylist = Stylist {mode: LineViewMode::Chop { width: 10 }};

@@ -5,7 +5,6 @@ pub mod keyboard;
 pub mod styled_text;
 pub mod document;
 pub mod status_line;
-pub mod stylist;
 pub mod search_prompt;
 
 use config::Config;
