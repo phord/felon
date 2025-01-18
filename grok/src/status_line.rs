@@ -3,7 +3,7 @@ use std::io::{stdout, Write};
 use crate::config::Config;
 use crossterm::{QueueableCommand, cursor, terminal, style, style::Stylize};
 use crate::document::Document;
-use crate::styled_text::RGB_BLACK;
+use crate::styled_text::styled_line::RGB_BLACK;
 
 pub struct StatusLine {
     color: bool,
@@ -42,6 +42,7 @@ impl StatusLine {
         stdout.queue(cursor::MoveTo(0, height-1_u16))?;
         stdout.queue(style::PrintStyledContent(message[0..width].reverse()))?;
         if self.color {
+            // TODO: Stylist?
             stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
         }
         stdout.queue(terminal::Clear(ClearType::UntilNewLine))?;

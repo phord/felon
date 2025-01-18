@@ -2,7 +2,7 @@ use crossterm::terminal::ClearType;
 use std::io::{stdout, Write};
 use crate::config::Config;
 use crossterm::{QueueableCommand, cursor, terminal};
-use crate::styled_text::RGB_BLACK;
+use crate::styled_text::styled_line::RGB_BLACK;
 
 struct SearchEditor;
 
@@ -106,6 +106,7 @@ impl SearchPrompt {
         let mut stdout = stdout();
         stdout.queue(cursor::MoveTo(0, height - self.get_height()))?;
         if self.color {
+            // TODO: Move to Stylist?
             stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
         }
         stdout.queue(terminal::Clear(ClearType::UntilNewLine))?;

@@ -5,9 +5,8 @@ use crossterm::{cursor, execute, queue, terminal};
 
 use crate::config::Config;
 use crate::keyboard::UserCommand;
-use crate::styled_text::{PattColor, RegionColor, StyledLine};
+use crate::styled_text::styled_line::{PattColor, RegionColor, StyledLine, RGB_BLACK};
 use crate::document::Document;
-use crate::styled_text::RGB_BLACK;
 
 
 #[derive(PartialEq, Debug)]
@@ -59,6 +58,7 @@ impl io::Write for ScreenBuffer {
         let mut buffer = String::new();
         for row in &self.content {
             let pairs = row.phrases.iter().zip(row.phrases[1..].iter());
+            // FIXME: Move this to Stylist
             for (p, pnext) in pairs{
                 match p.patt {
                     PattColor::None => {
@@ -401,6 +401,7 @@ impl Display {
         buff.set_width(self.width);
         buff.push(line);
 
+        // FIXME: Push this into Stylist somehow
         queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
 
