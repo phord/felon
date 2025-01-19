@@ -7,26 +7,31 @@ use super::Stylist;
 
 
 /// Holds a logline and all of it's styling information before being chopped/wrapped/etc.
-/// Supports iterating across the line following a given LineViewMode.
-#[derive(Default)]
-struct StyledLine {
+/// Supports iterating across the line following a given Stylist's LineViewMode.
+struct SubLineHelper<'a> {
     line: Option<LogLine>,
     index: usize,
+    stylist: &'a Stylist,
 }
 
-impl StyledLine {
+impl<'a> SubLineHelper<'a> {
     /// Style a new line at a given offset.  Rejects lines whose offset is out of range.
-    pub fn new(line: LogLine, offset: usize, stylist: &Stylist) -> Self {
+    fn new(stylist: &'a Stylist) -> Self {
+        Self {
+            line: None,
+            index: 0,
+            stylist,
+        }
+    }
+
+    /// Accept a new line and position to begin iterating
+    fn insert(&mut self, line: LogLine, offset: usize) {
         let index = offset.saturating_sub(line.offset).min(line.line.len().saturating_sub(1));
-        if stylist.mode.valid_index(index, line.line.len()) {
-            Self {
-                line: Some(line),
-                index: stylist.mode.chunk_start(index),
-                // styles: Vec::new(),
-            }
+        if self.stylist.mode.valid_index(index, line.line.len()) {
+            self.line = Some(line);
+            self.index = self.stylist.mode.chunk_start(index);
         } else {
-            // Index is out of range for this line. Consider us exhausted.
-            Self::default()
+            self.line = None;
         }
     }
 
@@ -35,22 +40,22 @@ impl StyledLine {
     }
 
     // Get the range of the chunk we're on
-    fn chunk_range(&self, stylist: &Stylist) -> Option<Range<usize>> {
+    fn chunk_range(&self) -> Option<Range<usize>> {
         if let Some(line) = &self.line {
             assert!(self.index < line.line.len());
-            let end = stylist.mode.chunk_end(self.index, line.line.len());
+            let end = self.stylist.mode.chunk_end(self.index, line.line.len());
             Some(self.index..end)
         } else {
             None
         }
     }
 
-    fn advance(&mut self, stylist: &Stylist, forward: bool) -> Option<LogLine> {
-        if let Some(range) = self.chunk_range(stylist) {
+    fn advance(&mut self, forward: bool) -> Option<LogLine> {
+        if let Some(range) = self.chunk_range() {
             let rline = self.render(&range);
-            if stylist.mode.is_chunked() {
+            if self.stylist.mode.is_chunked() {
                 let target = if forward { range.end } else { range.start.saturating_sub(1) };
-                let next = stylist.mode.chunk_start(target);
+                let next = self.stylist.mode.chunk_start(target);
                 // If there is a valid next chunk, it start be outside the range of this one but still within the line
                 if !range.contains(&next) && next < self.line.as_ref().unwrap().line.len() {
                     self.index = next;
@@ -68,12 +73,12 @@ impl StyledLine {
         }
     }
 
-    fn next(&mut self, stylist: &Stylist) -> Option<LogLine> {
-        self.advance(stylist, true)
+    fn next(&mut self) -> Option<LogLine> {
+        self.advance( true)
     }
 
-    fn next_back(&mut self, stylist: &Stylist) -> Option<LogLine> {
-        self.advance(stylist, false)
+    fn next_back(&mut self) -> Option<LogLine> {
+        self.advance( false)
     }
 
     fn render(&self, range: &Range<usize>) -> LogLine {
@@ -91,22 +96,14 @@ impl StyledLine {
 // This iterator handles breaking lines into substrings for wrapping, right-scrolling, and/or chopping
 pub struct GrokLineIterator<'a, LOG: IndexedLog> {
     inner: LineIndexerDataIterator<'a, LOG>,
-    stylist: &'a Stylist,
     range: Range<usize>,
-    fwd: StyledLine,
-    rev: StyledLine,
+    fwd: SubLineHelper<'a>,
+    rev: SubLineHelper<'a>,
 }
 
 impl<'a, LOG: IndexedLog> GrokLineIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG, stylist: &'a Stylist) -> Self {
-        let inner = LineIndexerDataIterator::new(log);
-        Self {
-            inner,
-            stylist,
-            range: 0..usize::MAX,
-            fwd: StyledLine::default(),
-            rev: StyledLine::default(),
-        }
+        Self::range(log, stylist, &(..))
     }
 
     pub fn range<R>(log: &'a mut LOG, stylist: &'a Stylist, range: &'a R) -> Self
@@ -119,10 +116,9 @@ impl<'a, LOG: IndexedLog> GrokLineIterator<'a, LOG> {
 
         Self {
             inner,
-            stylist,
             range: start..end,
-            fwd: StyledLine::default(),
-            rev: StyledLine::default(),
+            fwd: SubLineHelper::new(stylist),
+            rev: SubLineHelper::new(stylist),
         }
     }
 }
@@ -134,10 +130,10 @@ impl<LOG: IndexedLog> DoubleEndedIterator for GrokLineIterator<'_, LOG> {
             let mut prev = self.inner.next_back();
             if prev.is_none() { prev = self.fwd.line.clone(); }
             if let Some(prev) = prev {
-                self.rev = StyledLine::new(prev, self.range.end, self.stylist);
+                self.rev.insert(prev, self.range.end);
             }
         }
-        if let Some(line) = self.rev.next_back(self.stylist) {
+        if let Some(line) = self.rev.next_back() {
             if line.offset >= self.range.start {
                 self.range = self.range.start..line.offset;
                 return Some(line);
@@ -156,10 +152,10 @@ impl<LOG: IndexedLog> Iterator for GrokLineIterator<'_, LOG> {
             let mut next = self.inner.next();
             if next.is_none() { next = self.rev.line.clone(); }
             if let Some(next) = next {
-                self.fwd = StyledLine::new(next, self.range.start, self.stylist);
+                self.fwd.insert(next, self.range.start);
             }
         }
-        if let Some(line) = self.fwd.next(self.stylist) {
+        if let Some(line) = self.fwd.next() {
             if line.offset < self.range.end {
                 self.range = line.offset.saturating_add(1)..self.range.end;
                 return Some(line)
