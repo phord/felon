@@ -45,13 +45,19 @@ impl StyledLine {
         }
     }
 
-    fn next(&mut self, stylist: &Stylist) -> Option<LogLine> {
+    fn advance(&mut self, stylist: &Stylist, forward: bool) -> Option<LogLine> {
         if let Some(range) = self.chunk_range(stylist) {
             let rline = self.render(&range);
-            let next = stylist.mode.chunk_start(range.end);
-            // If there is a next chunk, it should be same as end of current chunk
-            if next == range.end && next < self.line.as_ref().unwrap().line.len() {
-                self.index = next;
+            if stylist.mode.is_chunked() {
+                let target = if forward { range.end } else { range.start.saturating_sub(1) };
+                let next = stylist.mode.chunk_start(target);
+                // If there is a valid next chunk, it start be outside the range of this one but still within the line
+                if !range.contains(&next) && next < self.line.as_ref().unwrap().line.len() {
+                    self.index = next;
+                } else {
+                    // No more chunks
+                    self.line = None;
+                }
             } else {
                 // No more chunks
                 self.line = None;
@@ -62,21 +68,12 @@ impl StyledLine {
         }
     }
 
+    fn next(&mut self, stylist: &Stylist) -> Option<LogLine> {
+        self.advance(stylist, true)
+    }
+
     fn next_back(&mut self, stylist: &Stylist) -> Option<LogLine> {
-        if let Some(range) = self.chunk_range(stylist) {
-            let rline = self.render(&range);
-            let next = stylist.mode.chunk_start(range.start.saturating_sub(1));
-            // If there is a previous chunk, it should start before us
-            if next < range.start {
-                self.index = next;
-            } else {
-                // No more chunks
-                self.line = None;
-            }
-            Some(rline)
-        } else {
-            None
-        }
+        self.advance(stylist, false)
     }
 
     fn render(&self, range: &Range<usize>) -> LogLine {

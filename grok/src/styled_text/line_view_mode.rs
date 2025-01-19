@@ -24,6 +24,11 @@ impl LineViewMode {
         }
     }
 
+    // Test if this line may be displayed in multiple chunks (wrapped)
+    pub fn is_chunked(&self) -> bool {
+        matches!(self, LineViewMode::Chop{width: _} | LineViewMode::Clip{width: _, left: _})
+    }
+
     /// Return the start of the chunk we're on, given an arbitrary offset into the line
     pub fn chunk_start(&self, index: usize) -> usize {
         match self {
