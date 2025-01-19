@@ -5,7 +5,7 @@ use crossterm::{cursor, execute, queue, terminal};
 
 use crate::config::Config;
 use crate::keyboard::UserCommand;
-use crate::styled_text::styled_line::{PattColor, RegionColor, StyledLine, RGB_BLACK};
+use crate::styled_text::styled_line::{PattColor, StyledLine, RGB_BLACK};
 use crate::document::Document;
 
 
@@ -57,26 +57,7 @@ impl io::Write for ScreenBuffer {
     fn flush(&mut self) -> io::Result<()> {
         let mut buffer = String::new();
         for row in &self.content {
-            let pairs = row.phrases.iter().zip(row.phrases[1..].iter());
-            // FIXME: Move this to Stylist
-            for (p, pnext) in pairs{
-                match p.patt {
-                    PattColor::None => {
-                        buffer.push_str(&row.line);
-                        break;
-                    }
-                    _ => {
-                        let end = cmp::min(self.width, pnext.start);
-                        assert!(end > p.start || end == 0);
-                        let reg = RegionColor {len: (end - p.start) as u16, style: p.patt};
-                        let content = reg.to_str(&row.line[p.start..end]);
-                        buffer.push_str(content.as_str());
-                        if end == self.width {
-                            break;
-                        }
-                    }
-                }
-            }
+            buffer.push_str(&row.to_string(0, self.width));
         }
         let out = write!(stdout(), "{}", buffer);
         stdout().flush()?;

@@ -1,12 +1,13 @@
 use crossterm::style::{Stylize, ContentStyle};
+use itertools::Itertools;
 use std::cmp;
 use crossterm::style::Color;
 
 /// Defines a style for a portion of a line.  Represents the style and the position within the line.
 #[derive(Copy, Clone, Debug)]
-pub struct Phrase {
-    pub start: usize,
-    pub patt: PattColor,
+struct Phrase {
+    start: usize,
+    patt: PattColor,
 }
 
 /// Holds a line of text and the styles for each character.
@@ -16,7 +17,7 @@ pub struct Phrase {
 pub struct StyledLine {
     // FIXME: Make this a &str with proper lifetime checking
     pub line: String,
-    pub phrases: Vec<Phrase>,
+    phrases: Vec<Phrase>,
 }
 
 // TODO: In the future when GATs are stable, we can implement IntoIterator.  Until then, users will
@@ -105,9 +106,31 @@ impl StyledLine {
     //     }
     // }
 
+    pub fn to_string(&self, start: usize, width: usize) -> String {
+        let end = self.line.len().min(start + width);
+        assert!(width > 0);
+        let pairs = self.phrases.windows(2);
+        pairs
+            .map(|phrases| (phrases[0], phrases[1]))
+            .filter(|(p, pnext)| p.start < end && pnext.start > start && p.start < pnext.start)
+            .map(|(p, pnext)| {
+                match p.patt {
+                    PattColor::None => {  // None: No patterns for whole line
+                        self.line[start..end].to_string()
+                    }
+                    _ => {
+                        let start = start.max(p.start);
+                        let end = end.min(pnext.start);
+                        let reg = RegionColor {len: (end - start) as u16, style: p.patt};
+                        reg.to_str(&self.line[start..end])
+                    }
+                }
+        })
+        .join("")
+    }
 
     // Inserts a new styled region into the line style planner.
-    // If the new phrase overlaps with existing phrases, it clips them.
+    // If the new phrase overlaps with existing phrases, it clips the existing ones.
     pub fn push(&mut self, start: usize, end: usize, patt: PattColor) {
         assert!(end > start);
         let phrase = Phrase::new(start, patt);
@@ -145,7 +168,7 @@ impl StyledLine {
 
 
         // We may be contained inside the phrase at pos and we need to split it into two pieces.
-        // AAAAAAA
+        // AAAAAAA    <--- This phrase exists ---  What happens when we insert the next one
         //   BBB      split_left && split_right:   Insert copy of AA; insert our new phrase
         // CCCCCCC    !split_left && !split_right: replace CCCCCCCC with our phrase
         // DDD        split_right && count=1:      Insert our new phrase at left; adjust left+1 to end
@@ -284,5 +307,7 @@ mod tests {
         assert!(line.phrases[0].start == 0);
         assert!(line.phrases[1].start == 29);
     }
+
+    // FIXME: Unit tests for StyledLine::to_string
 
 }

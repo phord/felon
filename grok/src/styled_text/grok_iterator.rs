@@ -9,7 +9,7 @@ use super::Stylist;
 /// Holds a logline and all of it's styling information before being chopped/wrapped/etc.
 /// Supports iterating across the line following a given LineViewMode.
 #[derive(Default)]
-pub struct StyledLine {
+struct StyledLine {
     line: Option<LogLine>,
     index: usize,
 }
