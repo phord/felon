@@ -16,30 +16,19 @@ struct DisplayState {
 }
 
 struct ScreenBuffer {
-    // content: String,
-    content: Vec<StyledLine>,
-    width: usize,
+    content: String,
 }
 
 impl ScreenBuffer {
 
     fn new() -> Self {
         Self {
-            content: Vec::new(),
-            width: 0,
+            content: String::new(),
         }
     }
 
-    fn set_width(&mut self, width: usize) {
-        self.width = width;
-    }
-
-    fn push(&mut self, line: StyledLine) {
-        self.content.push(line)
-    }
-
     fn push_raw(&mut self, data: &str) {
-        self.content.push(StyledLine::new(data, PattColor::None))
+        self.content.push_str(data)
     }
 }
 
@@ -55,11 +44,7 @@ impl io::Write for ScreenBuffer {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        let mut buffer = String::new();
-        for row in &self.content {
-            buffer.push_str(&row.to_string(0, self.width));
-        }
-        let out = write!(stdout(), "{}", buffer);
+        let out = write!(stdout(), "{}", self.content);
         stdout().flush()?;
         self.content.clear();
         out
@@ -379,8 +364,17 @@ impl Display {
     fn draw_styled_line(&self, buff: &mut ScreenBuffer, row: usize, line: StyledLine) {
         queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
 
-        buff.set_width(self.width);
-        buff.push(line);
+        buff.push_raw(line.to_string(0, self.width).as_str());
+
+        // FIXME: Push this into Stylist somehow
+        queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
+    }
+
+    fn draw_log_line(&self, buff: &mut ScreenBuffer, row: usize, line: &LogLine) {
+        queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
+
+        // Used for LogLines that are already rendered with Stylist.  TODO: New type? StyledLogLine?
+        buff.push_raw(line.line.as_str());
 
         // FIXME: Push this into Stylist somehow
         queue!(buff, crossterm::style::SetBackgroundColor(RGB_BLACK), terminal::Clear(ClearType::UntilNewLine)).unwrap();
@@ -388,7 +382,6 @@ impl Display {
 
     fn draw_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &str) {
         if self.color && self.semantic_color {
-            // TODO: Memoize the line_colors along with the lines
             self.draw_styled_line(buff, row, doc.line_colors(line));
         } else {
             self.draw_plain_line(doc, buff, row, line);
@@ -399,8 +392,7 @@ impl Display {
         // TODO: dedup with draw_styled_line (it only needs to remove the RGB_BLACK background)
         queue!(buff, cursor::MoveTo(0, row as u16)).unwrap();
 
-        buff.set_width(self.width);
-        buff.push(StyledLine::sanitize_basic(line, PattColor::Plain));
+        buff.push_raw(line);
 
         queue!(buff, terminal::Clear(ClearType::UntilNewLine)).unwrap();
     }
@@ -484,15 +476,23 @@ impl Display {
             };
 
         let filler = count.saturating_sub(lines.len());
-        for line in iter
-                .map(|logline| logline.line.as_str())
-                .chain(iter::repeat_n("~", filler)) {
+        for line in iter {
             if down {
                 queue!(buff, terminal::ScrollDown(1)).unwrap();
             } else if up {
                 queue!(buff, terminal::ScrollUp(1)).unwrap();
             }
-            self.draw_line(doc, &mut buff, row, line);
+            self.draw_log_line(&mut buff, row, line);
+            row += incr;
+        }
+
+        for _ in 0..filler {
+            if down {
+                queue!(buff, terminal::ScrollDown(1)).unwrap();
+            } else if up {
+                queue!(buff, terminal::ScrollUp(1)).unwrap();
+            }
+            self.draw_line(doc, &mut buff, row, "~");
             row += incr;
         }
 

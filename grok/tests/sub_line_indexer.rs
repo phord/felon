@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod sub_line_iterator_helper {
     use grok::styled_text::grok_iterator::GrokLineIterator;
+    use grok::styled_text::styled_line::PattColor;
     use grok::styled_text::stylist::Stylist;
     use grok::styled_text::line_view_mode::LineViewMode;
     use indexed_file::{IndexedLog, Log};
@@ -13,18 +14,20 @@ mod sub_line_iterator_helper {
 
     pub(crate) struct Harness {
         pub(crate) patt: String,
-        pub(crate) patt_len: usize,
+        pub(crate) line_len: usize,
         pub(crate) lines: usize,
     }
 
     impl Harness {
         pub(crate) fn new(patt: &str, lines: usize, ) -> (Self, Log) {
-            let patt_len = patt.len();
-            let file = new_mock_file(patt, patt_len * lines, 100);
+            let line_len = patt.len();
+            let file = new_mock_file(patt, line_len * lines, 100);
             let file = Log::from(file);
+            let patt = patt.trim().to_string();
+
             let s = Self {
-                patt: patt.to_string(),
-                patt_len,
+                line_len,
+                patt,
                 lines,
             };
             (s, file)
@@ -32,11 +35,11 @@ mod sub_line_iterator_helper {
         }
 
         pub(crate) fn total_len(&self, width: usize) -> usize {
-            self.lines * self.patt_len.div_ceil(width)
+            self.lines * self.line_len.div_ceil(width)
         }
 
         pub(crate) fn offset_into_line(&self, offset: usize) -> usize {
-            offset % self.patt_len
+            offset % self.line_len
         }
 
         pub(crate) fn expected_bol(&self, offset: usize, width: usize) -> usize {
@@ -46,7 +49,7 @@ mod sub_line_iterator_helper {
 
         pub(crate) fn expected_width(&self, offset: usize, width: usize) -> usize {
             let offset = self.expected_bol(offset, width);
-            (self.patt_len - self.offset_into_line(offset)).min(width)
+            (self.patt.len() - self.offset_into_line(offset)).min(width)
         }
 
         pub(crate) fn expected_line(&self, offset: usize, width: usize) -> &str {
@@ -65,7 +68,7 @@ mod sub_line_iterator_helper {
         }
     }
 
-    static STYLIST_WHOLE: Stylist = Stylist {mode: LineViewMode::WholeLine};
+    static STYLIST_WHOLE: Stylist = Stylist {mode: LineViewMode::WholeLine, patt: PattColor::None, styles: vec![]};
 
     pub(crate) fn new<LOG: IndexedLog>(log: &mut LOG) -> GrokLineIterator<LOG> {
         GrokLineIterator::new(log, &STYLIST_WHOLE)
@@ -95,7 +98,7 @@ mod subline_iterator_tests {
         assert_eq!(prev, 0);
         for i in it.take(harness.lines - 1) {
             let bol = i;
-            assert_eq!(bol - prev, harness.patt_len);
+            assert_eq!(bol - prev, harness.line_len);
             prev = bol;
         }
     }
@@ -107,12 +110,12 @@ mod subline_iterator_tests {
         let prev = it.next().unwrap();
         let mut prev = prev;
 
-        assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
+        assert_eq!(prev, harness.lines * harness.line_len - harness.line_len);
 
         for i in it.take(harness.lines - 1) {
             let bol = i;
             // println!("{bol} {prev}");
-            assert_eq!(prev - bol, harness.patt_len);
+            assert_eq!(prev - bol, harness.line_len);
             prev = bol;
         }
     }
@@ -124,13 +127,13 @@ mod subline_iterator_tests {
         let prev = it.next().unwrap();
         let mut prev = prev;
 
-        assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
+        assert_eq!(prev, harness.lines * harness.line_len - harness.line_len);
 
         let mut count = 1;
         for i in it {
             let bol = i;
             // println!("{bol} {prev}");
-            assert_eq!(prev - bol, harness.patt_len);
+            assert_eq!(prev - bol, harness.line_len);
             prev = bol;
             count += 1;
         }
@@ -150,30 +153,30 @@ mod subline_iterator_tests {
             // count += 1;
             // println!("{count} {i}");
             let bol = i;
-            assert_eq!(bol - prev, harness.patt_len);
+            assert_eq!(bol - prev, harness.line_len);
             prev = bol;
         }
 
         // Last line is the empty string after the last \n
-        assert_eq!(prev, (harness.lines / 2 - 1) * harness.patt_len );
+        assert_eq!(prev, (harness.lines / 2 - 1) * harness.line_len );
 
         let bol_part1 = prev;
 
         let mut it = it.rev();
         prev = it.next().unwrap();      // Fetch last line offset
-        assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
+        assert_eq!(prev, harness.lines * harness.line_len - harness.line_len);
 
         for _x in 0..harness.lines/2 - 1 {
             let i = it.next().unwrap();
             // count += 1;
             // println!("{count} {i}");
             let bol = i;
-            assert_eq!(prev - bol, harness.patt_len);
+            assert_eq!(prev - bol, harness.line_len);
             prev = bol;
         }
 
         let bol_part2 = prev;
-        assert_eq!(bol_part2 - bol_part1, harness.patt_len);
+        assert_eq!(bol_part2 - bol_part1, harness.line_len);
 
         // all lines exhausted
         assert!(it.next().is_none());
@@ -199,7 +202,7 @@ mod subline_iterator_tests {
         assert_eq!(prev, 0);
         for i in it.take(harness.lines - 1) {
             let bol = i;
-            assert_eq!(bol - prev, harness.patt_len);
+            assert_eq!(bol - prev, harness.line_len);
             prev = bol;
         }
     }
@@ -219,7 +222,7 @@ mod subline_iterator_tests {
             assert_eq!(prev, 0);
             for i in it.take(harness.lines - 1) {
                 let bol = i;
-                assert_eq!(bol - prev, harness.patt_len);
+                assert_eq!(bol - prev, harness.line_len);
                 prev = bol;
             }
         }
@@ -245,7 +248,7 @@ mod sub_line_iterator_tests {
         assert_eq!(line, harness.patt);
         for i in it.take(harness.lines - 1) {
             let (line, bol) = (i.line, i.offset);
-            assert_eq!(bol - prev, harness.patt_len);
+            assert_eq!(bol - prev, harness.line_len);
             assert_eq!(line, harness.patt);
             prev = bol;
         }
@@ -259,12 +262,12 @@ mod sub_line_iterator_tests {
         let (_line, prev) = (line.line, line.offset);
         let mut prev = prev;
 
-        assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
+        assert_eq!(prev, harness.lines * harness.line_len - harness.line_len);
 
         for i in it.take(harness.lines - 2) {
             let (line, bol) = (i.line, i.offset);
             // println!("{bol} {prev}");
-            assert_eq!(prev - bol, harness.patt_len);
+            assert_eq!(prev - bol, harness.line_len);
             assert_eq!(line, harness.patt);
             prev = bol;
         }
@@ -279,13 +282,13 @@ mod sub_line_iterator_tests {
 
         let mut prev = prev;
 
-        assert_eq!(prev, harness.lines * harness.patt_len - harness.patt_len);
+        assert_eq!(prev, harness.lines * harness.line_len - harness.line_len);
 
         let mut count = 1;
         for i in it {
             let (line, bol) = (i.line, i.offset);
             println!("{bol} {prev}");
-            assert_eq!(prev - bol, harness.patt_len);
+            assert_eq!(prev - bol, harness.line_len);
             assert_eq!(line, harness.patt);
             prev = bol;
             count += 1;
@@ -313,7 +316,7 @@ mod sub_line_iterator_tests {
         assert_eq!(prev, 0);
         for i in it.take(harness.lines - 1) {
             let (line, bol) = (i.line, i.offset);
-            assert_eq!(bol - prev, harness.patt_len);
+            assert_eq!(bol - prev, harness.line_len);
             assert_eq!(line, harness.patt);
             prev = bol;
         }
@@ -334,7 +337,7 @@ mod sub_line_iterator_tests {
             assert_eq!(prev, 0);
             for i in it.take(harness.lines - 1) {
                 let (line, bol) = (i.line, i.offset);
-                assert_eq!(bol - prev, harness.patt_len);
+                assert_eq!(bol - prev, harness.line_len);
                 assert_eq!(line, harness.patt);
                 prev = bol;
             }
@@ -347,7 +350,7 @@ mod sub_line_iterator_tests {
         let (harness, mut file) =  Harness::new_small(100);
 
         // A few bytes before the middle of the file
-        let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let offset = harness.line_len * harness.lines / 2 - harness.line_len / 2;
         let range =  offset..;
         let mut it = sub_line_iterator_helper::new_from(&mut file,&range);
 
@@ -355,7 +358,7 @@ mod sub_line_iterator_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        assert_eq!(prev, harness.patt_len * (harness.lines / 2 - 1));
+        assert_eq!(prev, harness.line_len * (harness.lines / 2 - 1));
         assert_eq!(line, harness.patt);
 
         let count = it.count() + 1;
@@ -376,7 +379,7 @@ mod sub_line_iterator_tests {
             if let Some(line) = it.next() {
                 lineset.insert(line.offset);
                 // We don't reach the end of the file
-                assert!(line.offset < harness.lines * harness.patt_len);
+                assert!(line.offset < harness.lines * harness.line_len);
                 assert_eq!(line.line, harness.patt);
                 count += 1;
                 done = false;
@@ -402,7 +405,7 @@ mod sub_line_iterator_tests {
         assert_eq!(count, harness.lines);
 
         // A few bytes before the middle of the file
-        let start = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let start = harness.line_len * harness.lines / 2 - harness.line_len / 2;
         let range =  start..;
         let mut it = sub_line_iterator_helper::new_from(&mut file,&range);
 
@@ -410,7 +413,7 @@ mod sub_line_iterator_tests {
         let line = it.next().unwrap();
         let (line, prev) = (line.line, line.offset);
 
-        let expected_offset = harness.patt_len * (harness.lines / 2 - 1);
+        let expected_offset = harness.line_len * (harness.lines / 2 - 1);
         assert_eq!(prev, expected_offset);
         assert_eq!(line, harness.patt);
 
@@ -445,7 +448,7 @@ mod sub_line_iterator_tests {
     #[test]
     fn test_iterator_from_offset_end_of_file() {
         let (harness, mut file) =  Harness::new_small(100);
-        let out_of_range = harness.patt_len * harness.lines;
+        let out_of_range = harness.line_len * harness.lines;
 
         let range = out_of_range..;
         let count = sub_line_iterator_helper::new_from(&mut file, &range).count();
@@ -461,7 +464,7 @@ mod sub_line_iterator_tests {
     fn test_iterator_from_offset_out_of_range() {
         let (harness, mut file) =  Harness::new_small(100);
 
-        let out_of_range = harness.patt_len * harness.lines + 2;
+        let out_of_range = harness.line_len * harness.lines + 2;
 
         let range = ..out_of_range;
         let count = sub_line_iterator_helper::new_from(&mut file, &range).rev().count();
@@ -479,12 +482,12 @@ mod sub_line_iterator_tests {
 mod sub_line_wrap_tests {
     use std::collections::HashSet;
     use crate::sub_line_iterator_helper::Harness;
-    use grok::styled_text::grok_iterator::GrokLineIterator;
+    use grok::styled_text::{grok_iterator::GrokLineIterator, styled_line::PattColor};
     use grok::styled_text::stylist::Stylist;
     use grok::styled_text::line_view_mode::LineViewMode;
     use indexed_file::{IndexedLog, Log};
 
-    static STYLIST_WRAP: Stylist = Stylist {mode: LineViewMode::Chop { width: 10 }};
+    static STYLIST_WRAP: Stylist = Stylist {mode: LineViewMode::Chop { width: 10 }, patt: PattColor::None, styles: vec![]};
 
     fn wrapped_new(log: &mut Log, _width: usize) -> GrokLineIterator<Log> {
         GrokLineIterator::new(log, &STYLIST_WRAP)
@@ -509,22 +512,24 @@ mod sub_line_wrap_tests {
 
             assert_eq!(line, harness.expected_line(offset, width));
             offset += expect_width;
+            if expect_width < width {offset += 1;}
         }
-        assert_eq!(offset, harness.lines * harness.patt_len);
+        assert_eq!(offset, harness.lines * harness.line_len);
     }
 
     #[test]
     fn test_iterator_rev() {
         let (harness, mut file) = Harness::default();
         let width = 10;
-        let mut offset = harness.lines * harness.patt_len;
+        let mut offset = harness.lines * harness.line_len;
         for i in wrapped_new(&mut file, width).rev() {
             let (line, bol) = (i.line, i.offset);
             let expect_width = harness.expected_width(bol, width);
-            assert_eq!(offset, bol + expect_width);
             offset -= expect_width;
 
             assert_eq!(line, harness.expected_line(offset, width));
+            assert_eq!(bol, harness.expected_bol(offset, width));
+            offset = harness.expected_bol(offset, width);
         }
         assert_eq!(offset, 0);
     }
@@ -567,8 +572,9 @@ mod sub_line_wrap_tests {
             let expect_line = harness.expected_line(offset, width);
             assert_eq!(line, expect_line);
             offset += expect_width;
+            if expect_width < width {offset += 1;}
         }
-        assert_eq!(offset, harness.lines * harness.patt_len);
+        assert_eq!(offset, harness.lines * harness.line_len);
     }
 
 
@@ -593,8 +599,9 @@ mod sub_line_wrap_tests {
                 let expect_line = harness.expected_line(offset, width);
                 assert_eq!(line, expect_line);
                 offset += expect_width;
+                if expect_width < width {offset += 1;}
             }
-            assert_eq!(offset, harness.lines * harness.patt_len);
+            assert_eq!(offset, harness.lines * harness.line_len);
         }
     }
 
@@ -605,7 +612,7 @@ mod sub_line_wrap_tests {
         let width = 10;
 
         // A few bytes before the middle of the file
-        let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let offset = harness.line_len * harness.lines / 2 - harness.line_len / 2;
         let range = offset..;
         let mut it = wrapped_new_range(&mut file, width, &range);
 
@@ -628,7 +635,7 @@ mod sub_line_wrap_tests {
         let mut it = wrapped_new_range(&mut file, width, &(..));
 
         let mut fwd_offset = harness.expected_bol(0, width);
-        let mut rev_offset = harness.expected_bol(harness.lines * harness.patt_len, width);
+        let mut rev_offset = harness.expected_bol(harness.lines * harness.line_len, width);
 
         // Iterate forwards and backwards simultaneously
         let mut lineset = HashSet::new();
@@ -638,17 +645,18 @@ mod sub_line_wrap_tests {
             if let Some(line) = it.next() {
                 lineset.insert(line.offset);
                 // We don't reach the end of the file
-                assert!(line.offset < harness.lines * harness.patt_len);
+                assert!(line.offset < harness.lines * harness.line_len);
                 assert_eq!(line.line, harness.expected_line(fwd_offset, width));
-                fwd_offset += harness.expected_width(fwd_offset, width);
+                fwd_offset = harness.expected_bol(fwd_offset + width, width);
                 count += 1;
                 done = false;
             }
             if let Some(line) = it.next_back() {
                 lineset.insert(line.offset);
                 rev_offset -= harness.expected_width(rev_offset - 1, width);
-                assert_eq!(line.offset, rev_offset);
                 assert_eq!(line.line, harness.expected_line(rev_offset, width));
+                rev_offset = harness.expected_bol(rev_offset, width);
+                assert_eq!(line.offset, rev_offset);
                 count += 1;
                 done = false;
             }
@@ -666,7 +674,7 @@ mod sub_line_wrap_tests {
         let width = 10;
 
         // A few bytes before the middle of the file
-        let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let offset = harness.line_len * harness.lines / 2 - harness.line_len / 2;
         let range = offset..;
         let mut it = wrapped_new_range(&mut file, width, &range);
 
@@ -732,7 +740,7 @@ mod sub_line_wrap_tests {
         assert_eq!(count, harness.total_len(width));
 
         // A few bytes before the middle of the file
-        let offset = harness.patt_len * harness.lines / 2 - harness.patt_len / 2;
+        let offset = harness.line_len * harness.lines / 2 - harness.line_len / 2;
         let range = ..offset;
         let mut it = wrapped_new_range(&mut file, width, &range).rev();
 
@@ -788,7 +796,7 @@ mod sub_line_wrap_tests {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
-        let end_of_file = harness.patt_len * harness.lines;
+        let end_of_file = harness.line_len * harness.lines;
 
         let range = end_of_file..;
         let it = wrapped_new_range(&mut file, width, &range);
@@ -811,7 +819,7 @@ mod sub_line_wrap_tests {
         let (harness, mut file) =  Harness::new_small(100);
         let width = 10;
 
-        let out_of_range = harness.patt_len * harness.lines + 2;
+        let out_of_range = harness.line_len * harness.lines + 2;
 
         // let it = wrapped_new_range(&mut file, width, ..out_of_range).rev();
         // for i in it {

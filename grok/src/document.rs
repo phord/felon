@@ -55,7 +55,7 @@ impl Document {
 
         Self {
             log: LogStack::new(log),
-            stylist: Stylist::new(LineViewMode::WholeLine),
+            stylist: Stylist::new(LineViewMode::WholeLine, PattColor::NoCrumb),
         }
     }
 

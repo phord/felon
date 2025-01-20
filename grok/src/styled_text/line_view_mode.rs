@@ -13,17 +13,6 @@ pub enum LineViewMode{
 }
 
 impl LineViewMode {
-    /// Return true if the given index is visible in the chopped version of some line with a given length
-    /// The pedantic goal is to support range-based iteration where the start/end may not be at line boundaries.
-    /// If the part of a line that hits this index is not visible, we can filter the line out of the display.
-    /// I'm not sure this is useful.  :-\
-    pub fn valid_index(&self, index: usize, len: usize) -> bool {
-        match self {
-            LineViewMode::Clip{width, left} => index >= *left && index < left + width,
-            _ => index < len,
-        }
-    }
-
     // Test if this line may be displayed in multiple chunks (wrapped)
     pub fn is_chunked(&self) -> bool {
         matches!(self, LineViewMode::Chop{width: _} | LineViewMode::Clip{width: _, left: _})
@@ -41,8 +30,8 @@ impl LineViewMode {
     /// Return the end of the chunk we're on, given an arbitrary offset into the line
     pub fn chunk_end(&self, start: usize, end: usize) -> usize {
         match self {
-            LineViewMode::Chop{width} => (start + end).min(start + *width),
-            LineViewMode::Clip{width, left: _} => (start + end).min(start + *width),
+            LineViewMode::Chop{width} => end.min(start + *width),
+            LineViewMode::Clip{width, left: _} => end.min(start + *width),
             LineViewMode::WholeLine => end,
         }
     }

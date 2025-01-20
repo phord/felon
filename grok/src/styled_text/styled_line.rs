@@ -14,22 +14,12 @@ struct Phrase {
 /// The styles are stored in phrases, a sorted collection of start,style.
 /// Phrases are not allowed to overlap. When a phrase is inserted that overlaps an existing one,
 /// the existing one is clipped to fit around the new one.
+#[derive(Clone)]
 pub struct StyledLine {
     // FIXME: Make this a &str with proper lifetime checking
     pub line: String,
     phrases: Vec<Phrase>,
 }
-
-// TODO: In the future when GATs are stable, we can implement IntoIterator.  Until then, users will
-// just have to use self.phrases.iter() instead.
-//
-// impl IntoIterator for StyledLine<'a> {
-//     type Item<'a> = StyledContent<&'a str>;
-//     type IntoIter = std::vec::IntoIter<Self::Item>;
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.phrases.into_iter()
-//     }
-// }
 
 impl Phrase {
     fn new(start: usize, patt: PattColor) -> Self {
@@ -42,14 +32,18 @@ impl Phrase {
 
 const TAB_SIZE: usize = 8;
 
-#[allow(dead_code)]
-enum AnsiSequences {
-    Esc,    // prev was Esc
-    Csi,    // inside Control Sequence Introducer
-    Osc,    // inside Operating System Command
-    Dcs,    // inside Device Control String
-    None,   // not inside any sequence
+// https://stackoverflow.com/questions/51982999/slice-a-string-containing-unicode-chars
+pub fn utf8_slice(s: &str, start: usize, end: usize) -> Option<&str> {
+    let mut iter = s.char_indices()
+        .map(|(pos, _)| pos)
+        .chain(Some(s.len()))
+        .skip(start)
+        .peekable();
+    let start_pos = *iter.peek()?;
+    for _ in start..end { iter.next(); }
+    Some(&s[start_pos..*iter.peek()?])
 }
+
 
 impl StyledLine {
     pub fn new(line: &str, patt: PattColor) -> Self {
@@ -91,38 +85,25 @@ impl StyledLine {
         Self {line: out, phrases}
     }
 
-    // Remove ANSI escape sequences from a line of text.
-    #[allow(dead_code)]
-    fn sanitize_ansi(_line: &str) -> String {
-        todo!("Use the ansi_parser crate to pick out offending ANSI sequences and remove them");
-    }
-
-    // fn to_str(&self) -> &str {
-    //     for p in self.phrases {
-    //         // FIXME: Impl this; use pattern instead of style in Phrase
-    //         let style = to_style(p.style);
-    //         &line[p.start, p.end];
-    //         format!("{}" , style.apply(content))
-    //     }
-    // }
-
     pub fn to_string(&self, start: usize, width: usize) -> String {
         let end = self.line.len().min(start + width);
-        assert!(width > 0);
-        let pairs = self.phrases.windows(2);
-        pairs
+        self.phrases.windows(2)
             .map(|phrases| (phrases[0], phrases[1]))
             .filter(|(p, pnext)| p.start < end && pnext.start > start && p.start < pnext.start)
             .map(|(p, pnext)| {
                 match p.patt {
                     PattColor::None => {  // None: No patterns for whole line
-                        self.line[start..end].to_string()
+                        utf8_slice(&self.line, start, end).unwrap().to_string()
                     }
                     _ => {
                         let start = start.max(p.start);
                         let end = end.min(pnext.start);
-                        let reg = RegionColor {len: (end - start) as u16, style: p.patt};
-                        reg.to_str(&self.line[start..end])
+                        let reg = RegionColor {style: p.patt};
+                        if let Some(slice) = utf8_slice(&self.line, start, end) {
+                            reg.to_str(slice)
+                        } else {
+                            "".to_string()
+                        }
                     }
                 }
         })
@@ -221,7 +202,6 @@ pub enum PattColor {
 }
 /// Line section coloring
 pub struct RegionColor {
-    pub(crate) len: u16,
     pub(crate) style: PattColor,
 }
 
@@ -240,18 +220,15 @@ fn to_style(patt: PattColor) -> ContentStyle {
         PattColor::Error => style.with(Color::Yellow).on(RGB_BLACK),
         PattColor::Fail => style.with(Color::Red).on(Color::Blue).bold().italic(),
         PattColor::Info => style.with(Color::White).on(RGB_BLACK),
-        PattColor::NoCrumb => style.with(Color::White).on(RGB_BLACK).italic(),
+        PattColor::NoCrumb => style.with(Color::White).on(RGB_BLACK), // .italic(),
         PattColor::Module(c) => style.with(c).on(RGB_BLACK).bold(),
     }
 }
 
 impl RegionColor {
     pub(crate) fn to_str(&self, line: &str) -> String {
-        let len = cmp::min(self.len as usize, line.len());
-        let content = &line[..len];
         let style = to_style(self.style);
-
-        format!("{}" , style.apply(content))
+        format!("{}" , style.apply(line))
     }
 }
 

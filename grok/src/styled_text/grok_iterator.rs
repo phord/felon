@@ -2,14 +2,15 @@ use std::ops::{Bound, Range};
 
 use indexed_file::{IndexedLog, LineIndexerDataIterator, LogLine};
 
-use super::Stylist;
+use super::{styled_line::StyledLine, Stylist};
 
 
 
 /// Holds a logline and all of it's styling information before being chopped/wrapped/etc.
 /// Supports iterating across the line following a given Stylist's LineViewMode.
 struct SubLineHelper<'a> {
-    line: Option<LogLine>,
+    line: Option<StyledLine>,
+    offset: usize,
     index: usize,
     stylist: &'a Stylist,
 }
@@ -19,6 +20,7 @@ impl<'a> SubLineHelper<'a> {
     fn new(stylist: &'a Stylist) -> Self {
         Self {
             line: None,
+            offset: 0,
             index: 0,
             stylist,
         }
@@ -26,13 +28,18 @@ impl<'a> SubLineHelper<'a> {
 
     /// Accept a new line and position to begin iterating
     fn insert(&mut self, line: LogLine, offset: usize) {
-        let index = offset.saturating_sub(line.offset).min(line.line.len().saturating_sub(1));
-        if self.stylist.mode.valid_index(index, line.line.len()) {
-            self.line = Some(line);
-            self.index = self.stylist.mode.chunk_start(index);
-        } else {
-            self.line = None;
-        }
+        self.offset = line.offset;
+        let line = self.stylist.apply(&line.line);
+        let index = offset.saturating_sub(self.offset).min(line.line.len().saturating_sub(1));
+        self.index = self.stylist.mode.chunk_start(index);
+        self.line = Some(line);
+    }
+
+    // Copy an existing SubLineHelper but use a different index
+    fn from(&mut self, other: &Self, index: usize) {
+        self.line = other.line.clone();
+        self.offset = other.offset;
+        self.index = index;
     }
 
     fn empty(&self) -> bool {
@@ -42,7 +49,7 @@ impl<'a> SubLineHelper<'a> {
     // Get the range of the chunk we're on
     fn chunk_range(&self) -> Option<Range<usize>> {
         if let Some(line) = &self.line {
-            assert!(self.index < line.line.len());
+            assert!(self.index < line.line.len() || line.line.is_empty());
             let end = self.stylist.mode.chunk_end(self.index, line.line.len());
             Some(self.index..end)
         } else {
@@ -82,12 +89,9 @@ impl<'a> SubLineHelper<'a> {
     }
 
     fn render(&self, range: &Range<usize>) -> LogLine {
-        // TODO: construct line with styles
         let line = self.line.as_ref().unwrap();
-        let start = range.start;
-        let end = range.end.min(line.line.len());
-        let rline = line.line[start..end].to_string();
-        LogLine::new(rline, line.offset + start)
+        let rline = line.to_string(range.start, range.end - range.start);
+        LogLine::new(rline, self.offset + range.start)
     }
 }
 
@@ -127,10 +131,10 @@ impl<LOG: IndexedLog> DoubleEndedIterator for GrokLineIterator<'_, LOG> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.rev.empty() {
-            let mut prev = self.inner.next_back();
-            if prev.is_none() { prev = self.fwd.line.clone(); }
-            if let Some(prev) = prev {
+            if let Some(prev) = self.inner.next_back() {
                 self.rev.insert(prev, self.range.end);
+            } else {
+                self.rev.from(&self.fwd, self.range.end);
             }
         }
         if let Some(line) = self.rev.next_back() {
@@ -149,10 +153,10 @@ impl<LOG: IndexedLog> Iterator for GrokLineIterator<'_, LOG> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.fwd.empty() {
-            let mut next = self.inner.next();
-            if next.is_none() { next = self.rev.line.clone(); }
-            if let Some(next) = next {
+            if let Some(next) = self.inner.next() {
                 self.fwd.insert(next, self.range.start);
+            } else {
+                self.fwd.from(&self.rev, self.range.start);
             }
         }
         if let Some(line) = self.fwd.next() {
