@@ -28,6 +28,10 @@ impl Stylist {
         }
     }
 
+    pub fn add_style(&mut self, regex: Regex, pattern: PattColor) {
+        self.styles.push(Style{matcher: regex, pattern});
+    }
+
     pub fn iter_range<'a, R, T>(&'a self, log: &'a mut T, range: &'a R) -> GrokLineIterator<'a, T>
     where R: std::ops::RangeBounds<usize>, T: IndexedLog
     {
@@ -45,7 +49,7 @@ impl Stylist {
                 let start = m.start();
                 let end = m.end();
                 // TODO: Custom actions / colors based on style rules
-                styled.push(start, end, PattColor::Inverse);
+                styled.push(start, end, style.pattern);
             }
         }
 
@@ -53,18 +57,17 @@ impl Stylist {
     }
 }
 
-/// Transformation rules to apply to a line
+/// Transformation rules to apply to a named match
 /// - Matcher (regex, string, timestamp, position?)
 /// - Action (color, replace, delete, insert, etc.)
 /// - Categorize (pid, module, timestamp, etc.)
 pub enum StyleAction {
-    Color(Color),
-    Replace(String),
-    Categorize,
+    Basic,              // Match categories and follow user config
+    Sanitize,           // Sanitize unprintable control characters a-la less
+    Replace(String),    // Replace string with another string
 }
 
 pub struct Style {
     pub(crate) matcher: Regex,
-    pub(crate) action: String,
-    pub(crate) category: String,
+    pub(crate) pattern: PattColor,
 }

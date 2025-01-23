@@ -53,9 +53,13 @@ impl Document {
         let filename = config.filename.first().expect("No filename specified").clone();
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
+        // TODO: Add default or config styles here
+        let mut stylist = Stylist::new(LineViewMode::WholeLine, PattColor::NoCrumb);
+        stylist.add_style(Regex::new(r"[0-9A-F]{12}").unwrap(), PattColor::Number(Color::Blue));
+
         Self {
             log: LogStack::new(log),
-            stylist: Stylist::new(LineViewMode::WholeLine, PattColor::NoCrumb),
+            stylist,
         }
     }
 
