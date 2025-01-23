@@ -54,8 +54,7 @@ impl Document {
         let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
 
         // TODO: Add default or config styles here
-        let mut stylist = Stylist::new(LineViewMode::WholeLine, PattColor::NoCrumb);
-        stylist.add_style(Regex::new(r"[0-9A-F]{12}").unwrap(), PattColor::Number(Color::Blue));
+        let stylist = Stylist::new(LineViewMode::WholeLine, PattColor::NoCrumb);
 
         Self {
             log: LogStack::new(log),

@@ -11,6 +11,7 @@ mod sub_line_iterator_helper {
     use grok::styled_text::line_view_mode::LineViewMode;
     use indexed_file::{IndexedLog, Log};
     use indexed_file::files::new_mock_file;
+    use lazy_static::lazy_static;
 
     pub(crate) struct Harness {
         pub(crate) patt: String,
@@ -68,17 +69,22 @@ mod sub_line_iterator_helper {
         }
     }
 
-    static STYLIST_WHOLE: Stylist = Stylist {mode: LineViewMode::WholeLine, patt: PattColor::None, styles: vec![]};
+    pub(crate) fn stylist_whole() -> &'static Stylist {
+        lazy_static! {
+            static ref STYLIST_WHOLE: Stylist = Stylist::new(LineViewMode::WholeLine, PattColor::None);
+        }
+        &STYLIST_WHOLE
+    }
 
     pub(crate) fn new<LOG: IndexedLog>(log: &mut LOG) -> GrokLineIterator<LOG> {
-        GrokLineIterator::new(log, &STYLIST_WHOLE)
+        GrokLineIterator::new(log, stylist_whole())
     }
 
     pub(crate) fn new_from<'a, LOG: IndexedLog, R>(log: &'a mut LOG, offset: &'a R) -> GrokLineIterator<'a, LOG>
     where
         R: std::ops::RangeBounds<usize>
     {
-        GrokLineIterator::range(log, &STYLIST_WHOLE, offset)
+        GrokLineIterator::range(log, stylist_whole(), offset)
     }
 }
 
@@ -486,17 +492,23 @@ mod sub_line_wrap_tests {
     use grok::styled_text::stylist::Stylist;
     use grok::styled_text::line_view_mode::LineViewMode;
     use indexed_file::{IndexedLog, Log};
+    use lazy_static::lazy_static;
 
-    static STYLIST_WRAP: Stylist = Stylist {mode: LineViewMode::Chop { width: 10 }, patt: PattColor::None, styles: vec![]};
+    pub(crate) fn stylist_wrap() -> &'static Stylist {
+        lazy_static! {
+            static ref STYLIST_WRAP: Stylist = Stylist::new(LineViewMode::WholeLine, PattColor::None);
+        }
+        &STYLIST_WRAP
+    }
 
     fn wrapped_new(log: &mut Log, _width: usize) -> GrokLineIterator<Log> {
-        GrokLineIterator::new(log, &STYLIST_WRAP)
+        GrokLineIterator::new(log, stylist_wrap())
     }
 
     fn wrapped_new_range<'a, R>(log: &'a mut Log, _width: usize, offset: &'a R) -> GrokLineIterator<'a, Log>
     where
         R: std::ops::RangeBounds<usize> {
-        GrokLineIterator::range(log, &STYLIST_WRAP, offset)
+        GrokLineIterator::range(log, stylist_wrap(), offset)
     }
 
     #[test]

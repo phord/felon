@@ -5,7 +5,8 @@
 // - Text modification / snipping
 
 
-use crossterm::style::Color;
+use std::collections::HashMap;
+
 use indexed_file::IndexedLog;
 use regex::Regex;
 
@@ -16,20 +17,75 @@ pub struct Stylist {
     // Map of regex -> color pattern
     // TODO: Use PattColor::Plain for uncolored text;  PattColor::NoCrumb for colored output.
     pub patt: PattColor,
-    pub styles: Vec<Style>,
+    pub matchers: Vec<Style>,
+    pub named_styles: HashMap<String, PattColor>,
 }
 
 impl Stylist {
     pub fn new(mode: LineViewMode, patt: PattColor) -> Self {
-        Self {
+        let mut stylist = Self {
             mode,
             patt,
-            styles: Vec::new(),
-        }
+            matchers: Vec::new(),
+            named_styles: HashMap::new(),
+        };
+
+        stylist.hack_sample_matchers();
+
+        stylist
     }
 
-    pub fn add_style(&mut self, regex: Regex, pattern: PattColor) {
-        self.styles.push(Style{matcher: regex, pattern});
+    pub fn hack_sample_matchers(&mut self) {
+        // stylist.add_match(Regex::new(r"[0-9A-F]{12}(?P<red>[0-9A-F]*)").unwrap(), PattColor::Semantic);
+        // stylist.add_style("red", PattColor::Number(Color::Red));
+
+        let core_log = r"(?x)
+            (?P<timestamp>
+                ^(...\ [\ 1-3]\d\ [0-2]\d:[0-5]\d:\d{2}\.\d{3})    # date & time
+            )
+            \ (?P<pid>
+                ([A-F0-9]{12})\                                    # PID
+            )
+            (?P<crumb>
+                [A-Z]                                              # crumb
+            )
+            \ +
+            (?P<module>
+                ([A-Za-z0-9_.]+)\                                  # module
+            )";
+
+        let ids = r"(?x)(?P<submodule>[a-z_.]+::[a-z_.]+ | [a-z_.]+[_.][a-z_.]+ | (?:\[([a-z0-9_.]+)\]))";
+
+        let numbers = r"(?x)
+                (?P<number>
+                      \b0x[[:xdigit:]]+\b                       # 0xabcdef...
+                    | \b[0-9A-F]{16}\b                          # ABCDEF1234567890  <-- 16 nibbles
+                    | \b(?:[[:digit:]]+\.)*[[:digit:]]+         # integers, decimals, not part of any word, or with a suffix
+                )
+            ";
+
+        self.add_match(Regex::new(core_log).unwrap(), PattColor::None);
+        self.add_style("timestamp", PattColor::Timestamp);
+        self.add_style("pid", PattColor::Semantic);
+        // self.add_style("crumb", PattColor::Inverse);
+        self.add_style("module", PattColor::Semantic);
+        self.add_style("submodule", PattColor::Semantic);
+        self.add_style("number", PattColor::Semantic);
+
+        self.add_match(Regex::new(ids).unwrap(), PattColor::None);
+        self.add_match(Regex::new(numbers).unwrap(), PattColor::None);
+
+        self.add_match(Regex::new(r"(?P<segio>segio)").unwrap(), PattColor::Inverse);
+
+        // FIXME: Prevent matches overlapping?  Or restrict highlights to a region, e.g. the "body" instead of the timestamp
+    }
+
+    pub fn add_match(&mut self, regex: Regex, pattern: PattColor) {
+        self.matchers.push(Style{matcher: regex, pattern});
+    }
+
+    pub fn add_style(&mut self, name: &str, pattern: PattColor) {
+        self.named_styles.insert(name.to_string(), pattern);
     }
 
     pub fn iter_range<'a, R, T>(&'a self, log: &'a mut T, range: &'a R) -> GrokLineIterator<'a, T>
@@ -38,18 +94,38 @@ impl Stylist {
         GrokLineIterator::range(log, self, range)
     }
 
+
+    /// Apply each regex in self.styles and perform related actions / styling
+    ///
+    /// Given a pattern like "(?P<color>red|blue|green) fish", and a string like "One fish, two fish, red fish, blue fish",
+    /// we will have four matches:
+    /// 1. "red fish"
+    /// 2. "color": "red"
+    /// 3. "blue fish"
+    /// 4. "color": "blue"
+    ///
+    /// Each of these may induce a specific style.  So we iterate over them, in the order show above. That is, we visit
+    /// each match and apply its styles, then we visit each named capture and apply its styles.
+    /// Expressions are defined with the `match` command, and groups are defined with the style command.
+    ///
+    ///    match "(?P<color>red|blue|green) fish" Green,Italic
+    ///    style "color" Semantic,Bold
     pub fn apply(&self, line: &str) -> StyledLine {
         let mut styled = StyledLine::sanitize_basic(line, self.patt);
 
         // TODO: replace all NoCrumb styles with a Crumb style if one is later matched
 
-        for style in &self.styles {
-            for m in style.matcher.captures_iter(line) {
-                let m = m.get(0).unwrap();
-                let start = m.start();
-                let end = m.end();
-                // TODO: Custom actions / colors based on style rules
-                styled.push(start, end, style.pattern);
+        for style in &self.matchers {
+            for capture in style.matcher.captures_iter(line) {
+                let matched = capture.get(0).unwrap();
+                styled.apply(matched.as_str(), matched.range(), style.pattern);
+                for group_name in style.matcher.capture_names().filter(|n| n.is_some()) {
+                    if let Some(group) = capture.name(group_name.unwrap()) {
+                        if let Some(patt) = self.named_styles.get(group_name.unwrap()) {
+                            styled.apply(group.as_str(), group.range(), *patt);
+                        }
+                    }
+                }
             }
         }
 

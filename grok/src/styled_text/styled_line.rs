@@ -1,6 +1,7 @@
 use crossterm::style::{Stylize, ContentStyle};
+use fnv::FnvHasher;
 use itertools::Itertools;
-use std::cmp;
+use std::{hash::Hasher, ops::Range};
 use crossterm::style::Color;
 
 /// Defines a style for a portion of a line.  Represents the style and the position within the line.
@@ -54,7 +55,17 @@ impl StyledLine {
         }
     }
 
+    pub fn apply(&mut self, match_string: &str, range: Range<usize>, patt: PattColor) {
+        let pattern = match patt {
+            PattColor::None => return,  // No pattern to apply
+            PattColor::Semantic =>  PattColor::Number(Self::hash_color(match_string)),
+            _ => patt,
+        };
+        self.push(range.start, range.end, pattern);
+    }
+
     pub fn sanitize_basic(line: &str, patt: PattColor) -> Self {
+        // TODO Replace this with a Stylist::Replace action
         let mut out = String::with_capacity(line.len());
         let mut phrases = vec![Phrase::new(0, patt)];
         for ch in line.chars() {
@@ -110,9 +121,23 @@ impl StyledLine {
         .join("")
     }
 
+    fn hash_color(text: &str) -> Color {
+        let mut hasher = FnvHasher::default();
+        hasher.write(text.as_bytes());
+        let hash = hasher.finish();
+
+        let base = 0x80_u8;
+        let red = (hash & 0xFF) as u8 | base;
+        let green = ((hash >> 8) & 0xFF) as u8 | base;
+        let blue = ((hash >> 16) & 0xFF) as u8 | base;
+
+        Color::Rgb {r: red, g: green, b: blue}
+    }
+
     // Inserts a new styled region into the line style planner.
     // If the new phrase overlaps with existing phrases, it clips the existing ones.
     pub fn push(&mut self, start: usize, end: usize, patt: PattColor) {
+        if end == start { return }
         assert!(end > start);
         let phrase = Phrase::new(start, patt);
 
@@ -189,6 +214,7 @@ pub enum PattColor {
 
     Plain,      // Use default terminal colors
     Normal,
+    Semantic,
     Highlight,
     Inverse,
     Timestamp,
@@ -212,6 +238,7 @@ fn to_style(patt: PattColor) -> ContentStyle {
         PattColor::None => unreachable!("Tried to style with None pattern"),
         PattColor::Plain => style,
         PattColor::Normal => style.with(Color::Green).on(RGB_BLACK),
+        PattColor::Semantic => panic!("Semantic colors should be pre-processed"),
         PattColor::Highlight => style.with(Color::Yellow).on(Color::Blue).bold(),
         PattColor::Inverse => style.negative(),
         PattColor::Timestamp => style.with(Color::Green).on(RGB_BLACK),
