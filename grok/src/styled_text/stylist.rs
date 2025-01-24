@@ -105,7 +105,11 @@ impl Stylist {
     /// 4. "color": "blue"
     ///
     /// Each of these may induce a specific style.  So we iterate over them, in the order show above. That is, we visit
-    /// each match and apply its styles, then we visit each named capture and apply its styles.
+    /// each match and apply its styles, then we visit each named capture and apply its styles, unless the named capture
+    /// overlaps with a previous named capture.  (First named capture to match wins.)
+    /// Note: A direct style associated with a capture group will always be applied, regardless of whether it overlaps.
+    ///       To avoid this, use a group-style associated with the capture name which is separate from the capture itself.
+    ///
     /// Expressions are defined with the `match` command, and groups are defined with the style command.
     ///
     ///    match "(?P<color>red|blue|green) fish" Green,Italic
@@ -114,15 +118,20 @@ impl Stylist {
         let mut styled = StyledLine::sanitize_basic(line, self.patt);
 
         // TODO: replace all NoCrumb styles with a Crumb style if one is later matched
+        let mut named_ranges = Vec::new();
 
         for style in &self.matchers {
             for capture in style.matcher.captures_iter(line) {
                 let matched = capture.get(0).unwrap();
                 styled.apply(matched.as_str(), matched.range(), style.pattern);
-                for group_name in style.matcher.capture_names().filter(|n| n.is_some()) {
-                    if let Some(group) = capture.name(group_name.unwrap()) {
-                        if let Some(patt) = self.named_styles.get(group_name.unwrap()) {
-                            styled.apply(group.as_str(), group.range(), *patt);
+                for group_name in style.matcher.capture_names().flatten() {
+                    if let Some(group) = capture.name(group_name) {
+                        if let Some(patt) = self.named_styles.get(group_name) {
+                            let range = group.range();
+                            if !itertools::any(&named_ranges, |r: &std::ops::Range<usize>| r.contains(&range.start) || range.contains(&r.start)) {
+                                styled.apply(group.as_str(), group.range(), *patt);
+                                named_ranges.push(group.range());
+                            }
                         }
                     }
                 }
