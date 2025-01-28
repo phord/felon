@@ -153,8 +153,8 @@ impl LogFilter {
                     GetLine::Miss(p) => {
                         // Resolved gap with no matches; keep searching unless we hit the start of file
                         if next == p {
-                            // Start of file?
-                            assert!(next.least_offset() == 0);
+                            // Start of file?  No more points before us
+                            assert!(next.advance_back(&self.filter.index).is_invalid());
                             break;
                         }
                         next = p;
