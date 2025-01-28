@@ -40,19 +40,11 @@ impl Stylist {
         // stylist.add_style("red", PattColor::Number(Color::Red));
 
         let core_log = r"(?x)
-            (?P<timestamp>
-                ^(...\ [\ 1-3]\d\ [0-2]\d:[0-5]\d:\d{2}\.\d{3})    # date & time
-            )
-            \ (?P<pid>
-                ([A-F0-9]{12})\                                    # PID
-            )
-            (?P<crumb>
-                [A-Z]                                              # crumb
-            )
-            \ +
-            (?P<module>
-                ([A-Za-z0-9_.]+)\                                  # module
-            )";
+            (?P<timestamp>   ^(...\ [\ 1-3]\d\ [0-2]\d:[0-5]\d:\d{2}\.\d{3})\ )    # date & time
+            (?P<pid>          ([A-F0-9]{12})\ )                                    # PID
+            (?P<crumb>        [A-Z]\ +)                                            # crumb
+            (?P<module>       ([A-Za-z0-9_.]+)\ )                                  # module
+            ";
 
         let ids = r"(?x)(?P<submodule>[a-z_.]+::[a-z_.]+ | [a-z_.]+[_.][a-z_.]+ | (?:\[([a-z0-9_.]+)\]))";
 
@@ -60,6 +52,7 @@ impl Stylist {
                 (?P<number>
                       \b0x[[:xdigit:]]+\b                       # 0xabcdef...
                     | \b[0-9A-F]{16}\b                          # ABCDEF1234567890  <-- 16 nibbles
+                    | \b[[:xdigit:]]{8}(?:-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}\b # UUID style
                     | \b(?:[[:digit:]]+\.)*[[:digit:]]+         # integers, decimals, not part of any word, or with a suffix
                 )
             ";
