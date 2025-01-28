@@ -226,6 +226,7 @@ pub enum PattColor {
     NoCrumb,
     Module(Color),
 }
+
 /// Line section coloring
 pub struct RegionColor {
     pub(crate) style: PattColor,
@@ -261,6 +262,10 @@ impl RegionColor {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+
+    use crossterm::{style::{Attribute, Print, SetAttribute}, QueueableCommand};
+
     use super::*;
 
     #[test]
@@ -271,6 +276,40 @@ mod tests {
         assert!(line.phrases[1].start == 5);
     }
 
+    #[test]
+    fn crossterm_style_test() {
+        // use crossterm::style::Stylize;
+
+        crossterm::terminal::enable_raw_mode().expect("can enable raw mode");
+
+        // println!("{}", "Blue text".blue());
+        // println!("{}", "Negative text".negative());
+
+        let mut stdout = std::io::stdout();
+
+        stdout.queue(Print("\r\n".to_string())).expect("can queue");  // Clear line
+        stdout.queue(SetAttribute(Attribute::Undercurled)).expect("can queue");
+        // stdout.queue(SetAttribute(Attribute::CrossedOut)).expect("can queue");
+        // stdout.queue(SetAttribute(Attribute::CrossedOut)).expect("can queue");
+        // stdout.queue(SetAttribute(Attribute::Underdashed)).expect("can queue");
+        // stdout.queue(SetAttribute(Attribute::Underdotted)).expect("can queue");
+        stdout.queue(Print("REVERSED TEXT")).expect("can queue");
+        stdout.queue(SetAttribute(Attribute::Reset)).expect("can queue");
+        stdout.queue(Print("\r\n".to_string())).expect("can queue");
+        stdout.flush().expect("can flush");
+
+        // Don't forget to cleanup
+        crossterm::terminal::disable_raw_mode().expect("can disable raw mode");
+
+        println!("{}", "Bold text".bold());
+        println!("{}", "Underlined text".underlined());
+        println!("{}", "Underlined text fail".underline(Color::Red)); // .attribute(Attribute::Underdashed)
+
+        // Sleep a bit to see the output
+        // std::thread::sleep(std::time::Duration::from_secs(1));
+
+        // panic!("Forcing output");
+    }
 
     #[test]
     fn test_styledline_overlap() {
