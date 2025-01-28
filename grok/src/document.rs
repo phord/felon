@@ -30,21 +30,19 @@ impl Document {
     }
 
     pub fn search_next(&mut self, line: usize, repeat: usize) -> Option<usize> {
-        let mut pos = self.log.seek(line);
-        for _ in 0..repeat.max(1) {
-            let p= self.log.search_next(&pos);
-            pos = p;
-        }
-        pos.offset()
+        self.log.search_next(repeat, line)
     }
 
     pub fn search_back(&mut self, line: usize, repeat: usize) -> Option<usize> {
-        let mut pos = self.log.seek(line);
-        for _ in 0..repeat.max(1) {
-            let p= self.log.search_next_back(&pos);
-            pos = p;
-        }
-        pos.offset()
+        self.log.search_next_back(repeat, line)
+    }
+
+    pub fn run(&mut self, timeout: u64) -> Option<usize> {
+        self.log.run_pending(timeout)
+    }
+
+    pub fn has_pending(&self) -> bool {
+        self.log.has_pending()
     }
 }
 
@@ -88,15 +86,6 @@ impl Document {
     where Self: Sized
     {
         self.log.info()
-    }
-
-    /// Index more of the file in the background.
-    /// Returns true if more lines were indexed.
-    pub fn fill_gaps(&mut self, timeout: u64) -> bool {
-        // TODO: remember position so we can resume from it
-        let pos = self.log.seek(0);
-        let pos = self.log.with_timeout(timeout as usize).resolve_gaps(&pos);
-        !pos.is_invalid()
     }
 
     // FIXME: Move to Stylist

@@ -39,8 +39,14 @@ impl Viewer {
     pub fn run(&mut self) -> crossterm::Result<bool> {
 
         let event_timeout =
-            if self.fill_timeout > 0 && self.doc.fill_gaps(self.fill_timeout.min(40)) {
-                0
+            if self.doc.has_pending()  {
+                if let Some(offset) = self.doc.run(self.fill_timeout.min(40)) {
+                    // FIXME: Update status line with Searching... / Not found.
+                    self.display.goto(offset);
+                    return Ok(true);
+                } else {
+                    0
+                }
             } else {
                 500
             };

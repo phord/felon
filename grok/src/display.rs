@@ -268,6 +268,11 @@ impl Display {
             }
     }
 
+    /// Direct jump to some location because a previous op completed
+    pub fn goto(&mut self, offset: usize) {
+        self.scroll = ScrollAction::GotoOffset(offset);
+    }
+
     pub fn handle_command(&mut self, cmd: UserCommand) {
         // FIXME: commands should be queued so we don't lose any. For example, search prompt needs us to refresh and search-next. So it
         //        calls us twice in a row.  I suppose we also need a way to cancel queued commands, then.  ^C? And some way to recognize

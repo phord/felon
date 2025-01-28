@@ -88,8 +88,8 @@ pub trait IndexedLog {
     where Self: Sized ;
 
     // Autowrap
-    fn with_timeout(&mut self, ms: usize) -> TimeoutWrapper<Self> where Self: std::marker::Sized {
-        TimeoutWrapper::new(self, ms)
+    fn with_timeout(&mut self, ms: u64) -> TimeoutWrapper<Self> where Self: std::marker::Sized {
+        TimeoutWrapper::new(self, ms as usize)
     }
 
     // Iterators

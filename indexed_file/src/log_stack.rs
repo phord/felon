@@ -1,6 +1,35 @@
 use regex::Regex;
 
-use crate::{log_filter::LogFilter, index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, IndexedLog, Log};
+use crate::{index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine, TimeoutWrapper}, log_filter::LogFilter, IndexedLog, Log};
+
+#[derive(Clone, Debug)]
+enum PendingOp {
+    //          count, offset
+    SeekForward(usize, Position),
+    SeekBackward(usize, Position),
+    FillGaps(Position),
+    None,
+}
+
+
+impl PendingOp {
+    fn seek_fwd_rev(&mut self, log: &mut LogFilter, src: &mut TimeoutWrapper<'_, Log>, pos: Position) -> Position {
+        match self {
+            PendingOp::SeekForward(..) => log.find_next(src, &pos).into_pos(),
+            PendingOp::SeekBackward(..) => log.find_next_back(src, &pos).into_pos(),
+            _ => panic!("Invalid pending op: {:?} for {:?}", self, pos),
+        }
+    }
+
+    fn update(&mut self, count: usize, pos: Position) -> Self {
+        match self {
+            PendingOp::SeekForward(..) => PendingOp::SeekForward(count, pos),
+            PendingOp::SeekBackward(..) => PendingOp::SeekBackward(count, pos),
+            _ => panic!("Invalid pending op: {:?} for {:?}", self, pos),
+        }
+    }
+}
+
 
 // TODO: Move this into Grok?  It implements some very grok-specific features.
 
@@ -13,6 +42,7 @@ pub struct LogStack {
     source: Log,
     search: Option<LogFilter>,
     filter: Option<LogFilter>,
+    pending: PendingOp,
 }
 
 impl  LogStack {
@@ -21,6 +51,7 @@ impl  LogStack {
             source: log,
             search: None,
             filter: None,
+            pending: PendingOp::FillGaps(Position::invalid()),
         }
     }
 
@@ -33,7 +64,76 @@ impl  LogStack {
         } else {
             self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
         }
+        self.kick_pending();
         Ok(())
+    }
+
+    pub fn has_pending(&self) -> bool {
+        !matches!(self.pending, PendingOp::None)
+    }
+
+    fn do_search(&mut self, timeout: u64, count: usize, pos: Position) -> Option<usize> {
+        if let Some(ref mut search) = &mut self.search {
+            let src = &mut self.source.with_timeout(timeout);
+            let mut count = count;
+            let mut pos = pos;
+            loop {
+                // FIXME: Filter results against self.filter
+                pos = self.pending.seek_fwd_rev(search, src, pos);
+                if src.timed_out() {
+                    break;
+                }
+                count = count.saturating_sub(1);
+                if count == 0 {
+                    break;
+                }
+            }
+            if src.timed_out() {
+                // Didn't find it yet
+                self.pending = self.pending.update(count, pos);
+                None
+            } else {
+                // Found it
+                self.pending = PendingOp::None;
+                pos.offset()
+            }
+        } else {
+            // No search term; nothing to do here
+            self.pending = PendingOp::None;
+            None
+        }
+    }
+
+    fn do_fill_gaps(&mut self, timeout: u64, pos: Position) -> PendingOp {
+        let src = &mut self.with_timeout(timeout);
+        let pos = src.resolve_gaps(&pos);
+        if src.timed_out() {
+            PendingOp::FillGaps(pos)
+        } else {
+            PendingOp::None
+        }
+    }
+
+    pub fn run_pending(&mut self, timeout: u64) -> Option<usize> {
+        let result = match self.pending.clone() {
+            PendingOp::SeekForward(count, pos) |
+            PendingOp::SeekBackward(count, pos) =>
+                self.do_search(timeout, count, pos),
+
+            PendingOp::FillGaps(pos) => {
+                self.pending = self.do_fill_gaps(timeout, pos);
+                None
+            },
+            PendingOp::None => None,
+        };
+        self.kick_pending();
+        result
+    }
+
+    fn kick_pending(&mut self) {
+        if matches!(self.pending, PendingOp::None) && self.has_gaps() {
+            self.pending = PendingOp::FillGaps(Position::invalid());
+        }
     }
 
     /// Set a new regex search expression
@@ -43,26 +143,21 @@ impl  LogStack {
             self.search = None;
         } else {
             self.search = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
+            self.kick_pending();
         }
         Ok(())
     }
 
-    pub fn search_next(&mut self, pos: &Position) -> Position {
-        if let Some(ref mut search) = &mut self.search {
-            // FIXME: Filter results against self.filter
-            search.find_next(&mut self.source, pos).into_pos()
-        } else {
-            Position::invalid()
-        }
+    pub fn search_next(&mut self, count: usize, offset: usize) -> Option<usize> {
+        self.pending = PendingOp::SeekForward(count, Position::from(offset));
+        // return a result if we have one within 10ms.  Otherwise, let caller run_pending on their own.
+        self.run_pending(10)
     }
 
-    pub fn search_next_back(&mut self, pos: &Position) -> Position {
-        if let Some(ref mut search) = &mut self.search {
-            // FIXME: Filter results against self.filter
-            search.find_next_back(&mut self.source, pos).into_pos()
-        } else {
-            Position::invalid()
-        }
+    pub fn search_next_back(&mut self, count: usize, offset: usize) -> Option<usize> {
+        self.pending = PendingOp::SeekBackward(count, Position::from(offset));
+        // return a result if we have one within 10ms.  Otherwise, let caller run_pending on their own.
+        self.run_pending(10)
     }
 
 }
@@ -104,20 +199,25 @@ impl IndexedLog for LogStack {
     }
 
     fn resolve_gaps(&mut self, pos: &Position) -> Position {
+        let pos = if pos.is_invalid() {
+            self.seek(0)
+        } else {
+            pos.clone()
+        };
         if let Some(ref mut filter) = &mut self.filter {
             if filter.has_gaps() {
-                return filter.resolve_gaps(&mut self.source, pos)
+                return filter.resolve_gaps(&mut self.source, &pos)
             }
         }
 
         if let Some(ref mut search) = &mut self.search {
             if search.has_gaps() {
-                return search.resolve_gaps(&mut self.source, pos)
+                return search.resolve_gaps(&mut self.source, &pos)
             }
         }
 
         if self.source.has_gaps() {
-            return self.source.resolve_gaps(pos)
+            return self.source.resolve_gaps(&pos)
         }
 
         Position::invalid()
