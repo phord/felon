@@ -22,6 +22,9 @@ impl Document {
     }
 
     pub fn set_search(&mut self, search: &str) -> Result<(), regex::Error> {
+        // TODO: Remove old search patter from stylist
+        self.stylist.add_match(Regex::new(search)?, PattColor::Inverse);
+        // TODO: force viewer to refresh page
         self.log.search_regex(search)
     }
 

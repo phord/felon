@@ -68,7 +68,7 @@ impl Stylist {
         self.add_match(Regex::new(ids).unwrap(), PattColor::None);
         self.add_match(Regex::new(numbers).unwrap(), PattColor::None);
 
-        self.add_match(Regex::new(r"(?P<segio>segio)").unwrap(), PattColor::Inverse);
+        // self.add_match(Regex::new(r"(?P<segio>segio)").unwrap(), PattColor::Inverse);
 
         // FIXME: Prevent matches overlapping?  Or restrict highlights to a region, e.g. the "body" instead of the timestamp
     }
@@ -143,6 +143,12 @@ pub enum StyleAction {
     Basic,              // Match categories and follow user config
     Sanitize,           // Sanitize unprintable control characters a-la less
     Replace(String),    // Replace string with another string
+}
+
+pub enum StyleSource {
+    Config,
+    Interactive,
+    Automatic,
 }
 
 pub struct Style {
