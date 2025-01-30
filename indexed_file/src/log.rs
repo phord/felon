@@ -123,6 +123,11 @@ impl IndexedLog for Log {
         self.file.timed_out()
     }
 
+    /// Determine if the current operation has timed out
+    fn check_timeout(&mut self) -> bool {
+        self.file.check_timeout()
+    }
+
     fn resolve_gaps(&mut self, pos: &Position) -> Position {
         self.file.resolve_gaps(pos)
     }

@@ -109,6 +109,11 @@ impl<LOG: IndexedLog> IndexedLog for TimeoutWrapper<'_, LOG> {
         self.inner.timed_out()
     }
 
+    /// Determine if the current operation has timed out
+    fn check_timeout(&mut self) -> bool {
+        self.inner.check_timeout()
+    }
+
     fn resolve_gaps(&mut self, pos: &Position) -> Position {
         self.inner.resolve_gaps(pos)
     }

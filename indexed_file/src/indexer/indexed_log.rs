@@ -76,6 +76,9 @@ pub trait IndexedLog {
     /// Determine if previous operation exited due to timeout
     fn timed_out(&mut self) -> bool;
 
+    /// Determine if the current operation has timed out
+    fn check_timeout(&mut self) -> bool;
+
     /// Length of the log in total bytes
     fn len(&self) -> usize;
 

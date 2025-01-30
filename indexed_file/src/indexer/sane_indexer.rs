@@ -47,17 +47,13 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         }
     }
 
-    fn timed_out(&mut self) -> bool {
-        self.timeout.is_timed_out()
-    }
-
     /// read and memoize a line containing a given offset from a BufRead
     /// Returns Hit(found_line), Miss(EOF), or Timeout(pos)
     /// FIXME: return errors from read_line
     fn get_line_memo(&mut self, pos: &Position) -> GetLine {
         // Resolve position to a target offset to read in the file
         let offset = pos.least_offset();
-        if self.timed_out() {
+        if self.check_timeout() {
             GetLine::Timeout(pos.clone())
         } else if offset >= self.len() {
             GetLine::Miss(Position::invalid())
@@ -182,6 +178,12 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     // reports if the current operation is timed out
     fn timed_out(&mut self) -> bool {
         self.timeout.timed_out() || self.timeout.prev_timed_out()
+    }
+
+    // check for timeout and latch the result
+    // Returns true one time, when the timeout is first detected.  Thereafter returns false.
+    fn check_timeout(&mut self) -> bool {
+        self.timeout.is_timed_out()
     }
 
     /// Read the line starting from offset to EOL

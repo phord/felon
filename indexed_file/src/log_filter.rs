@@ -24,6 +24,9 @@ impl LogFilter {
         let mut next = next.clone();
 
         loop {
+            if log.check_timeout() {
+                return GetLine::Timeout(next)
+            }
             let get = log.next_back(&self.inner_pos);
             if let GetLine::Hit(pos, line) = get {
                 self.inner_pos = log.advance_back(&pos);
@@ -57,6 +60,9 @@ impl LogFilter {
         }
 
         while next.is_unmapped() {
+            if log.check_timeout() {
+                return GetLine::Timeout(next)
+            }
             let gap = next.region();
             let get = log.next(&self.inner_pos);
             if let GetLine::Hit(pos, line) = get {

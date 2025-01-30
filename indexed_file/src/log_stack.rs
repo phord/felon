@@ -231,6 +231,10 @@ impl IndexedLog for LogStack {
         self.source.timed_out()
     }
 
+    fn check_timeout(&mut self) -> bool {
+        self.source.check_timeout()
+    }
+
     fn len(&self) -> usize {
         self.source.len()
     }
