@@ -36,6 +36,11 @@ impl IndexStats {
             ..Self::default()
         }
     }
+
+    pub fn reset(&mut self) {
+        self.bytes_indexed = 0;
+        self.lines_indexed = 0;
+    }
 }
 
 pub trait IndexedLog {

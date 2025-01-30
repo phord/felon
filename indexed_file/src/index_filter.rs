@@ -72,6 +72,10 @@ impl IndexFilter {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.index.reset()
+    }
+
     #[inline]
     fn is_match(&self, line: &str) -> bool {
         is_match_type(line, &self.f) ^ (!self.include)

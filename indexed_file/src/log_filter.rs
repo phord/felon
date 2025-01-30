@@ -16,9 +16,13 @@ impl LogFilter {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.filter.reset();
+    }
+
     /// Find the previous matching line in an unmapped region. Uses inner_pos to track position in log.
     /// Returns the found line and the next-back position from it.
-    fn resolve_location_next_back<LOG: IndexedLog>(&mut self, log: &mut LOG, next: &Position) -> GetLine {
+    fn resolve_location_next_back<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, next: &Position) -> GetLine {
         assert!(next.is_unmapped());
         let gap = next.region();
         let mut next = next.clone();
@@ -49,7 +53,7 @@ impl LogFilter {
     // Search an unmapped region for the next line that matches our filter.
     // Uses inner_pos to track position in inner log.
     // Returns the found line and its position.
-    fn resolve_location_next<LOG: IndexedLog>(&mut self, log: &mut LOG, next: &Position) -> GetLine {
+    fn resolve_location_next<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, next: &Position) -> GetLine {
         assert!(next.is_unmapped());
         let gap = next.region();
         let mut next = next.clone();
@@ -99,14 +103,14 @@ impl LogFilter {
     }
 
     /// Map the next (first) line in an unmapped region, beginning at/after the given offset
-    fn explore_unmapped_next<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position, offset: usize) -> GetLine {
+    fn explore_unmapped_next<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, pos: &Position, offset: usize) -> GetLine {
         let offset = pos.least_offset().max(offset);
         self.seek_inner(offset);
         self.resolve_location_next(log, pos)
     }
 
     /// Find the next line that matches our filter, memoizing the position in our index.
-    pub fn find_next<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
+    pub fn find_next<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
         let end = log.len();
 
         // Resolve to an existing pos
@@ -134,7 +138,7 @@ impl LogFilter {
     }
 
     /// Find the previous line that matches our filter, memoizing the position in our index.
-    pub fn find_next_back<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
+    pub fn find_next_back<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, pos: &Position) -> GetLine {
 
         // TODO: Dedup with find_next:  next_back, resolve_location_next_back are the only differences
 
@@ -183,7 +187,7 @@ impl LogFilter {
         self.filter.next_back(pos)
     }
 
-    pub fn resolve_gaps<LOG: IndexedLog>(&mut self, log: &mut LOG, pos: &Position) -> Position {
+    pub fn resolve_gaps<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, pos: &Position) -> Position {
         let mut pos = pos.clone();
         while pos.least_offset() < log.len() {
             pos = self.filter.index.seek_gap(&pos);

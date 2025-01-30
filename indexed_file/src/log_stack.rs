@@ -13,7 +13,7 @@ enum PendingOp {
 
 
 impl PendingOp {
-    fn seek_fwd_rev(&mut self, log: &mut LogFilter, src: &mut TimeoutWrapper<'_, Log>, pos: Position) -> Position {
+    fn seek_fwd_rev(&mut self, log: &mut LogFilter, src: &mut dyn IndexedLog, pos: Position) -> Position {
         match self {
             PendingOp::SeekForward(..) => log.find_next(src, &pos).into_pos(),
             PendingOp::SeekBackward(..) => log.find_next_back(src, &pos).into_pos(),
@@ -39,18 +39,16 @@ impl PendingOp {
 /// This structure implements our complete stack of logs including the source files, include
 /// filters, exclude filters, bookmarks, highlights and and searches.
 pub struct LogStack {
-    source: Log,
+    source: FilteredSource,
     search: Option<LogFilter>,
-    filter: Option<LogFilter>,
     pending: PendingOp,
 }
 
 impl  LogStack {
     pub fn new(log: Log) -> Self {
         Self {
-            source: log,
+            source: FilteredSource::new(log),
             search: None,
-            filter: None,
             pending: PendingOp::FillGaps(Position::invalid()),
         }
     }
@@ -58,11 +56,9 @@ impl  LogStack {
     /// Apply a new regex search expression to the filter
     /// TODO: add more filters instead of replacing the one we currently allow
     pub fn filter_regex(&mut self, re: &str) -> Result<(), regex::Error> {
-        // FIXME: when filter changes, invalidate the search (or merge it / make it dependent on filter)
-        if re.is_empty() {
-            self.filter = None;
-        } else {
-            self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
+        self.source.filter_regex(re)?;
+        if let Some(search) = &mut self.search {
+            search.reset();
         }
         self.kick_pending();
         Ok(())
@@ -78,7 +74,6 @@ impl  LogStack {
             let mut count = count;
             let mut pos = pos;
             loop {
-                // FIXME: Filter results against self.filter
                 pos = self.pending.seek_fwd_rev(search, src, pos);
                 if src.timed_out() {
                     break;
@@ -161,7 +156,97 @@ impl  LogStack {
     }
 
 }
+
 impl IndexedLog for LogStack {
+    fn read_line(&mut self, offset: usize) -> Option<crate::LogLine> {
+        self.source.read_line(offset)
+    }
+
+    fn next(&mut self, pos: &Position) -> GetLine {
+        self.source.next(pos)
+    }
+
+    fn next_back(&mut self, pos: &Position) -> GetLine {
+        self.source.next_back(pos)
+    }
+
+    fn advance(&mut self, pos: &Position) -> Position {
+        self.source.advance(pos)
+    }
+
+    fn advance_back(&mut self, pos: &Position) -> Position {
+        self.source.advance_back(pos)
+    }
+
+    fn resolve_gaps(&mut self, pos: &Position) -> Position {
+        let pos = if pos.is_invalid() {
+            self.seek(0)
+        } else {
+            pos.clone()
+        };
+        if let Some(ref mut search) = &mut self.search {
+            if search.has_gaps() {
+                return search.resolve_gaps(&mut self.source, &pos)
+            }
+        }
+
+        self.source.resolve_gaps(&pos)
+    }
+
+    fn set_timeout(&mut self, limit: Option<std::time::Duration>) {
+        self.source.set_timeout(limit);
+    }
+
+    fn timed_out(&mut self) -> bool {
+        self.source.timed_out()
+    }
+
+    fn check_timeout(&mut self) -> bool {
+        self.source.check_timeout()
+    }
+
+    fn len(&self) -> usize {
+        self.source.len()
+    }
+
+    fn info(&self) -> impl Iterator<Item = &'_ IndexStats> + '_
+    where Self: Sized  {
+        self.source.info()
+        .chain(self.search.iter().flat_map(|f| f.info()))
+    }
+
+    fn has_gaps(&self) -> bool {
+        self.source.has_gaps()
+            || self.search.as_ref().map(|f| f.has_gaps()).unwrap_or(false)
+    }
+}
+
+/// A wrapper layer to hold an optional filtered log.
+/// This is primarily used to give us a detachable source so LogStack doesn't bump into Rust's ownership rules.
+struct FilteredSource {
+    source: Log,
+    filter: Option<LogFilter>,
+}
+
+impl FilteredSource {
+    pub fn new(source: Log) -> Self {
+        Self { source, filter: None }
+    }
+
+    /// Apply a new regex search expression to the filter
+    /// TODO: add more filters instead of replacing the one we currently allow
+    pub fn filter_regex(&mut self, re: &str) -> Result<(), regex::Error> {
+        // FIXME: when filter changes, invalidate the search (or merge it / make it dependent on filter)
+        if re.is_empty() {
+            self.filter = None;
+        } else {
+            self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
+        }
+        Ok(())
+    }
+}
+
+impl IndexedLog for FilteredSource {
     fn read_line(&mut self, offset: usize) -> Option<crate::LogLine> {
         self.source.read_line(offset)
     }
@@ -210,12 +295,6 @@ impl IndexedLog for LogStack {
             }
         }
 
-        if let Some(ref mut search) = &mut self.search {
-            if search.has_gaps() {
-                return search.resolve_gaps(&mut self.source, &pos)
-            }
-        }
-
         if self.source.has_gaps() {
             return self.source.resolve_gaps(&pos)
         }
@@ -243,13 +322,10 @@ impl IndexedLog for LogStack {
     where Self: Sized  {
         self.source.info()
         .chain(self.filter.iter().flat_map(|f| f.info()))
-        .chain(self.search.iter().flat_map(|f| f.info()))
     }
 
     fn has_gaps(&self) -> bool {
         self.source.has_gaps() ||
-            self.filter.as_ref().map(|f| f.has_gaps()).unwrap_or_else(
-                || self.search.as_ref().map(|f| f.has_gaps()).unwrap_or(false)
-            )
+            self.filter.as_ref().map(|f| f.has_gaps()).unwrap_or(false)
     }
 }

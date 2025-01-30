@@ -58,6 +58,11 @@ impl SaneIndex {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.stats.reset();
+        self.index = SaneIndex::default().index
+    }
+
     pub fn index_prev(&self, idx: IndexIndex) -> Option<IndexIndex> {
         let (i, j) = idx;
         if j > 0 {
