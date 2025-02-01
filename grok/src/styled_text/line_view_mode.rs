@@ -7,7 +7,7 @@
 ///  TODO: add continuation indent option for chopped/wrapped lines
 #[derive(Clone, Copy, Debug)]
 pub enum LineViewMode{
-    Chop{width: usize},
+    Wrap{width: usize},
     Clip{width: usize, left: usize},
     WholeLine,
 }
@@ -15,13 +15,13 @@ pub enum LineViewMode{
 impl LineViewMode {
     // Test if this line may be displayed in multiple chunks (wrapped)
     pub fn is_chunked(&self) -> bool {
-        matches!(self, LineViewMode::Chop{width: _} | LineViewMode::Clip{width: _, left: _})
+        matches!(self, LineViewMode::Wrap{width: _})
     }
 
     /// Return the start of the chunk we're on, given an arbitrary offset into the line
     pub fn chunk_start(&self, index: usize) -> usize {
         match self {
-            LineViewMode::Chop{width} => index - index % width,
+            LineViewMode::Wrap{width} => index - index % width,
             LineViewMode::Clip{width: _, left} => *left,
             LineViewMode::WholeLine => 0,
         }
@@ -30,7 +30,7 @@ impl LineViewMode {
     /// Return the end of the chunk we're on, given an arbitrary offset into the line
     pub fn chunk_end(&self, start: usize, end: usize) -> usize {
         match self {
-            LineViewMode::Chop{width} => end.min(start + *width),
+            LineViewMode::Wrap{width} => end.min(start + *width),
             LineViewMode::Clip{width, left: _} => end.min(start + *width),
             LineViewMode::WholeLine => end,
         }

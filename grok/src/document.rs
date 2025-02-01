@@ -63,6 +63,10 @@ impl Document {
         }
     }
 
+    pub fn set_line_mode(&mut self, mode: LineViewMode) {
+        self.stylist.mode = mode;
+    }
+
     fn hash_color(&self, text: &str) -> Color {
         let mut hasher = FnvHasher::default();
         hasher.write(text.as_bytes());
@@ -79,10 +83,6 @@ impl Document {
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.log.len()
-    }
-
-    pub fn set_width(&mut self, width: usize) {
-        self.stylist.mode = LineViewMode::Chop{width};
     }
 
     pub fn info(&self) -> impl Iterator<Item = &IndexStats> + '_

@@ -3,7 +3,7 @@ use indexed_file::LogLine;
 use std::{cmp, io::{self, stdout, Write}, iter};
 use crossterm::{cursor, execute, queue, terminal};
 
-use crate::config::Config;
+use crate::{config::Config, styled_text::LineViewMode};
 use crate::keyboard::UserCommand;
 use crate::styled_text::styled_line::{PattColor, StyledLine, RGB_BLACK};
 use crate::document::Document;
@@ -72,6 +72,7 @@ pub struct Display {
 
     use_alt: bool,
     color: bool,
+    chop: bool,
     semantic_color: bool,
 
 
@@ -126,6 +127,7 @@ impl Display {
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
             color: config.color,
+            chop: config.chop,
             semantic_color: config.semantic_color,
         }
     }
@@ -532,8 +534,11 @@ impl Display {
 
         let height = self.page_size();
 
-        // FIXME: Check config for Wrap mode
-        doc.set_width(self.width);
+        if self.chop {
+            doc.set_line_mode(LineViewMode::Wrap{width: self.width});
+        } else {
+            doc.set_line_mode(LineViewMode::Chop);
+        }
 
         let lines= match scroll {
             Scroll::Up(ref sv) | Scroll::GotoBottom(ref sv) => {

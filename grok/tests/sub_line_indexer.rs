@@ -496,7 +496,7 @@ mod sub_line_wrap_tests {
 
     pub(crate) fn stylist_wrap() -> &'static Stylist {
         lazy_static! {
-            static ref STYLIST_WRAP: Stylist = Stylist::new(LineViewMode::WholeLine, PattColor::None);
+            static ref STYLIST_WRAP: Stylist = Stylist::new(LineViewMode::Wrap{width: 10}, PattColor::None);
         }
         &STYLIST_WRAP
     }
