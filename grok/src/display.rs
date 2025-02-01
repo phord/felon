@@ -73,7 +73,6 @@ pub struct Display {
     use_alt: bool,
     color: bool,
     chop: bool,
-    semantic_color: bool,
 
 
     /// Scroll command from user
@@ -128,7 +127,6 @@ impl Display {
             mouse_wheel_height: config.mouse_scroll,
             color: config.color,
             chop: config.chop,
-            semantic_color: config.semantic_color,
         }
     }
 
@@ -388,7 +386,7 @@ impl Display {
     }
 
     fn draw_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &str) {
-        if self.color && self.semantic_color {
+        if self.color {
             self.draw_styled_line(buff, row, doc.line_colors(line));
         } else {
             self.draw_plain_line(doc, buff, row, line);
