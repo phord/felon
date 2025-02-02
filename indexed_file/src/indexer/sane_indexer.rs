@@ -189,8 +189,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
     /// Read the line starting from offset to EOL
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
         // Find the line containing offset, if any
-        let line = self.line_cache.get(&offset);
-        if let Some(line) = line {
+        if let Some(line) = self.line_cache.get(&offset) {
             return Some(line.clone());
         }
         let line = self.source.read_line_at(offset).unwrap();
