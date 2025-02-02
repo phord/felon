@@ -181,6 +181,7 @@ pub enum UserCommand {
 // use grok::keyboard::Reader;
 // assert_eq!(Reader::keycode("Ctrl+Q"), KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
 
+#[derive(Default)]
 struct Reader {
     keymap: HashMap<KeyEvent, UserCommand>,
     mousemap: HashMap<MouseEvent, UserCommand>,
@@ -350,6 +351,7 @@ impl Reader {
 
 }
 
+#[derive(Default)]
 pub struct Input {
     reader: Reader,
     started: bool,

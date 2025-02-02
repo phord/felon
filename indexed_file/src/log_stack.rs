@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine, TimeoutWrapper}, log_filter::LogFilter, IndexedLog, Log};
+use crate::{index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, log_filter::LogFilter, IndexedLog, Log};
 
 #[derive(Clone, Debug)]
 enum PendingOp {
