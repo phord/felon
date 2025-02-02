@@ -21,6 +21,11 @@ impl Document {
         self.stylist.iter_range(&mut self.log, range)
     }
 
+    pub fn get_plain_lines<'a, R>(&'a mut self, range: &'a R) -> impl DoubleEndedIterator<Item = LogLine> + 'a
+    where R: std::ops::RangeBounds<usize> {
+        self.log.iter_lines_range(range)
+    }
+
     pub fn set_search(&mut self, search: &str) -> Result<(), regex::Error> {
         // TODO: Remove old search patter from stylist
         self.stylist.add_match(Regex::new(search)?, PattColor::Inverse);

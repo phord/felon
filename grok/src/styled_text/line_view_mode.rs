@@ -18,6 +18,11 @@ impl LineViewMode {
         matches!(self, LineViewMode::Wrap{width: _})
     }
 
+    /// If this is a chunked mode, return the index as the bias into the start of the line. Otherwise, zero.
+    pub fn line_index(&self, index: usize) -> usize {
+        if self.is_chunked() { index } else { 0 }
+    }
+
     /// Return the start of the chunk we're on, given an arbitrary offset into the line
     pub fn chunk_start(&self, index: usize) -> usize {
         match self {

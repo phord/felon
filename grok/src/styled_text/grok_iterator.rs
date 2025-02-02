@@ -49,9 +49,13 @@ impl<'a> SubLineHelper<'a> {
     // Get the range of the chunk we're on
     fn chunk_range(&self) -> Option<Range<usize>> {
         if let Some(line) = &self.line {
-            assert!(self.index < line.line.len() || line.line.is_empty());
-            let end = self.stylist.mode.chunk_end(self.index, line.line.len());
-            Some(self.index..end)
+            if self.index < line.line.len() {
+                let end = self.stylist.mode.chunk_end(self.index, line.line.len());
+                Some(self.index..end)
+            } else {
+                // Index is out of range (line empty or line scrolled to left)
+                Some(0..0)
+            }
         } else {
             None
         }
@@ -59,11 +63,12 @@ impl<'a> SubLineHelper<'a> {
 
     fn advance(&mut self, forward: bool) -> Option<LogLine> {
         if let Some(range) = self.chunk_range() {
-            let rline = self.render(&range);
+            let offset = self.stylist.mode.line_index(self.index);
+            let rline = self.render(offset, &range);
             if self.stylist.mode.is_chunked() {
                 let target = if forward { range.end } else { range.start.saturating_sub(1) };
                 let next = self.stylist.mode.chunk_start(target);
-                // If there is a valid next chunk, it start be outside the range of this one but still within the line
+                // If there is a valid next chunk, its start will be outside the range of this one but still within the line
                 if !range.contains(&next) && next < self.line.as_ref().unwrap().line.len() {
                     self.index = next;
                 } else {
@@ -88,10 +93,10 @@ impl<'a> SubLineHelper<'a> {
         self.advance( false)
     }
 
-    fn render(&self, range: &Range<usize>) -> LogLine {
+    fn render(&self, offset: usize, range: &Range<usize>) -> LogLine {
         let line = self.line.as_ref().unwrap();
         let rline = line.to_string(range.start, range.end - range.start);
-        LogLine::new(rline, self.offset + range.start)
+        LogLine::new(rline, offset + self.offset)
     }
 }
 

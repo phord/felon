@@ -13,6 +13,7 @@ use crate::document::Document;
 struct DisplayState {
     height: usize,
     width: usize,
+    pan: usize,
 }
 
 struct ScreenBuffer {
@@ -74,6 +75,11 @@ pub struct Display {
     color: bool,
     chop: bool,
 
+    /// Right-scroll pan position
+    pan: usize,
+
+    // Sticky pan width
+    pan_width: usize,
 
     /// Scroll command from user
     scroll: ScrollAction,
@@ -122,11 +128,13 @@ impl Display {
             half: 0,
             arg_fraq: 0,
             arg_denom: 0,
-            prev: DisplayState { height: 0, width: 0},
+            prev: DisplayState { height: 0, width: 0, pan: 0},
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
             color: config.color,
             chop: config.chop,
+            pan: 0,
+            pan_width: 0,
         }
     }
 
@@ -194,6 +202,18 @@ impl Display {
                 self.set_status_msg(format!("Invalid filter expression: {}", e));
                 false
             }
+        }
+    }
+
+    // Half screen width, or sticky previous value, or given argument
+    fn get_pan_width(&mut self) -> usize {
+        if self.arg_num > 0 {
+            self.pan_width = self.arg_num;
+            self.arg_num
+        } else if self.pan_width > 0 {
+            self.pan_width
+        } else {
+            self.width / 2
         }
     }
 
@@ -278,6 +298,23 @@ impl Display {
         //        calls us twice in a row.  I suppose we also need a way to cancel queued commands, then.  ^C? And some way to recognize
         //        commands that cancel previous ones (RefreshDisplay, twice in a row, for example).
         match cmd {
+            UserCommand::PanLeft => {
+                self.pan = self.pan.saturating_sub(self.get_pan_width());
+                // self.scroll = ScrollAction::Repaint;
+            }
+            UserCommand::PanRight => {
+                self.pan += self.get_pan_width();
+                // self.scroll = ScrollAction::Repaint;
+            }
+            UserCommand::PanLeftMax => {
+                self.pan = 0;
+                // self.scroll = ScrollAction::Repaint;
+            }
+            UserCommand::PanRightMax => {
+                // FIXME: Magic number that means "pan to EOL"
+                self.pan = usize::MAX;
+                // self.scroll = ScrollAction::Repaint;
+            }
             UserCommand::ScrollDown => {
                 self.scroll = ScrollAction::Down(self.get_one());
             }
@@ -331,6 +368,7 @@ impl Display {
             }
             UserCommand::TerminalResize => {
                 self.update_size();
+                // self.scroll = ScrollAction::Repaint;
             }
             UserCommand::SelectWordAt(_x, _y) => {
                 self.set_status_msg(format!("{:?}", cmd));
@@ -358,8 +396,8 @@ impl Display {
             _ => {}
         }
 
-        // Clear argument when command is seen
-        if ! matches!(self.scroll, ScrollAction::None) {
+        // Clear argument when any user action but digits/decimal is seen
+        if ! matches!(cmd, UserCommand::CollectDigits(_) | UserCommand::CollectDecimal | UserCommand::TerminalResize) {
             self.arg_num = 0;
             self.arg_denom = 0;
             self.arg_fraq = 0;
@@ -521,6 +559,31 @@ impl Display {
         Ok(buff)
     }
 
+    fn get_max_pan(&self, doc: &mut Document, scroll: &Scroll) -> usize {
+        let sv = match scroll {
+            Scroll::Repaint(ref sv) => sv,
+
+            Scroll::Up(_) |
+            Scroll::Down(_) |
+            Scroll::GotoBottom(_) |
+            Scroll::GotoTop(_) => panic!("Expected Repaint after PanRightMax"),
+
+            Scroll::None => unreachable!("Scroll::None")
+        };
+
+        let max =
+            doc.get_plain_lines(&(sv.offset..))
+                .map(|line| line.line.len())
+                .take(sv.lines)
+                .max();
+        if let Some(max) = max {
+            // FIXME: +1 because of \n on EOL; but we might strip it in the future
+            max.saturating_sub(self.width + 1)
+        } else {
+            0
+        }
+    }
+
     // Pull lines from an iterator and display them.  There are three modes:
     // 1. Scroll up:  Display each new line at the next lower position, and scroll up from bottom
     // 2. Scroll down:  Display each new line at the next higher position, and scroll down from top
@@ -532,10 +595,15 @@ impl Display {
 
         let height = self.page_size();
 
-        if self.chop {
+        if self.pan == usize::MAX {
+            self.pan = self.get_max_pan(doc, &scroll);
+        }
+
+        if self.chop && self.pan == 0 {
             doc.set_line_mode(LineViewMode::Wrap{width: self.width});
         } else {
-            doc.set_line_mode(LineViewMode::Chop);
+            // Pan the document to the left; override wrap-mode
+            doc.set_line_mode(LineViewMode::Clip{width: self.width, left: self.pan});
         }
 
         let lines= match scroll {
@@ -552,6 +620,9 @@ impl Display {
                 let range = sv.offset..;
                 let mut lines = doc.get_lines_range(&range).take(sv.lines + 1);
                 if let Some(line) = lines.next() {
+                    // When scrolling down, the first line retrieved is the bottom line from the previous screen
+                    // because that's where we start.  We don't know the offset of the next line, so we always get the
+                    // bottom line again, redundantly.
                     assert_eq!(line.offset, sv.offset);
                 }
                 lines.skip(skip).collect()
@@ -578,6 +649,7 @@ impl Display {
         let disp = DisplayState {
             height: self.page_size(),
             width: self.width,
+            pan: self.pan,
         };
 
         let plan =
