@@ -195,6 +195,21 @@ OMG - the RipGrep CLI helper tools crate includes a struct that decompresses any
 https://docs.rs/grep-cli/0.1.2/grep_cli/struct.DecompressionReader.html
 
 
+Nameless is a file handler that tries to make stdin, files, gzipped files, HTTPS urls, etc. all look the same.
+https://docs.rs/crate/nameless/latest
+
+https://docs.rs/clap/latest/clap/
+Command line parser that can also be used for an internal REPL.
+
+More REPLs:
+    https://docs.rs/thag_rs/latest/thag_rs/
+    https://github.com/jedrzejboczar/easy-repl
+
+    Make a REPL from clap and reedline:
+    https://docs.rs/reedline-repl-rs/latest/reedline_repl_rs/
+
+
+
 https://codeberg.org/rini/pomprt
     A readline-like prompt
 https://github.com/kkawakam/rustyline

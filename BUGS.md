@@ -6,14 +6,16 @@
 [     ] No way to turn off filter
 [     ] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
 
+# MVP: Features I need daily
+[fixed] Switch between chopped and wrapped lines
+[fixed] Horizontal scroll
+[     ] Compressed file support or LESSPIPE support
 
 # Todo:
 * F3/Shift-F3 to search
-* Highlight search matches
 * scroll in chunks larger than 1 line for faster speed.  Maybe 25% of page?  or 5 lines at a time?
-*
-* highlight search results
-* Search
+* [x] highlight search results
+* [x] Search
 * Multi-search
 * Multi-filter (filter-in, filter-out)
 * Filter/search configs:
@@ -23,10 +25,11 @@
 * Search preview
 * Bookmarks
 * Save/restore previous session
-* Persistent searches (" [KA] ", "STACKTRACE")
+* [x] Persistent searches (" [KA] ", "STACKTRACE")
 * Scrollbar/minimap
-* Semantic coloring for words
-
+* [x] Semantic coloring for words
+* Display helpful regex errors
+* Faster indexing / searching (compare to bvr)
 
 * Less-compat:
   * -F quit if one screen
