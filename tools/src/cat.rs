@@ -22,7 +22,7 @@ fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
 pub fn cat_cmd() {
     let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
-        logs.push(Log::open(file).unwrap());
+        logs.push(Log::open(file.as_ref()).unwrap());
     }
 
     use std::io::Write;
@@ -42,7 +42,7 @@ pub fn cat_cmd() {
 pub fn tac_cmd() {
     let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
-        let mut log = Log::open(file).unwrap();
+        let mut log = Log::open(file.as_ref()).unwrap();
         log.wait_for_end();
         logs.push(log);
     }
@@ -58,6 +58,7 @@ pub fn tail_cmd() {
     let count = 10;
 
     for file in get_files_from_cfg() {
+        let file = file.as_ref();
         let file = files::new_text_file(file).expect("File failed to open");
         let mut log = Log::from(file);
 
@@ -126,7 +127,7 @@ where
 pub fn copycat_merged_cmd() {
     let mut logs = MergedLogs::new();
     for file in get_files_from_cfg() {
-        logs.push(Log::open(file).unwrap());
+        logs.push(Log::open(file.as_ref()).unwrap());
     }
 
     let mut src = IteratorAsRead::new(logs.iter_lines().map(|line| line.line));
@@ -138,7 +139,7 @@ pub fn copycat_merged_cmd() {
 #[allow(dead_code)]
 pub fn copycat_cmd() {
     for file in get_files_from_cfg() {
-        let mut file = files::new_text_file(file).expect("File failed to open");
+        let mut file = files::new_text_file(file.as_ref()).expect("File failed to open");
         std::io::copy(&mut file, &mut std::io::stdout()).expect("We don't need error handling");
     }
 }
@@ -148,7 +149,7 @@ pub fn copycat_cmd() {
 pub fn itercat_cmd() {
     let mut out = std::io::stdout();
     for file in get_files_from_cfg() {
-        let file = files::new_text_file(file).expect("File failed to open");
+        let file = files::new_text_file(file.as_ref()).expect("File failed to open");
         for line in file.lines() {
             let line = line.unwrap();
             let _ = out.write(line.as_bytes()).expect("No errors");
@@ -178,7 +179,7 @@ pub fn brcat_cmd() {
 pub fn rev_itercat_cmd() {
     let mut out = std::io::stdout();
     for file in get_files_from_cfg() {
-        let file = files::new_text_file(file).expect("File failed to open");
+        let file = files::new_text_file(file.as_ref()).expect("File failed to open");
         let lines = file.lines().map(|x| x.unwrap()).collect::<Vec<_>>();
         eprintln!("Read in {} lines", lines.len());
         for line in lines.iter().rev() {
@@ -215,7 +216,7 @@ fn test_itercat() {
     // path.push("/home/phord/git/mine/igrok/indexed_file/resources/test/core.log-2022040423.zst");
     path.push("/home/phord/git/mine/igrok/indexed_file/resources/test/core.log-2022040423");
     let mut out = std::io::stdout();
-    let file = files::new_text_file(Some(path)).expect("File failed to open");
+    let file = files::new_text_file(Some(&path)).expect("File failed to open");
     {
         for line in file.lines().map(|x| x.unwrap()).collect::<Vec<_>>().iter().rev() {
             let _ = out.write(line.as_bytes()).expect("No errors");

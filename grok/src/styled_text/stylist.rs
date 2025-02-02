@@ -21,6 +21,13 @@ pub struct Stylist {
     pub named_styles: HashMap<String, PattColor>,
 }
 
+impl Default for Stylist {
+    fn default() -> Self {
+        // FIXME: Defer NoCrumb/None choice until later on.  NoCrumb here forces color mode.
+        Self::new(LineViewMode::WholeLine, PattColor::NoCrumb)
+    }
+}
+
 impl Stylist {
     pub fn new(mode: LineViewMode, patt: PattColor) -> Self {
         let mut stylist = Self {

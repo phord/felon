@@ -56,15 +56,12 @@ impl Document {
 
 impl Document {
     pub fn new(config: Config) -> Self {
-        let filename = config.filename.first().expect("No filename specified").clone();
-        let log = Log::from(files::new_text_file(Some(filename)).expect("Failed to open file"));
-
-        // TODO: Add default or config styles here
-        let stylist = Stylist::new(LineViewMode::WholeLine, PattColor::NoCrumb);
+        let filename = config.filename.first();
+        let log = Log::open(filename).expect("Failed to open file");
 
         Self {
             log: LogStack::new(log),
-            stylist,
+            stylist: Stylist::default(),
         }
     }
 

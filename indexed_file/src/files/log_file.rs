@@ -80,7 +80,7 @@ impl LogFile for LogSource {
     #[inline(always)] fn wait_for_end(&mut self) { self.as_mut().wait_for_end() }
 }
 
-pub fn new_text_file(input_file: Option<PathBuf>) -> std::io::Result<LogSource> {
+pub fn new_text_file(input_file: Option<&PathBuf>) -> std::io::Result<LogSource> {
     if let Some(input_file) = input_file {
             // Is it a file?
         let metadata = input_file.metadata()?;

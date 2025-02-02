@@ -24,7 +24,7 @@ mod tests {
 
     fn open_log_file(filename: &str) -> std::io::Result<LogSource> {
         let path = PathBuf::from(filename);
-        new_text_file(Some(path))
+        new_text_file(Some(&path))
     }
 
     fn open_log_file_lines(path: PathBuf) -> Log {
@@ -44,7 +44,7 @@ mod tests {
     fn file_found() {
         let (path, _) = make_test_file("file_found", 10 , 10);
         println!("{:?}", path);
-        let file = new_text_file(Some(path));
+        let file = new_text_file(Some(&path));
         assert!(file.is_ok());
     }
 
@@ -167,7 +167,7 @@ mod tests {
     fn file_found_zstd() {
         let path = PathBuf::from("/home/phord/git/mine/igrok/test.zst");
         println!("{:?}", path);
-        let file = new_text_file(Some(path));
+        let file = new_text_file(Some(&path));
         assert!(file.is_ok());
     }
 
@@ -176,7 +176,7 @@ mod tests {
         let path = PathBuf::from("/home/phord/git/mine/igrok/test.zst");
         // let path = PathBuf::from("/home/phord/git/mine/igrok/README.md");
         println!("{:?}", path);
-        let file = new_text_file(Some(path));
+        let file = new_text_file(Some(&path));
         assert!(file.is_ok());
         let mut file = Log::from( file.unwrap() );
         for line in file.iter_lines() {

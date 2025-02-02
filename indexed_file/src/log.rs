@@ -62,7 +62,7 @@ impl Log {
         }
     }
 
-    pub fn open(file: Option<PathBuf>) -> std::io::Result<Self> {
+    pub fn open(file: Option<&PathBuf>) -> std::io::Result<Self> {
         log::trace!("Instantiate log from file {:?}", file);
         let src = new_text_file(file)?;
         let cached_len = src.len();

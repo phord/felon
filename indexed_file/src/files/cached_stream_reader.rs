@@ -63,7 +63,7 @@ impl<T: Stream + BufRead + Seek> LogFile for T {
 }
 
 impl CachedStreamReader {
-    pub fn new(pipe: Option<PathBuf>) -> std::io::Result<Self> {
+    pub fn new(pipe: Option<&PathBuf>) -> std::io::Result<Self> {
         log::trace!("new");
         let base = Self {
             rx: None,
