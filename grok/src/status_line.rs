@@ -1,9 +1,8 @@
 use crossterm::terminal::ClearType;
 use std::io::{stdout, Write};
 use crate::config::Config;
-use crossterm::{QueueableCommand, cursor, terminal, style, style::Stylize};
+use crossterm::{QueueableCommand, cursor, terminal, style, style::{Color, Stylize}};
 use crate::document::Document;
-use crate::styled_text::styled_line::RGB_BLACK;
 
 pub struct StatusLine {
     color: bool,
@@ -26,6 +25,7 @@ impl StatusLine {
 
         // FIXME: Don't print the status line again if nothing changed
 
+        // status line:   curr_line of total_lines | "search": hit of total (hidden) | "filter": hit of total (hidden)
         let mut stdout = stdout();
         let message =
             std::iter::once(format!("Bytes: {}", doc.len()))
@@ -43,7 +43,8 @@ impl StatusLine {
         stdout.queue(style::PrintStyledContent(message[0..width].reverse()))?;
         if self.color {
             // TODO: Stylist?
-            stdout.queue(crossterm::style::SetBackgroundColor(RGB_BLACK))?;
+            let fixme_inverse = Color::Rgb{r:0xc0,g:0xc0,b:0xc0}; // FIXME: use PattColor::Inverse() somehow
+            stdout.queue(crossterm::style::SetBackgroundColor(fixme_inverse))?;
         }
         stdout.queue(terminal::Clear(ClearType::UntilNewLine))?;
 
