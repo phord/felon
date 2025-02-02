@@ -85,19 +85,19 @@ pub fn new_text_file(input_file: Option<&PathBuf>) -> std::io::Result<LogSource>
             // Is it a file?
         let metadata = input_file.metadata()?;
         if metadata.is_file() {
-            if let Ok(file) = ZstdLogFile::from_path(&input_file) {
+            if let Ok(file) = ZstdLogFile::from_path(input_file) {
                 // FIXME: If the first magic number succeeded but some later error occurred during scan, treat the
                 //        file as a compressed file anyway.
                 Ok(file.to_src())
             } else {
-                let file = File::open(&input_file).unwrap();
+                let file = File::open(input_file).unwrap();
                 let file = BufReader::new(file);
                 let file = TextLogFile::new(file)?;
                 Ok(file.to_src())
             }
         } else {
             // Must be a stream.  We can't seek in streams; assert that seek fails to make sure.
-            let mut file = File::open(&input_file)?;
+            let mut file = File::open(input_file)?;
             assert!(file.seek(SeekFrom::Start(0)).is_err());
             let file = TextLogStream::new(Some(input_file))?;
             Ok(file.to_src())
