@@ -6,7 +6,7 @@ use fnv::FnvHasher;
 use std::hash::Hasher;
 use lazy_static::lazy_static;
 use regex::Regex;
-use indexed_file::{files, indexer::indexed_log::IndexStats, IndexedLog, Log, LogLine, LogStack};
+use indexed_file::{files::Stream, indexer::indexed_log::IndexStats, IndexedLog, Log, LogLine, LogStack};
 pub struct Document {
     // FIXME: StyledLine caching -- premature optimization?
     // File contents

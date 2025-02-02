@@ -7,7 +7,7 @@ use std::time::Duration;
 use std::num::NonZeroUsize;
 use lru::LruCache;
 
-use crate::files::LogFile;
+use crate::files::{LogFile, Stream};
 use crate::LogLine;
 
 use super::indexed_log::{IndexStats, IndexedLog};
@@ -162,9 +162,25 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
     }
 }
 
-impl<LOG: LogFile> SaneIndexer<LOG> {
+impl<LOG: LogFile> Stream for SaneIndexer<LOG> {
+    fn len(&self) -> usize {
+        self.index.stats.bytes_total
+    }
+
+    fn poll(&mut self) -> bool {
+        if self.source.poll() {
+            let len = self.source.len();
+            if len != self.index.stats.bytes_total {
+                self.index.stats.bytes_total = len;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     #[inline]
-    pub fn wait_for_end(&mut self) {
+    fn wait_for_end(&mut self) {
         self.source.wait_for_end()
     }
 }
@@ -263,12 +279,6 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
 
     fn advance_back(&mut self, pos: &Position) -> Position {
         pos.next_back(&self.index)
-    }
-
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.index.stats.bytes_total
     }
 
     fn info(&self) -> impl Iterator<Item = &IndexStats> + '_

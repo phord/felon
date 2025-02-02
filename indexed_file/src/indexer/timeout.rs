@@ -49,7 +49,7 @@ impl Timeout {
 }
 
 
-use crate::IndexedLog;
+use crate::{files::Stream, IndexedLog};
 
 use super::{indexed_log::IndexStats, waypoint::Position, GetLine};
 
@@ -67,6 +67,16 @@ impl<'a, LOG: IndexedLog> TimeoutWrapper<'a, LOG> {
 impl<LOG: IndexedLog> Drop for TimeoutWrapper<'_, LOG> {
     fn drop(&mut self) {
         self.inner.set_timeout(None);
+    }
+}
+
+impl<LOG: IndexedLog> Stream for TimeoutWrapper<'_, LOG>  {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn poll(&mut self) -> bool {
+        self.inner.poll()
     }
 }
 
@@ -89,10 +99,6 @@ impl<LOG: IndexedLog> IndexedLog for TimeoutWrapper<'_, LOG> {
 
     fn advance_back(&mut self, pos: &Position) -> Position {
         self.inner.advance_back(pos)
-    }
-
-    fn len(&self) -> usize {
-        self.inner.len()
     }
 
     fn info(&self) -> impl Iterator<Item = &IndexStats> + '_

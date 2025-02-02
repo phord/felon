@@ -1,5 +1,5 @@
 use std::time::Duration;
-use crate::{LineIndexerDataIterator, LineIndexerIterator, LogLine};
+use crate::{files::Stream, LineIndexerDataIterator, LineIndexerIterator, LogLine};
 
 use super::{waypoint::Position, TimeoutWrapper};
 
@@ -43,7 +43,7 @@ impl IndexStats {
     }
 }
 
-pub trait IndexedLog {
+pub trait IndexedLog: Stream {
     /// Return a Position to read from given offset.
     /// Always returns a generic virtual position that can be used on any index.
     fn seek(&self, pos: usize) -> Position {
@@ -83,13 +83,6 @@ pub trait IndexedLog {
 
     /// Determine if the current operation has timed out
     fn check_timeout(&mut self) -> bool;
-
-    /// Length of the log in total bytes
-    fn len(&self) -> usize;
-
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
 
     /// Iterator to provide access to info about the different indexes
     fn info(&self) -> impl Iterator<Item = &'_ IndexStats> + '_

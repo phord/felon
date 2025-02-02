@@ -40,7 +40,7 @@ pub trait Stream {
 
     /// Check for more data and update state
     /// Returns true if source is still open/active
-    fn poll(&mut self) -> bool;
+    fn poll(&mut self) -> bool { false }
 
     /// Wait until source is closed/complete
     fn wait_for_end(&mut self) {}

@@ -6,7 +6,7 @@ use crate::LogLine;
 use std::path::PathBuf;
 use crate::indexer::{GetLine, IndexedLog};
 
-use crate::files::{LogBase, LogSource, new_text_file};
+use crate::files::{new_text_file, LogBase, LogSource, Stream};
 
 /**
  * Log is an adapter interface used to instantiate a SaneIndexer from different kinds of LogSources.
@@ -75,6 +75,20 @@ impl Log {
     }
 }
 
+
+// TODO: Delete this except for tests once SaneIndexer something something something...
+impl Stream for Log {
+    fn len(&self) -> usize {
+        self.cached_len
+    }
+
+   #[inline]
+    fn wait_for_end(&mut self) {
+        log::trace!("Wait for end of file");
+        self.file.wait_for_end()
+    }
+}
+
 // Navigation
 // TODO: Delete this except for tests once SaneIndexer
 impl IndexedLog for Log {
@@ -95,11 +109,6 @@ impl IndexedLog for Log {
 
     fn advance_back(&mut self, pos: &Position) -> Position {
         self.file.advance_back(pos)
-    }
-
-    #[inline]
-    fn len(&self) -> usize {
-        self.cached_len
     }
 
     fn info(&self) -> impl Iterator<Item = &IndexStats> + '_
@@ -134,14 +143,5 @@ impl IndexedLog for Log {
 
     fn has_gaps(&self) -> bool {
         self.file.has_gaps()
-    }
-}
-
-// Miscellaneous
-impl Log {
-    #[inline]
-    pub fn wait_for_end(&mut self) {
-        log::trace!("Wait for end of file");
-        self.file.wait_for_end()
     }
 }

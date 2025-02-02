@@ -1,7 +1,7 @@
 use crate::config::Config;
 use document::MergedLogs;
 use indexed_file::{files, IndexedLog, LineIndexerDataIterator, Log};
-use indexed_file::files::ZstdLogFile;
+use indexed_file::files::{Stream, ZstdLogFile};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::PathBuf;

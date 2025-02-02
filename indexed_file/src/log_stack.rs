@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::{index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, log_filter::LogFilter, IndexedLog, Log};
+use crate::{files::Stream, index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, log_filter::LogFilter, IndexedLog, Log};
 
 #[derive(Clone, Debug)]
 enum PendingOp {
@@ -157,6 +157,12 @@ impl  LogStack {
 
 }
 
+impl Stream for LogStack {
+    fn len(&self) -> usize {
+        self.source.len()
+    }
+}
+
 impl IndexedLog for LogStack {
     fn read_line(&mut self, offset: usize) -> Option<crate::LogLine> {
         self.source.read_line(offset)
@@ -205,10 +211,6 @@ impl IndexedLog for LogStack {
         self.source.check_timeout()
     }
 
-    fn len(&self) -> usize {
-        self.source.len()
-    }
-
     fn info(&self) -> impl Iterator<Item = &'_ IndexStats> + '_
     where Self: Sized  {
         self.source.info()
@@ -243,6 +245,12 @@ impl FilteredSource {
             self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
         }
         Ok(())
+    }
+}
+
+impl Stream for FilteredSource {
+    fn len(&self) -> usize {
+        self.source.len()
     }
 }
 
@@ -312,10 +320,6 @@ impl IndexedLog for FilteredSource {
 
     fn check_timeout(&mut self) -> bool {
         self.source.check_timeout()
-    }
-
-    fn len(&self) -> usize {
-        self.source.len()
     }
 
     fn info(&self) -> impl Iterator<Item = &'_ IndexStats> + '_

@@ -82,6 +82,7 @@ impl Stream for LogSource {
 
 impl LogFile for LogSource {
     #[inline(always)] fn chunk(&self, target: usize) -> (usize, usize) { self.as_ref().chunk(target) }
+    #[inline(always)] fn read_line_at(&mut self, start: usize) -> std::io::Result<String> { self.as_mut().read_line_at(start) }
 }
 
 pub fn new_text_file(input_file: Option<&PathBuf>) -> std::io::Result<LogSource> {
