@@ -21,11 +21,15 @@ impl fmt::Debug for MockLogFile {
     }
 }
 
-impl LogFile for MockLogFile {
+impl Stream for MockLogFile {
     fn len(&self) -> usize {
         self.size
     }
 
+    fn poll(&mut self) -> bool { false }
+}
+
+impl LogFile for MockLogFile {
     fn chunk(&self, target: usize) -> (usize, usize) {
         let start = target.saturating_sub(self.chunk_size / 2);
         let end = (start + self.chunk_size).min(self.len());
@@ -66,6 +70,8 @@ impl BufRead for MockLogFile {
 }
 
 use std::io::{Seek, SeekFrom};
+
+use super::Stream;
 impl Seek for MockLogFile {
     fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
         let (start, offset) = match pos {

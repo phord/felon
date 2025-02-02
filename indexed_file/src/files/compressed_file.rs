@@ -419,7 +419,7 @@ impl<R: Read + Seek> Seek for CompressedFile<R> {
                     todo!("We don't know if we know the end-of-file pos yet");
                 },
         };
-        let pos = start.saturating_add_signed(offset).min(self.get_length() as u64);
+        let pos = start.saturating_add_signed(offset).min(self.len() as u64);
 
         // Save the seek position for the future
         self.seek_pos = Some(pos);
@@ -464,7 +464,7 @@ impl<R: Read + Seek> BufRead for CompressedFile<R> {
 }
 
 impl<R> Stream for CompressedFile<R> {
-    fn get_length(&self) -> usize {
+    fn len(&self) -> usize {
         let last = &self.frames.last().unwrap();
         let len = last.logical + last.len +
             if last.len > 0 { 0 } else {
@@ -475,7 +475,7 @@ impl<R> Stream for CompressedFile<R> {
         len as usize
     }
     // Wait on any data at all; Returns true if file is still open
-    fn wait(&mut self) -> bool {
+    fn poll(&mut self) -> bool {
         true
     }
 }

@@ -13,6 +13,9 @@ use crate::files::TextLogFile;
 use crate::files::TextLogStream;
 use crate::files::ZstdLogFile;
 
+use super::CachedStreamReader;
+use super::Stream;
+
 
 pub type LogSource = Box<dyn LogFile>;
 
@@ -30,13 +33,18 @@ pub trait LogBase: LogFile {
 }
 
 // All of these can be promoted to LogSource
+impl LogFile for CachedStreamReader {}
+impl LogFile for TextLogFile {}
+impl LogFile for ZstdLogFile {}
+impl LogFile for CursorLogFile {}
+
 impl LogBase for CursorLogFile {}
 impl LogBase for MockLogFile {}
 impl LogBase for TextLogFile {}
 impl LogBase for TextLogStream {}
 impl LogBase for ZstdLogFile {}
 
-pub trait LogFile: BufRead + Seek {
+pub trait LogFile: BufRead + Seek + Stream {
 
     // Read a line from a given offset
     fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
@@ -56,9 +64,6 @@ pub trait LogFile: BufRead + Seek {
         }
     }
 
-    fn len(&self) -> usize;
-    fn is_empty(&self) -> bool { self.len() == 0 }
-
     // Determine the preferred chunk to read to include the target offset
     fn chunk(&self, target: usize) -> (usize, usize) {
         let chunk_size = 1024 * 1024;
@@ -67,17 +72,16 @@ pub trait LogFile: BufRead + Seek {
         let start = end.saturating_sub(chunk_size);
         (start, end)
     }
+}
 
-    // Check for more data in file and update state
-    fn quench(&mut self) {}
-    fn wait_for_end(&mut self) {}
+impl Stream for LogSource {
+    #[inline(always)] fn len(&self) -> usize { self.as_ref().len() }
+    #[inline(always)] fn wait_for_end(&mut self) { self.as_mut().wait_for_end() }
+    #[inline(always)] fn poll(&mut self) -> bool { false }
 }
 
 impl LogFile for LogSource {
-    #[inline(always)] fn len(&self) -> usize { self.as_ref().len() }
     #[inline(always)] fn chunk(&self, target: usize) -> (usize, usize) { self.as_ref().chunk(target) }
-    #[inline(always)] fn quench(&mut self) { self.as_mut().quench() }
-    #[inline(always)] fn wait_for_end(&mut self) { self.as_mut().wait_for_end() }
 }
 
 pub fn new_text_file(input_file: Option<&PathBuf>) -> std::io::Result<LogSource> {

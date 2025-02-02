@@ -9,12 +9,12 @@ use super::Stream;
 pub type CursorLogFile = std::io::Cursor<Vec<u8>>;
 
 impl Stream for CursorLogFile {
-    fn get_length(&self) -> usize {
+    fn len(&self) -> usize {
         self.get_ref().len()
     }
 
     // Wait on any data at all; Returns true if file is still open
-    fn wait(&mut self) -> bool { false }
+    fn poll(&mut self) -> bool { false }
 }
 
 pub trait CursorUtil {

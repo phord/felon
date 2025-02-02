@@ -20,12 +20,12 @@ impl TextLogFile {
 
 impl Stream for TextLogFile {
     #[inline(always)]
-    fn get_length(&self) -> usize {
+    fn len(&self) -> usize {
         self.len
     }
     // Wait on any data at all; Returns true if file is still open
     #[inline(always)]
-    fn wait(&mut self) -> bool {
+    fn poll(&mut self) -> bool {
         true
     }
 }

@@ -31,35 +31,28 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 use std::{thread, time};
 
-use crate::files::LogFile;
-
 const QUEUE_SIZE:usize = 100;
 const READ_THRESHOLD:usize = 10240;
 
 pub trait Stream {
-    fn get_length(&self) -> usize;
-    // Wait on any data at all; Returns true if file is still open
-    fn wait(&mut self) -> bool;
-    // Wait until we're sure the stream is closed
+    /// Returns current length of file/stream
+    fn len(&self) -> usize;
+
+    /// Check for more data and update state
+    /// Returns true if source is still open/active
+    fn poll(&mut self) -> bool;
+
+    /// Wait until source is closed/complete
     fn wait_for_end(&mut self) {}
+
+    /// Check if empty
+    fn is_empty(&self) -> bool { self.len() == 0 }
 }
 
 pub struct CachedStreamReader {
     buffer: Vec<u8>,
     rx: Option<Receiver<Vec<u8>>>,
     pos:u64,
-}
-
-impl<T: Stream + BufRead + Seek> LogFile for T {
-    #[inline(always)] fn len(&self) -> usize { self.get_length() }
-    #[inline(always)] fn quench(&mut self) {
-        log::trace!("Stream::quench");
-        self.wait();
-    }
-    fn wait_for_end(&mut self) {
-        log::trace!("wait_for_end");
-        Stream::wait_for_end(self)
-    }
 }
 
 impl CachedStreamReader {
@@ -94,7 +87,7 @@ impl CachedStreamReader {
         };
 
         // Try to init some read
-        stream.quench();
+        stream.poll();
 
         Ok(stream)
     }
@@ -139,8 +132,8 @@ impl CachedStreamReader {
     }
 
     pub fn fill_buffer(&mut self, pos: usize) {
-        while self.is_open() && pos + READ_THRESHOLD > self.get_length() {
-            let data = if pos >= self.get_length() {
+        while self.is_open() && pos + READ_THRESHOLD > self.len() {
+            let data = if pos >= self.len() {
                 self.blocking_wait()
             } else {
                 self.try_wait()
@@ -183,12 +176,12 @@ impl CachedStreamReader {
 }
 
 impl Stream for CachedStreamReader {
-    fn get_length(&self) -> usize {
+    fn len(&self) -> usize {
         self.buffer.len()
     }
 
     // Wait on any data at all; Returns true if file is still open
-    fn wait(&mut self) -> bool {
+    fn poll(&mut self) -> bool {
         self.fill_buffer(self.pos as usize);
         self.is_open()
     }
@@ -197,7 +190,7 @@ impl Stream for CachedStreamReader {
     fn wait_for_end(&mut self) {
         // TODO: add a timeout
         log::trace!("wait_for_end");
-        while self.wait() {
+        while self.poll() {
             thread::sleep(time::Duration::from_millis(10));
         }
     }
@@ -206,10 +199,10 @@ impl Stream for CachedStreamReader {
 impl Read for CachedStreamReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Blocking read
-        self.wait();
+        self.poll();
         let start = self.pos as usize;
         self.fill_buffer(start + buf.len());
-        let len = buf.len().min(self.get_length().saturating_sub(start));
+        let len = buf.len().min(self.len().saturating_sub(start));
         if len > 0 {
             let end = start + len;
             buf[..len].copy_from_slice(&self.buffer[start..end]);
@@ -220,6 +213,7 @@ impl Read for CachedStreamReader {
 }
 
 use std::io::SeekFrom;
+
 impl Seek for CachedStreamReader {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         // There's a dilemma here for stream readers. If we seek to the end, we can't know if more data is coming.
@@ -229,9 +223,9 @@ impl Seek for CachedStreamReader {
         // Code that needs to guarantee the end of the stream should call wait_for_end() first.
 
         if let SeekFrom::End(_) = pos {
-            let mut end = self.get_length();
-            while self.wait() {
-                let len = self.get_length();
+            let mut end = self.len();
+            while self.poll() {
+                let len = self.len();
                 if end == len {
                     // End stopped moving
                     break
@@ -243,9 +237,9 @@ impl Seek for CachedStreamReader {
         let (start, offset) = match pos {
             SeekFrom::Start(n) => (0_i64, n as i64),
             SeekFrom::Current(n) => (self.pos as i64, n),
-            SeekFrom::End(n) => (self.get_length() as i64, n),
+            SeekFrom::End(n) => (self.len() as i64, n),
         };
-        self.pos = ((start.saturating_add(offset)) as u64).min(self.get_length() as u64);
+        self.pos = ((start.saturating_add(offset)) as u64).min(self.len() as u64);
         Ok(self.pos)
     }
 }
