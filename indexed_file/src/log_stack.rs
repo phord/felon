@@ -161,6 +161,14 @@ impl Stream for LogStack {
     fn len(&self) -> usize {
         self.source.len()
     }
+
+    // Wait on any data at all; Returns true if file is still open
+    fn poll(&mut self) -> bool {
+        self.source.poll()
+    }
+    fn is_open(&self) -> bool {
+        self.source.is_open()
+     }
 }
 
 impl IndexedLog for LogStack {
@@ -251,6 +259,15 @@ impl FilteredSource {
 impl Stream for FilteredSource {
     fn len(&self) -> usize {
         self.source.len()
+    }
+
+    fn is_open(&self) -> bool {
+        self.source.is_open()
+    }
+
+     // Wait on any data at all; Returns true if file is still open
+    fn poll(&mut self) -> bool {
+        self.source.poll()
     }
 }
 

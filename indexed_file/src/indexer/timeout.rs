@@ -78,6 +78,10 @@ impl<LOG: IndexedLog> Stream for TimeoutWrapper<'_, LOG>  {
     fn poll(&mut self) -> bool {
         self.inner.poll()
     }
+
+    fn is_open(&self) -> bool {
+        self.inner.is_open()
+    }
 }
 
 impl<LOG: IndexedLog> IndexedLog for TimeoutWrapper<'_, LOG> {

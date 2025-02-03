@@ -82,7 +82,16 @@ impl Stream for Log {
         self.cached_len
     }
 
-   #[inline]
+    // Wait on any data at all; Returns true if file is still open
+    fn poll(&mut self) -> bool {
+        self.file.poll()
+    }
+
+    fn is_open(&self) -> bool {
+        self.file.is_open()
+    }
+
+    #[inline]
     fn wait_for_end(&mut self) {
         log::trace!("Wait for end of file");
         self.file.wait_for_end()

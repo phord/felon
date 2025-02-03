@@ -26,8 +26,11 @@ impl Stream for TextLogFile {
     // Wait on any data at all; Returns true if file is still open
     #[inline(always)]
     fn poll(&mut self) -> bool {
-        true
+        // FIXME: poll for new lines
+        false
     }
+
+    fn is_open(&self) -> bool { false }
 }
 
 impl BufRead for TextLogFile {

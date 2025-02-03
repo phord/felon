@@ -27,6 +27,7 @@ impl Stream for MockLogFile {
     }
 
     fn poll(&mut self) -> bool { false }
+    fn is_open(&self) -> bool { false }
 }
 
 impl LogFile for MockLogFile {

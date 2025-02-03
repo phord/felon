@@ -38,9 +38,11 @@ pub trait Stream {
     /// Returns current length of file/stream
     fn len(&self) -> usize;
 
+    fn is_open(&self) -> bool;
+
     /// Check for more data and update state
     /// Returns true if source is still open/active
-    fn poll(&mut self) -> bool { false }
+    fn poll(&mut self) -> bool;
 
     /// Wait until source is closed/complete
     fn wait_for_end(&mut self) {}
@@ -127,10 +129,6 @@ impl CachedStreamReader {
         }
     }
 
-    fn is_open(&self) -> bool {
-        self.rx.is_some()
-    }
-
     pub fn fill_buffer(&mut self, pos: usize) {
         while self.is_open() && pos + READ_THRESHOLD > self.len() {
             let data = if pos >= self.len() {
@@ -180,6 +178,10 @@ impl Stream for CachedStreamReader {
         self.buffer.len()
     }
 
+    fn is_open(&self) -> bool {
+        self.rx.is_some()
+    }
+
     // Wait on any data at all; Returns true if file is still open
     fn poll(&mut self) -> bool {
         self.fill_buffer(self.pos as usize);
@@ -188,6 +190,7 @@ impl Stream for CachedStreamReader {
 
     // Read stream until the file is closed
     fn wait_for_end(&mut self) {
+        // FIXME: This doesn't wait for end.  It hangs when we have enough readahead to rest (10KB).
         // TODO: add a timeout
         log::trace!("wait_for_end");
         while self.poll() {

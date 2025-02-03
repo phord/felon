@@ -179,6 +179,8 @@ impl<LOG: LogFile> Stream for SaneIndexer<LOG> {
         }
     }
 
+    fn is_open(&self) -> bool { self.source.is_open() }
+
     #[inline]
     fn wait_for_end(&mut self) {
         self.source.wait_for_end()

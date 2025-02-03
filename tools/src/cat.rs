@@ -17,27 +17,31 @@ fn get_files_from_cfg() -> Vec<Option<PathBuf>> {
     files
 }
 
-// MergedLogs line iterator exits early on slow stdin because it doesn't wait for more data while the file is still open.
+// Iterate using IndexedLog iterator, and poll for end of stream
 #[allow(dead_code)]
 pub fn cat_cmd() {
-    let mut logs = MergedLogs::new();
+    let mut out = std::io::stdout();
     for file in get_files_from_cfg() {
-        logs.push(Log::open(file.as_ref()).unwrap());
-    }
+        let file = files::new_text_file(file.as_ref()).expect("File failed to open");
+        let mut file = Log::from(file);
 
-    use std::io::Write;
-    // locking stdout saves time vs. many calls to printf!() macro
-    let stdout = std::io::stdout();
-    let lock = stdout.lock();
-
-    // Buffered writes approximately double the speed
-    let mut out = BufWriter::new(lock);
-
-    // TODO: Print lines with colors
-    for line in logs.iter_lines() {
-        write!(out, "{}", line).expect("stdout doesn't fail");
+        let mut start = 0;
+        loop {
+            log::trace!("iterating");
+            let range = start..;
+            for line in file.iter_lines_range(&range).filter(|line| line.offset >= range.start) {
+                // stdout like this is almost twice as fast as print!("{line}");
+                let _ = out.write(line.line.as_bytes()).expect("No errors");
+                start = line.offset + 1;
+            }
+            if !file.poll() {
+                log::trace!("exiting");
+                break
+            }
+        }
     }
 }
+
 
 pub fn tac_cmd() {
     let mut logs = MergedLogs::new();
@@ -115,6 +119,28 @@ where
             self.cursor = self.iter.next().map(Cursor::new);
         }
         Ok(0)
+    }
+}
+
+// MergedLogs line iterator exits early on slow stdin because it doesn't wait for more data while the file is still open.
+#[allow(dead_code)]
+pub fn merged_cat_cmd() {
+    let mut logs = MergedLogs::new();
+    for file in get_files_from_cfg() {
+        logs.push(Log::open(file.as_ref()).unwrap());
+    }
+
+    use std::io::Write;
+    // locking stdout saves time vs. many calls to printf!() macro
+    let stdout = std::io::stdout();
+    let lock = stdout.lock();
+
+    // Buffered writes approximately double the speed
+    let mut out = BufWriter::new(lock);
+
+    // TODO: Print lines with colors
+    for line in logs.iter_lines() {
+        write!(out, "{}", line).expect("stdout doesn't fail");
     }
 }
 

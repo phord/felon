@@ -474,9 +474,15 @@ impl<R> Stream for CompressedFile<R> {
             };
         len as usize
     }
+
     // Wait on any data at all; Returns true if file is still open
     fn poll(&mut self) -> bool {
-        true
+        // FIXME: assumes compressed files won't grow.  But they might.
+        false
+    }
+
+    fn is_open(&self) -> bool {
+        false
     }
 }
 

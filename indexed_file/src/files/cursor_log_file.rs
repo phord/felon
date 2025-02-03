@@ -13,8 +13,11 @@ impl Stream for CursorLogFile {
         self.get_ref().len()
     }
 
-    // Wait on any data at all; Returns true if file is still open
     fn poll(&mut self) -> bool { false }
+
+    fn is_open(&self) -> bool {
+        false
+    }
 }
 
 pub trait CursorUtil {
