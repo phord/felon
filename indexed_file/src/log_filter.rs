@@ -32,20 +32,28 @@ impl LogFilter {
                 return GetLine::Timeout(next)
             }
             let get = log.next_back(&self.inner_pos);
-            if let GetLine::Hit(pos, line) = get {
-                self.inner_pos = log.advance_back(&pos);
-                let range = line.offset..line.offset + line.line.len();
-                assert!(range.start < gap.end);
-                if range.end <= gap.start {
+            match get {
+                GetLine::Hit(pos, line) => {
+                    self.inner_pos = log.advance_back(&pos);
+                    let range = line.offset..line.offset + line.line.len();
+                    assert!(range.start < gap.end);
+                    if range.end <= gap.start {
+                        return GetLine::Miss(next);
+                    } else if self.filter.eval(&line) {
+                        next = self.filter.insert(&next, &range);
+                        return GetLine::Hit(next, line);
+                    } else {
+                        next = self.filter.erase_back(&next, &range);
+                    }
+                },
+                GetLine::Miss(pos) => {
+                    self.inner_pos = pos;
                     return GetLine::Miss(next);
-                } else if self.filter.eval(&line) {
-                    next = self.filter.insert(&next, &range);
-                    return GetLine::Hit(next, line);
-                } else {
-                    next = self.filter.erase_back(&next, &range);
-                }
-            } else {
-                return get;
+                },
+                GetLine::Timeout(pos) => {
+                    self.inner_pos = pos;
+                    return GetLine::Timeout(next)
+                },
             }
         }
     }
@@ -69,26 +77,34 @@ impl LogFilter {
             }
             let gap = next.region();
             let get = log.next(&self.inner_pos);
-            if let GetLine::Hit(pos, line) = get {
-                self.inner_pos = log.advance(&pos);
-                let range = line.offset..line.offset + line.line.len();
-                if range.end <= gap.start {
-                    // Inner starts by scanning the line that ends at the start of our gap
-                    continue;
-                }
-                assert!(range.start >= gap.start);
-                if range.start >= gap.end {
-                    // We walked off the end of our gap and onto the next gap.  We're done for now.
+            match get {
+                GetLine::Hit(pos, line) => {
+                    self.inner_pos = log.advance(&pos);
+                    let range = line.offset..line.offset + line.line.len();
+                    if range.end <= gap.start {
+                        // Inner starts by scanning the line that ends at the start of our gap
+                        continue;
+                    }
+                    assert!(range.start >= gap.start);
+                    if range.start >= gap.end {
+                        // We walked off the end of our gap and onto the next gap.  We're done for now.
+                        break;
+                    }
+                    if self.filter.eval(&line) {
+                        next = self.filter.insert(&next, &range);
+                        return GetLine::Hit(next, line);
+                    } else {
+                        next = self.filter.erase(&next, &range);
+                    }
+                },
+                GetLine::Miss(pos) => {
+                    self.inner_pos = pos;
                     break;
-                }
-                if self.filter.eval(&line) {
-                    next = self.filter.insert(&next, &range);
-                    return GetLine::Hit(next, line);
-                } else {
-                    next = self.filter.erase(&next, &range);
-                }
-            } else {
-                return get;
+                },
+                GetLine::Timeout(pos) => {
+                    self.inner_pos = pos;
+                    return GetLine::Timeout(next)
+                },
             }
         }
         GetLine::Miss(next)
@@ -162,9 +178,7 @@ impl LogFilter {
                 match get {
                     GetLine::Miss(p) => {
                         // Resolved gap with no matches; keep searching unless we hit the start of file
-                        if next == p {
-                            // Start of file?  No more points before us
-                            assert!(next.advance_back(&self.filter.index).is_invalid());
+                        if next.is_start_of_index() {
                             break;
                         }
                         next = p;

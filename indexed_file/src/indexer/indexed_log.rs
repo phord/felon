@@ -56,7 +56,7 @@ pub trait IndexedLog: Stream {
 
     /// Read the next/prev line from the file
     /// returns
-    ///    GetLine::Hit:     found line and it's indexed position
+    ///    GetLine::Hit:     found line and its indexed position
     ///    GetLine::Miss:    not found
     ///    GetLine::Timeout: we reached some limit (max time); pos is where we stopped
     /// Note: Unlike DoubleEndedIterator next_back, there is no rev() to reverse the iterator;

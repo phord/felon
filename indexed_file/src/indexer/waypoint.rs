@@ -207,6 +207,11 @@ impl Position {
         }
     }
 
+    /// Check if this waypoint is the first waypoint in the index
+    pub(crate) fn is_start_of_index(&self) -> bool {
+        matches!(self, Position::Existing((0,0), _))
+    }
+
     /// Find the next previous Position from this one
     pub(crate) fn advance_back(&self, index: &SaneIndex) -> Position {
         if let Position::Existing(i, ..) = self {
