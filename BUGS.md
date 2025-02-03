@@ -10,7 +10,9 @@
 [fixed] Switch between chopped and wrapped lines
 [fixed] Horizontal scroll
 [     ] Compressed file support or LESSPIPE support
-
+[     ] Fix pipe support
+[     ] Follow mode, as file grows, load more lines
+[     ] Disable mouse mode by default
 # Todo:
 * F3/Shift-F3 to search
 * scroll in chunks larger than 1 line for faster speed.  Maybe 25% of page?  or 5 lines at a time?
@@ -22,8 +24,11 @@
   * Enable/disable
   * color
   * Filter-in/Filter-out/Highlight
+  * Edit filter
 * Search preview
 * Bookmarks
+  * anonymous
+  * named
 * Save/restore previous session
 * [x] Persistent searches (" [KA] ", "STACKTRACE")
 * Scrollbar/minimap
