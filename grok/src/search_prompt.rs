@@ -3,25 +3,7 @@ use std::io::{stdout, Write};
 use crate::config::Config;
 use crossterm::{QueueableCommand, cursor, terminal};
 use crate::styled_text::styled_line::RGB_BLACK;
-
-struct SearchEditor;
-
-impl pomprt::Editor for SearchEditor {
-    // TODO: history functions?
-    // TODO: Find or build a better editor crate.  One that
-    // - Is async for iterative searching
-    // - Supports history
-    // - Forces single-line input (doesn't scroll the terminal)
-    // - Allows abort on Esc
-    //  See Rustyline, Reedline, r3bl_terminal_async, etc.
-    //   Alternatively, ratatui (but it's a whole thing)
-    //   https://github.com/rhysd/tui-textarea/blob/HEAD/examples/single_line.rs
-
-    // // Make the prompt cyan
-    // fn highlight_prompt(&self, prompt: &str, _multiline: bool) -> String {
-    //     format!("\x1b[36m{prompt}")
-    // }
-}
+use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
 
 pub struct Search {
     active: bool,
@@ -114,11 +96,21 @@ impl SearchPrompt {
     }
 
     pub fn run(&mut self) -> Option<String> {
-        let mut pom = pomprt::with(SearchEditor, &self.prompt);
-        match pom.read() {
-            Ok(input) => Some(input),
-            Err(pomprt::Eof) => None,
-            Err(_) => None,
+        let mut line_editor = Reedline::create();
+        let mut prompt = DefaultPrompt::default();
+        prompt.left_prompt = DefaultPromptSegment::Basic("/".to_string());
+        let sig = line_editor.read_line(&prompt);
+        match sig {
+            Ok(Signal::Success(buffer)) => {
+                Some(buffer)
+            }
+            Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
+                None
+            }
+            x => {
+                log::info!("reedline Event: {:?}", x);
+                None
+            }
         }
     }
 
