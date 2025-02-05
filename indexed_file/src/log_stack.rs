@@ -162,9 +162,9 @@ impl Stream for LogStack {
         self.source.len()
     }
 
-    // Wait on any data at all; Returns true if file is still open
-    fn poll(&mut self) -> bool {
-        self.source.poll()
+    // Poll for new data
+    fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
+        self.source.poll(timeout)
     }
     fn is_open(&self) -> bool {
         self.source.is_open()
@@ -265,9 +265,9 @@ impl Stream for FilteredSource {
         self.source.is_open()
     }
 
-     // Wait on any data at all; Returns true if file is still open
-    fn poll(&mut self) -> bool {
-        self.source.poll()
+    // Poll for new data
+    fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
+        self.source.poll(timeout)
     }
 }
 

@@ -52,6 +52,10 @@ impl Document {
     pub fn has_pending(&self) -> bool {
         self.log.has_pending()
     }
+
+    pub fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
+        self.log.poll(timeout)
+    }
 }
 
 impl Document {

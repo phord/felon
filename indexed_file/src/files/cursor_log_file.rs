@@ -13,7 +13,7 @@ impl Stream for CursorLogFile {
         self.get_ref().len()
     }
 
-    fn poll(&mut self) -> bool { false }
+    fn poll(&mut self, _timeout: Option<std::time::Instant>) -> usize { self.len() }
 
     fn is_open(&self) -> bool {
         false

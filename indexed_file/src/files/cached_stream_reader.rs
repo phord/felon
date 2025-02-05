@@ -41,11 +41,15 @@ pub trait Stream {
     fn is_open(&self) -> bool;
 
     /// Check for more data and update state
-    /// Returns true if source is still open/active
-    fn poll(&mut self) -> bool;
+    /// Returns new length
+    fn poll(&mut self, _timeout: Option<std::time::Instant>) -> usize;
 
     /// Wait until source is closed/complete
-    fn wait_for_end(&mut self) {}
+    fn wait_for_end(&mut self) {
+        while self.is_open() {
+            self.poll(Some(std::time::Instant::now() + time::Duration::from_millis(1000)));
+        }
+    }
 
     /// Check if empty
     fn is_empty(&self) -> bool { self.len() == 0 }
@@ -59,7 +63,6 @@ pub struct CachedStreamReader {
 
 impl CachedStreamReader {
     pub fn new(pipe: Option<&PathBuf>) -> std::io::Result<Self> {
-        log::trace!("new");
         let base = Self {
             rx: None,
             buffer: Vec::default(),
@@ -89,7 +92,7 @@ impl CachedStreamReader {
         };
 
         // Try to init some read
-        stream.poll();
+        stream.poll(None);
 
         Ok(stream)
     }
@@ -114,11 +117,13 @@ impl CachedStreamReader {
         }
     }
 
-    // Wait on any data at all; returns Some(data) or None if the stream is closed or there was an error
-    fn blocking_wait(&mut self) -> Option<Vec<u8>> {
+    // Wait on any data at all up to a timeout; returns Some(data) or None if the stream is closed or there was an error
+    fn timed_wait(&mut self, timeout: std::time::Instant) -> Option<Vec<u8>> {
         if let Some(rx) = &self.rx {
-            match rx.recv() {
+            let duration = timeout.duration_since(std::time::Instant::now());
+            match rx.recv_timeout(duration) {
                 Ok(data) => Some(data),
+                Err(mpsc::RecvTimeoutError::Timeout) => None,
                 Err(_) => {
                     self.rx = None;
                     None
@@ -131,15 +136,9 @@ impl CachedStreamReader {
 
     pub fn fill_buffer(&mut self, pos: usize) {
         while self.is_open() && pos + READ_THRESHOLD > self.len() {
-            let data = if pos >= self.len() {
-                self.blocking_wait()
-            } else {
-                self.try_wait()
-            };
-            if let Some(mut data) = data {
-                self.buffer.append(&mut data);
-            } else {
-                // Loop until queue is drained or threshold is satisfied
+            self.poll(None);
+            if pos < self.len() {
+                // Well, we got something, anyway.
                 break
             }
         }
@@ -182,27 +181,35 @@ impl Stream for CachedStreamReader {
         self.rx.is_some()
     }
 
-    // Wait on any data at all; Returns true if file is still open
-    fn poll(&mut self) -> bool {
-        self.fill_buffer(self.pos as usize);
-        self.is_open()
-    }
-
-    // Read stream until the file is closed
-    fn wait_for_end(&mut self) {
-        // FIXME: This doesn't wait for end.  It hangs when we have enough readahead to rest (10KB).
-        // TODO: add a timeout
-        log::trace!("wait_for_end");
-        while self.poll() {
-            thread::sleep(time::Duration::from_millis(10));
+    // Poll for new data
+    fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
+        while self.is_open() {
+            let data = if let Some(timeout) = timeout {
+                if std::time::Instant::now() > timeout {
+                    break
+                }
+                self.timed_wait(timeout)
+            } else {
+                self.try_wait()
+            };
+            if let Some(mut data) = data {
+                self.buffer.append(&mut data);
+            } else {
+                // queue is drained or we timed out
+                break
+            }
+            if timeout.is_none() {
+                // only try once if we weren't given a timeout
+                break
+            }
         }
+        self.buffer.len()
     }
 }
 
 impl Read for CachedStreamReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         // Blocking read
-        self.poll();
         let start = self.pos as usize;
         self.fill_buffer(start + buf.len());
         let len = buf.len().min(self.len().saturating_sub(start));
@@ -227,8 +234,8 @@ impl Seek for CachedStreamReader {
 
         if let SeekFrom::End(_) = pos {
             let mut end = self.len();
-            while self.poll() {
-                let len = self.len();
+            while self.is_open() {
+                let len = self.poll(None);
                 if end == len {
                     // End stopped moving
                     break

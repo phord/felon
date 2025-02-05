@@ -475,10 +475,10 @@ impl<R> Stream for CompressedFile<R> {
         len as usize
     }
 
-    // Wait on any data at all; Returns true if file is still open
-    fn poll(&mut self) -> bool {
+    // Poll for new data
+    fn poll(&mut self, _timeout: Option<std::time::Instant>) -> usize {
         // FIXME: assumes compressed files won't grow.  But they might.
-        false
+        self.len()
     }
 
     fn is_open(&self) -> bool {

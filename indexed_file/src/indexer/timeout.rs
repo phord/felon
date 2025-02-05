@@ -75,8 +75,8 @@ impl<LOG: IndexedLog> Stream for TimeoutWrapper<'_, LOG>  {
         self.inner.len()
     }
 
-    fn poll(&mut self) -> bool {
-        self.inner.poll()
+    fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
+        self.inner.poll(timeout)
     }
 
     fn is_open(&self) -> bool {

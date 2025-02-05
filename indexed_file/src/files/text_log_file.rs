@@ -23,11 +23,11 @@ impl Stream for TextLogFile {
     fn len(&self) -> usize {
         self.len
     }
-    // Wait on any data at all; Returns true if file is still open
+    // Poll for new data
     #[inline(always)]
-    fn poll(&mut self) -> bool {
+    fn poll(&mut self, _timeout: Option<std::time::Instant>) -> usize {
         // FIXME: poll for new lines
-        false
+        self.len
     }
 
     fn is_open(&self) -> bool { false }

@@ -27,17 +27,17 @@ pub fn cat_cmd() {
 
         let mut start = 0;
         loop {
-            log::trace!("iterating");
             let range = start..;
             for line in file.iter_lines_range(&range).filter(|line| line.offset >= range.start) {
                 // stdout like this is almost twice as fast as print!("{line}");
                 let _ = out.write(line.line.as_bytes()).expect("No errors");
                 start = line.offset + 1;
             }
-            if !file.poll() {
-                log::trace!("exiting");
+            if !file.is_open() {
                 break
             }
+            let timeout = std::time::Instant::now() + std::time::Duration::from_millis(100);
+            file.poll(Some(timeout));
         }
     }
 }

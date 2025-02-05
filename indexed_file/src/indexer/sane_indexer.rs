@@ -167,24 +167,15 @@ impl<LOG: LogFile> Stream for SaneIndexer<LOG> {
         self.index.stats.bytes_total
     }
 
-    fn poll(&mut self) -> bool {
-        if self.source.poll() {
-            let len = self.source.len();
-            if len != self.index.stats.bytes_total {
-                self.index.stats.bytes_total = len;
-            }
-            true
-        } else {
-            false
+    fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
+        let len = self.source.poll(timeout);
+        if len != self.index.stats.bytes_total {
+            self.index.stats.bytes_total = len;
         }
+        len
     }
 
     fn is_open(&self) -> bool { self.source.is_open() }
-
-    #[inline]
-    fn wait_for_end(&mut self) {
-        self.source.wait_for_end()
-    }
 }
 
 impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {

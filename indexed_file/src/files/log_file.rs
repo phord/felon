@@ -76,8 +76,7 @@ pub trait LogFile: BufRead + Seek + Stream {
 
 impl Stream for LogSource {
     #[inline(always)] fn len(&self) -> usize { self.as_ref().len() }
-    #[inline(always)] fn wait_for_end(&mut self) { self.as_mut().wait_for_end() }
-    #[inline(always)] fn poll(&mut self) -> bool { self.as_mut().poll() }
+    #[inline(always)] fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize { self.as_mut().poll(timeout) }
     #[inline(always)] fn is_open(&self) -> bool { self.as_ref().is_open() }
 }
 
