@@ -34,6 +34,7 @@ pub struct LineIndexerIterator<'a, LOG> {
 
 impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
+        log.poll(None);     // check for new data
         Self {
             pos: Position::Virtual(Start),
             pos_back: Position::Virtual(End),
@@ -46,6 +47,7 @@ impl<'a, LOG: IndexedLog> LineIndexerIterator<'a, LOG> {
     where
         R: std::ops::RangeBounds<usize>,
     {
+        log.poll(None);     // check for new data
         let start = start_offset(offset.start_bound());
         let end = end_offset(offset.end_bound());
         let pos = log.seek(start);
@@ -117,6 +119,7 @@ fn end_offset(bound: Bound<&usize>) -> usize {
 
 impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
     pub fn new(log: &'a mut LOG) -> Self {
+        log.poll(None);     // check for new data
         Self {
             pos: Position::Virtual(Start),
             pos_back: Position::Virtual(End),
@@ -129,6 +132,7 @@ impl<'a, LOG: IndexedLog> LineIndexerDataIterator<'a, LOG> {
     where
         R: std::ops::RangeBounds<usize>,
     {
+        log.poll(None);     // check for new data
         let start = start_offset(offset.start_bound());
         let end = end_offset(offset.end_bound());
         let pos = log.seek(start);
