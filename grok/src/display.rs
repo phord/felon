@@ -452,6 +452,7 @@ enum Scroll {
     Up(ScrollVector),
     Down(ScrollVector),
     Repaint(ScrollVector),
+    Overwrite(usize/* start row */, ScrollVector),
     GotoTop(ScrollVector),
     GotoBottom(ScrollVector),
     None,
@@ -466,6 +467,9 @@ impl Scroll {
     }
     fn repaint(offset: usize, lines: usize) -> Self {
         Self::Repaint( ScrollVector {offset, lines} )
+    }
+    fn overwrite(offset: usize, start: usize, end: usize) -> Self {
+        Self::Overwrite( start, ScrollVector {offset,lines: end - start} )
     }
     fn goto_top(offset: usize, lines: usize) -> Self {
         Self::GotoTop( ScrollVector {offset, lines} )
@@ -497,14 +501,18 @@ impl Display {
                 Scroll::Up(_) => (0, 0, 0),
                 Scroll::Down(_) => (height - 1, 0, 0),
                 Scroll::GotoBottom(_) | Scroll::GotoTop(_) | Scroll::Repaint(_) => (0, 1, height),
+                Scroll::Overwrite(start, _) => (start, 1, lines.len()),
                 Scroll::None => unreachable!("Scroll::None")
             }
         };
 
-        // Scrolling down if we are only inserting at the top
-        let down = row == 0 && incr == 0;
+        // Ugh! This is confusing.  But if we're Scrolling Up (towards the top of the document) then we're going to
+        // move the lines on the screen already downward.  So if scrolling up, we slide the lines on screen down.
 
-        // Scrolling up if we are only inserting at the bottom
+        // Scrolling the screen down if we are scrolling the document up
+        let down = !repaint && matches!(scroll, Scroll::Up(_));
+
+        // Scrolling the screen up if we are only inserting at the bottom
         let up = !down && incr == 0;
 
         let reversed = lines.len() > 1 && lines[0].offset > lines[1].offset;
@@ -566,6 +574,7 @@ impl Display {
             Scroll::Up(_) |
             Scroll::Down(_) |
             Scroll::GotoBottom(_) |
+            Scroll::Overwrite(..) |
             Scroll::GotoTop(_) => panic!("Expected Repaint after PanRightMax"),
 
             Scroll::None => unreachable!("Scroll::None")
@@ -634,10 +643,27 @@ impl Display {
                 let lines = doc.get_lines_range(&range).take(sv.lines.min(height));
                 lines.skip(skip).collect()
             },
+            Scroll::Overwrite(_, ref sv) => {
+                // Overwrite a range of lines with new data
+                let skip = sv.lines.saturating_sub(height);
+                let range = sv.offset..;
+                let lines = doc.get_lines_range(&range).skip_while(|line| line.offset <= sv.offset).take(sv.lines.min(height));
+                lines.skip(skip).collect()
+            },
             Scroll::None => unreachable!("Scroll::None")
         };
 
         self.paint(doc, lines, scroll)
+    }
+
+    fn have_new_lines(&self, doc: &mut Document) -> bool {
+        if self.displayed_lines.len() < self.page_size() {
+            let len = doc.len();
+            let new_len = doc.poll(None);
+            new_len > len
+        } else {
+            false
+        }
     }
 
     pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
@@ -663,6 +689,10 @@ impl Display {
                 // FIXME: Only need to add rows if we only got taller
                 log::trace!("repaint everything");
                 Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+            } else if self.have_new_lines(doc) {
+                // We displayed fewer lines than the screen height. Check for more data appearing
+                log::trace!("check for more data");
+                Scroll::overwrite(*self.displayed_lines.last().unwrap(), self.displayed_lines.len(), view_height)
             } else {
                 match self.scroll {
                     ScrollAction::GotoOffset(offset) => {
