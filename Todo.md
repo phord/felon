@@ -70,7 +70,8 @@ A quick issue tracker
             - count_lines
             - future: status (percent indexed, relative position?)
         - Stream
-            - wait
+            - poll
+            - is_open
             - wait_for_end
 
         - Wrappers

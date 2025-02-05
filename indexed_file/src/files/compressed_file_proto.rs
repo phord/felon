@@ -46,7 +46,6 @@ trait CompressedFileReader {
     fn is_recognized(file: R) -> bool;
     fn get_length(&self) -> usize;
     fn wait(&mut self) -> bool;
-    fn wait_for_end(&mut self);
 }
 
 pub struct CompressedFile<R, Decomp> {
@@ -471,7 +470,7 @@ impl<R> Stream for CompressedFile<R> {
             };
         len as usize
     }
-    // Wait on any data at all; Returns true if file is still open
+    // Poll for new data
     fn wait(&mut self) -> bool {
         true
     }
