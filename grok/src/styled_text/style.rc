@@ -1,0 +1,113 @@
+# style.rc
+#
+# This should be interpreted as a script of commands to Grok.  The commands available here are the same ones
+# available on the command-line in Grok.  TODO: Build a command parser.
+#
+
+filter-out "shmem.res"
+filter-out "profiler"
+
+filter-in --disabled --group GC "gc.main"
+filter-in --disabled --group GC "vol.gc.flush"
+filter-in --disabled --group GC "vol.gc_flush_mappings"
+
+parser-add "^(?<timestamp>[A-Z][a-z]{2} {1,2}\\d{1,2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}) (?<pid>[0-9A-F]{12}) (?<crumb>[A-Z])      (?<indent> *)(?<module>\\w+(?:(?:\\.|::)\\w+)*)(?: \\[(?<instance>\\w+(?:(?:\\.|::)\\w+)*)\\]){0,1} (?<body>.*)$"
+
+parser-add example "(?x)
+                      ^(...\ [\ 1-3]\d\ [0-2]\d:[0-5]\d:\d{2}\.\d{3})\    # date & time
+                       ([A-F0-9]{12})\                                    # PID
+                       ([A-Z])\                                           # crumb"
+
+parser-style timestamp Green
+parser-style pid Semantic
+parser-style module Semantic
+parser-style numbers Semantic
+
+set-level crumb error "E"
+set-level crumb critical "K"
+set-level crumb critical "A"
+
+time-format timestamp "%b %d %H:%M:%S.%f"
+
+# Default colors for searches
+search-colors Blue, Red, Green, Magenta, Cyan, Underline, Black-on-Yellow
+
+highlight-colors Red, Yellow, Green
+
+default-colors Rgb(140,140,140)-on-Rgb(0)
+default-colors "#c0c0c0"-on-"#000000"
+
+# Filters are not colored by default, but they can be
+filter-color None
+
+# Preview colors are used to show the match-so-far as the user is typing the expression
+preview-color White-on-Red
+
+# Color of the status line elements
+status-color Inverse
+
+
+
+set wrap chop
+set number on
+
+
+## Idea: conditionally accept directives by matching predicate
+    parser-add pslogd "^(?<timestamp>[A-Z][a-z]{2} {1,2}\\d{1,2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}) (?<pid>[0-9A-F]{12}) (?<crumb>[A-Z])      (?<indent> *)(?<module>\\w+(?:(?:\\.|::)\\w+)*)(?: \\[(?<instance>\\w+(?:(?:\\.|::)\\w+)*)\\]){0,1} (?<body>.*)$"
+
+    if pslogd {
+        parser-style timestamp Green
+        parser-style pid Semantic
+        parser-style module Semantic
+        parser-style numbers Semantic
+
+        parser-add " {3}(?<module>[A-Za-z0-9_.]+) (?<module>\[([a-z0-9_.]+)\]){0,1}"
+        parser-add "Space calculate job finished, ((?<capacity_bytes>\d{7,18}) [[:word:]]+[, ]+)+"
+    }
+
+    if filename ~ "core.log-*" {
+        parser-add " {3}(?<module>[A-Za-z0-9_.]+) (?<module>\[([a-z0-9_.]+)\]){0,1}"
+    }
+
+
+parser-add " {3}(?<module>[A-Za-z0-9_.]+) (?<module>\[([a-z0-9_.]+)\]){0,1}"
+
+parser-add "Space calculate job finished, ((?<capacity_bytes>\d{7,18}) [[:word:]]+[, ]+)+"
+
+# Can we use the evalexpr crate?
+replace capacity_bytes expr("a=1.0 * capacity_bytes; a /= 1024 * 1024 * 1024 * 1024; capacity_bytes, str_from(a) + "TB\"")
+
+parser-add control "[[:control:]]"
+replace control expr("a=ord(control); a += 64; "^" + str_from(a)")
+highlight control Inverse
+
+# Match any 0x{hex} number, any 16-digit all-uppercase hex number at word delimiters, or any decimal number which is not part of a word suffix.
+# TODO: Also match UUIDS and include units when attached, like `123GB`
+parser-add numbers "(\b0x[[:xdigit:]]+\b|\b[0-9A-F]{16}\b|(?:[[:digit:]]+\.)*[[:digit:]]+)"
+
+style "module" bold,semantic
+style numbers semantic,italic
+style timestamp Green
+style default White,onBlack
+
+
+linemode chop # break, wrap, etc.
+
+keymap "F3" search-next
+keymap "Shift+F3" search-prev
+keymap "Tab" edit-filters
+keymap "^L" toggle-filters
+
+show line-numbers
+show timestamp
+show delta
+show filename
+hide pid
+show offset
+show scrollbar
+
+# Misc commands:
+# goto-line
+# goto-time
+# goto-offset
+# goto-percent

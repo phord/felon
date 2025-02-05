@@ -1,0 +1,52 @@
+{
+        "purity" : {
+            "title" : "Purity and foed",
+            "description" : "Purity core.log and platform.log format",
+            "regex" : {
+                "default" : {
+                    "pattern" : "^(?<timestamp>[A-Z][a-z]{2} {1,2}\\d{1,2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}) (?<pid>[0-9A-F]{12}) (?<crumb>[A-Z])      (?<indent> *)(?<module>\\w+(?:(?:\\.|::)\\w+)*)(?: \\[(?<instance>\\w+(?:(?:\\.|::)\\w+)*)\\]){0,1} (?<body>.*)$"
+                }
+            },
+            "level-field": "crumb",
+            "level" : {
+                "fatal" : "K",
+                "critical" : "A",
+                "error" : "E"
+                },
+            "opid-field" : "module",
+            "value" : {
+                "instance" : {
+                    "kind" : "string",
+                    "identifier" : true
+                },
+                "pid" : {
+                    "kind" : "string",
+                    "identifier" : true
+                },
+                "module" : {
+                    "kind" : "string",
+                    "identifier" : true
+                },
+                "user" : {
+                    "kind" : "string",
+                    "identifier" : true
+                }
+            },
+            "sample" : [
+                {
+                    "level" : "error",
+                    "line" : "Jun  1 11:56:50.420 000000000B96 E      osenv.err <<0x00007FE75B9B6210>> err.src=6437:'/root/hudsonworkspace/workspace/p_builder/source.purity_unique.0/kernel/admin/puredb.cpp'"
+                },
+                {
+                    "line" : "Jun  1 11:56:50.474 000000000B96 I      admin.puredb_shared list messaging connections"
+                },
+                {
+                    "line" : "Jun  1 12:14:58.259 7FEA12B60D0D I      tbl.summary_svc Total cache utilization for 'tbl::ivec_summary_svc': 8.199MB in 32 maps"
+                },
+                {
+                    "level" : "fatal",
+                    "line" : "Jun 10 11:56:50.474 000000000B96 K      admin.puredb_shared list messaging connections"
+                }
+            ]
+        }
+    }
