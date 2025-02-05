@@ -8,6 +8,7 @@ enum PendingOp {
     SeekForward(usize, Position),
     SeekBackward(usize, Position),
     FillGaps(Position),
+    Streaming,
     None,
 }
 
@@ -99,35 +100,52 @@ impl  LogStack {
         }
     }
 
-    fn do_fill_gaps(&mut self, timeout: u64, pos: Position) -> PendingOp {
-        let src = &mut self.with_timeout(timeout);
-        let pos = src.resolve_gaps(&pos);
-        if src.timed_out() {
-            PendingOp::FillGaps(pos)
-        } else {
-            PendingOp::None
-        }
+    fn do_fill_gaps(&mut self, timeout: u64, pos: Position) {
+        let state= {
+            let src = &mut self.with_timeout(timeout);
+            let pos = src.resolve_gaps(&pos);
+            if src.timed_out() {
+                PendingOp::FillGaps(pos)
+            } else {
+                PendingOp::None
+            }
+        };
+        self.pending = state;
     }
 
     pub fn run_pending(&mut self, timeout: u64) -> Option<usize> {
-        let result = match self.pending.clone() {
+        let mut result = None;
+        match self.pending.clone() {
             PendingOp::SeekForward(count, pos) |
             PendingOp::SeekBackward(count, pos) =>
-                self.do_search(timeout, count, pos),
+                result = self.do_search(timeout, count, pos),
 
-            PendingOp::FillGaps(pos) => {
-                self.pending = self.do_fill_gaps(timeout, pos);
-                None
+            PendingOp::FillGaps(pos) =>
+                self.do_fill_gaps(timeout, pos),
+
+            PendingOp::Streaming => {
+                let len = self.source.poll(Some(std::time::Instant::now() + std::time::Duration::from_millis(timeout)));
+                if let Some(ref mut search) = &mut self.search {
+                    search.update_len(len);
+                }
+                if !self.source.is_open() {
+                    self.pending = PendingOp::None;
+                }
             },
-            PendingOp::None => None,
+
+            PendingOp::None => {},
         };
         self.kick_pending();
         result
     }
 
     fn kick_pending(&mut self) {
-        if matches!(self.pending, PendingOp::None) && self.has_gaps() {
-            self.pending = PendingOp::FillGaps(Position::invalid());
+        if matches!(self.pending, PendingOp::None) {
+            if self.has_gaps() {
+                self.pending = PendingOp::FillGaps(Position::invalid());
+            } else if self.source.is_open() {
+                self.pending = PendingOp::Streaming;
+            }
         }
     }
 
