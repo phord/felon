@@ -84,7 +84,8 @@ impl Stream for Log {
 
     // Wait on any data at all; returns file length
     fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
-        self.file.poll(timeout)
+        self.cached_len = self.file.poll(timeout);
+        self.cached_len
     }
 
     fn is_open(&self) -> bool {

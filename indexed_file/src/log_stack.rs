@@ -267,7 +267,11 @@ impl Stream for FilteredSource {
 
     // Poll for new data
     fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
-        self.source.poll(timeout)
+        let len = self.source.poll(timeout);
+        if let Some(ref mut filter) = &mut self.filter {
+            filter.update_len(len);
+        }
+        len
     }
 }
 

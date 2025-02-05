@@ -224,6 +224,11 @@ impl LogFilter {
         std::iter::once(&self.filter.index.stats)
     }
 
+    // We don't participate in poll(), so poll()-callers should update us by calling this
+    pub fn update_len(&mut self, len: usize) {
+        self.filter.index.stats.bytes_total = len;
+    }
+
     pub fn has_gaps(&self) -> bool {
         self.filter.index.stats.bytes_indexed < self.filter.index.stats.bytes_total
     }

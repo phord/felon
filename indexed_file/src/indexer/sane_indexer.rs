@@ -168,11 +168,8 @@ impl<LOG: LogFile> Stream for SaneIndexer<LOG> {
     }
 
     fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
-        let len = self.source.poll(timeout);
-        if len != self.index.stats.bytes_total {
-            self.index.stats.bytes_total = len;
-        }
-        len
+        self.index.stats.bytes_total = self.source.poll(timeout);
+        self.index.stats.bytes_total
     }
 
     fn is_open(&self) -> bool { self.source.is_open() }
