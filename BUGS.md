@@ -13,6 +13,7 @@
 [     ] Fix pipe support
 [     ] Follow mode, as file grows, load more lines
 [     ] Disable mouse mode by default
+[     ] Filter + Search burns 100% CPU because Search.has_gaps() and never reaches 100%
 
 # Todo:
 * F3/Shift-F3 to search

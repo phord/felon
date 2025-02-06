@@ -2,6 +2,12 @@ use regex::Regex;
 
 use crate::{files::Stream, index_filter::SearchType, indexer::{indexed_log::IndexStats, waypoint::Position, GetLine}, log_filter::LogFilter, IndexedLog, Log};
 
+// Pending operations are used to handle blocking tasks asyncronously.  Mostly these are background tasks, and the order
+// doesn't much matter.  But if we are searching for a line, we need to find it and return it asap.  So we try to complete
+// searches first.  Then we try to fill gaps.  Then we try to stream new data. Streaming new data will cause us to have
+// new gaps, so these last two might trade back and forth. But streaming arguably comes first because there are no gaps
+// without data.
+
 #[derive(Clone, Debug)]
 enum PendingOp {
     //          count, offset
