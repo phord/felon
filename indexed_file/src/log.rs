@@ -121,10 +121,6 @@ impl IndexedLog for Log {
         self.file.info()
     }
 
-    fn addressable(&self) -> usize {
-        self.file.addressable()
-    }
-
     #[inline]
     fn read_line(&mut self, offset: usize) -> Option<LogLine> {
         self.file.read_line(offset)

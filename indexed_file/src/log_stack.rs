@@ -223,7 +223,7 @@ impl IndexedLog for LogStack {
             pos.clone()
         };
         if let Some(ref mut search) = &mut self.search {
-            if search.has_gaps_filtered(self.source.addressable()) {
+            if search.has_gaps() {
                 return search.resolve_gaps(&mut self.source, &pos)
             }
         }
@@ -249,13 +249,9 @@ impl IndexedLog for LogStack {
         .chain(self.search.iter().flat_map(|f| f.info()))
     }
 
-    fn addressable(&self) -> usize {
-        self.source.addressable()
-    }
-
     fn has_gaps(&self) -> bool {
         self.source.has_gaps()
-            || self.search.as_ref().map(|f| f.has_gaps_filtered(self.source.addressable())).unwrap_or(false)
+            || self.search.as_ref().map(|f| f.has_gaps()).unwrap_or(false)
     }
 }
 
@@ -375,14 +371,6 @@ impl IndexedLog for FilteredSource {
     where Self: Sized  {
         self.source.info()
         .chain(self.filter.iter().flat_map(|f| f.info()))
-    }
-
-    fn addressable(&self) -> usize {
-        if let Some(filter) = &self.filter {
-            filter.addressable()
-        } else {
-            self.source.addressable()
-        }
     }
 
     fn has_gaps(&self) -> bool {

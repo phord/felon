@@ -295,7 +295,6 @@ impl SaneIndex {
     pub fn insert_one(&mut self, pos: &Position, range: &Range) -> Position {
         let row = self.clear_gap(pos, range);
         self.stats.lines_indexed += 1;
-        self.stats.bytes_mapped += range.end.saturating_sub(range.start);
 
         // Returned slot is remainder of gap, if any.  We need to insert before or after that gap.
         // Find row on other side of gap make sure we can insert there.  If it's unmapped, we need to add a row.

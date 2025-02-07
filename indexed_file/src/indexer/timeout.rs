@@ -111,10 +111,6 @@ impl<LOG: IndexedLog> IndexedLog for TimeoutWrapper<'_, LOG> {
         self.inner.info()
     }
 
-    fn addressable(&self) -> usize {
-        self.inner.addressable()
-    }
-
     fn set_timeout(&mut self, limit: Option<Duration>) {
         self.inner.set_timeout(limit);
     }

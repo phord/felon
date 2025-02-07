@@ -24,8 +24,6 @@ impl GetLine {
 pub struct IndexStats {
     pub name: String,
     pub bytes_indexed: usize,
-    pub bytes_mapped: usize,
-    // TODO: pub bytes_in_source: usize, // how many bytes could we eventually index?  It comes from the source stats.  Need a new functon for that.
     pub lines_indexed: usize,
     pub bytes_total: usize,
 }
@@ -41,7 +39,6 @@ impl IndexStats {
 
     pub fn reset(&mut self) {
         self.bytes_indexed = 0;
-        self.bytes_mapped = 0;
         self.lines_indexed = 0;
     }
 }
@@ -90,10 +87,6 @@ pub trait IndexedLog: Stream {
     /// Iterator to provide access to info about the different indexes
     fn info(&self) -> impl Iterator<Item = &'_ IndexStats> + '_
     where Self: Sized ;
-
-    /// Size of the addressable space using this index. May decrease over time.
-    fn addressable(&self) -> usize ;
-        // self.stats.bytes_total - self.stats.bytes_indexed + self.stats.bytes_mapped
 
     // Autowrap
     fn with_timeout(&mut self, ms: u64) -> TimeoutWrapper<Self> where Self: std::marker::Sized {

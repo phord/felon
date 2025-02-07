@@ -277,10 +277,6 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         std::iter::once(&self.index.stats)
     }
 
-    fn addressable(&self) -> usize {
-        self.index.stats.bytes_mapped + self.index.stats.bytes_total - self.index.stats.bytes_indexed
-    }
-
     fn has_gaps(&self) -> bool {
         self.index.stats.bytes_indexed < self.index.stats.bytes_total
     }
