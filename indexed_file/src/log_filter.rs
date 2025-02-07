@@ -232,4 +232,12 @@ impl LogFilter {
     pub fn has_gaps(&self) -> bool {
         self.filter.index.stats.bytes_indexed < self.filter.index.stats.bytes_total
     }
+
+    pub fn has_gaps_filtered(&self, addressable: usize) -> bool {
+        self.filter.index.stats.bytes_indexed < addressable
+    }
+
+    pub fn addressable(&self) -> usize {
+        self.filter.index.stats.bytes_mapped + self.filter.index.stats.bytes_total - self.filter.index.stats.bytes_indexed
+    }
 }
