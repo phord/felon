@@ -4,6 +4,7 @@ use crate::{files::Stream, LineIndexerDataIterator, LineIndexerIterator, LogLine
 use super::{waypoint::Position, TimeoutWrapper};
 
 // Result of fetching a line: got it, or timeout
+#[derive(Debug)]
 pub enum GetLine {
     Hit(Position, LogLine),
     Miss(Position),

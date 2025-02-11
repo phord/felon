@@ -47,7 +47,7 @@ impl PendingOp {
 /// filters, exclude filters, bookmarks, highlights and and searches.
 pub struct LogStack {
     source: FilteredSource,
-    search: Option<LogFilter>,
+    search: Option<LogFilter>,  // FIXME: Should hold IndexFilter here and create a LogFilter as-needed
     pending: PendingOp,
 }
 
@@ -82,7 +82,7 @@ impl  LogStack {
             let mut pos = pos;
             loop {
                 pos = self.pending.seek_fwd_rev(search, src, pos);
-                if src.timed_out() {
+                if src.timed_out() || pos.is_invalid() {
                     break;
                 }
                 count = count.saturating_sub(1);
@@ -90,12 +90,20 @@ impl  LogStack {
                     break;
                 }
             }
-            if src.timed_out() {
+            if pos.is_invalid() {
+                // Not found, but nothing more to find, either.
+                self.pending = PendingOp::None;
+                log::trace!("Search invalid");
+                // FIXME: Return some indication to that caller that search failed
+                None
+            } else if src.timed_out() {
                 // Didn't find it yet
                 self.pending = self.pending.update(count, pos);
+                log::trace!("Search timed out");
                 None
             } else {
                 // Found it
+                log::trace!("Search found");
                 self.pending = PendingOp::None;
                 pos.offset()
             }

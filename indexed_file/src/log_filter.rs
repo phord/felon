@@ -24,13 +24,14 @@ impl LogFilter {
     /// Returns the found line and the next-back position from it.
     fn resolve_location_next_back<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, next: &Position) -> GetLine {
         assert!(next.is_unmapped());
-        let gap = next.region();
         let mut next = next.clone();
 
         loop {
             if log.check_timeout() {
                 return GetLine::Timeout(next)
             }
+            let gap = next.region();
+            let skip_end = self.inner_pos.least_offset().min(log.len());
             let get = log.next_back(&self.inner_pos);
             match get {
                 GetLine::Hit(pos, line) => {
@@ -39,7 +40,15 @@ impl LogFilter {
                     assert!(range.start < gap.end);
                     if range.end <= gap.start {
                         return GetLine::Miss(next);
-                    } else if self.filter.eval(&line) {
+                    }
+
+                    if skip_end > range.end {
+                        // We skipped a region because the inner log filtered it out.  Erase it from consideration.
+                        let skipped = range.end..skip_end;
+                        next = self.filter.erase_back(&next, &skipped);
+                    }
+
+                    if self.filter.eval(&line) {
                         next = self.filter.insert(&next, &range);
                         return GetLine::Hit(next, line);
                     } else {
@@ -76,20 +85,30 @@ impl LogFilter {
                 return GetLine::Timeout(next)
             }
             let gap = next.region();
+            let skip_start = self.inner_pos.least_offset();
             let get = log.next(&self.inner_pos);
             match get {
                 GetLine::Hit(pos, line) => {
                     self.inner_pos = log.advance(&pos);
                     let range = line.offset..line.offset + line.line.len();
                     if range.end <= gap.start {
-                        // Inner starts by scanning the line that ends at the start of our gap
+                        // Inner starts by scanning the line that ends at the start of our gap. This is that line. Ignore it.
                         continue;
                     }
                     assert!(range.start >= gap.start);
-                    if range.start >= gap.end {
+
+                    let end = gap.end;
+                    if range.start > skip_start {
+                        // We skipped a region because the inner log filtered it out.  Erase it from consideration.
+                        let skipped = skip_start..range.start;
+                        next = self.filter.erase(&next, &skipped);
+                    }
+
+                    if range.start >= end {
                         // We walked off the end of our gap and onto the next gap.  We're done for now.
                         break;
                     }
+
                     if self.filter.eval(&line) {
                         next = self.filter.insert(&next, &range);
                         return GetLine::Hit(next, line);
@@ -99,6 +118,13 @@ impl LogFilter {
                 },
                 GetLine::Miss(pos) => {
                     self.inner_pos = pos;
+                    // Mark the remaining gap as explored with no matches
+                    let remaining = skip_start..log.len();
+                    if !remaining.is_empty() {
+                        next = self.filter.erase(&next, &remaining);
+                    } else {
+                        next = Position::invalid();
+                    }
                     break;
                 },
                 GetLine::Timeout(pos) => {
@@ -203,6 +229,7 @@ impl LogFilter {
 
     pub fn resolve_gaps<LOG: IndexedLog + ?Sized>(&mut self, log: &mut LOG, pos: &Position) -> Position {
         let mut pos = pos.clone();
+
         while pos.least_offset() < log.len() {
             pos = self.filter.index.seek_gap(&pos);
             while pos.is_unmapped() {
