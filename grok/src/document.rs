@@ -49,6 +49,10 @@ impl Document {
         self.log.run_pending(timeout)
     }
 
+    pub fn describe_pending(&self) -> String {
+        self.log.describe_pending()
+    }
+
     pub fn has_pending(&self) -> bool {
         self.log.has_pending()
     }

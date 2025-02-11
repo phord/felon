@@ -119,6 +119,16 @@ impl  LogStack {
         self.pending = state;
     }
 
+    pub fn describe_pending(&self) -> String {
+        match self.pending {
+            PendingOp::SeekForward(..) => "Search Forward".to_string(),
+            PendingOp::SeekBackward(..) => "Search Backward".to_string(),
+            PendingOp::FillGaps(..) => "Fill Gaps".to_string(),
+            PendingOp::Streaming => "Streaming".to_string(),
+            PendingOp::None => "None".to_string(),
+        }
+    }
+
     pub fn run_pending(&mut self, timeout: u64) -> Option<usize> {
         let mut result = None;
         match self.pending.clone() {

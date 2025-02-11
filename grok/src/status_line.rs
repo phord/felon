@@ -28,7 +28,7 @@ impl StatusLine {
         // status line:   curr_line of total_lines | "search": hit of total (hidden) | "filter": hit of total (hidden)
         let mut stdout = stdout();
         let message =
-            std::iter::once(format!("Bytes: {}", doc.len()))
+            std::iter::once(format!("Bytes: {}  {}", doc.len(), doc.describe_pending()))
             .chain(doc.info()
                 .map(|stats| {
                     let indexed = stats.bytes_indexed as f64 / doc.len() as f64 * 100.0;
