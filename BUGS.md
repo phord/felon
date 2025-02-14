@@ -40,8 +40,8 @@
 * [x] Semantic coloring for words
 * Display helpful regex errors
 * Faster indexing / searching (compare to bvr)
-* Search/filter history recall
-  * Persistent history
+X Search/filter history recall
+  X Persistent history
 * Mouse tricks
   * Highlight instances of a clicked word
   * Drag-select text
@@ -61,4 +61,3 @@
   * --save-marks (saves bookmarks)
   * -<number> set horiz scroll width
   * --mouse
-  *
