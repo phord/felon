@@ -5,6 +5,12 @@ use crossterm::{QueueableCommand, cursor, terminal};
 use crate::styled_text::styled_line::RGB_BLACK;
 use crate::input_line::InputLine;
 
+pub enum InputAction {
+    None,
+    Search(bool, String),
+    Cancel,
+}
+
 pub struct Search {
     active: bool,
     prompt: SearchPrompt,
@@ -45,20 +51,27 @@ impl Search {
         &self.expr
     }
 
-    pub fn run(&mut self) -> bool {
-        if !self.active { false }
-        else {
+    pub fn run(&mut self) -> InputAction {
+        if !self.active {
+            InputAction::None
+        } else {
             let input = self.prompt.run();
             if let Some(input) = input {
                 self.active = false;
                 // Empty input means repeat previous search
                 let input = input.trim_end_matches('\r');
                 if input.is_empty() {
-                    return !self.expr.is_empty()
+                    if self.expr.is_empty() {
+                        return InputAction::Cancel
+                    }
+                } else {
+                    self.expr = input.to_string();
                 }
-                self.expr = input.to_string();
-                true
-            } else { false }
+                InputAction::Search(self.forward, self.expr.clone())
+            } else {
+                self.active = false;
+                InputAction::Cancel
+            }
         }
     }
 }

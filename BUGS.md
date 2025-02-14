@@ -4,7 +4,7 @@
 [     ] Scroll to bottom then up scrolls extra lines if file is shorter than page size.  End + PgUp (twice) shows this bug.
 [fixed] Search backwards sometimes doesn't update display or displays all-tildes
 [     ] No way to turn off filter
-[     ] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
+[fixed] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
 
 # MVP: Features I need daily
 [fixed] Switch between chopped and wrapped lines

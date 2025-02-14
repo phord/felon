@@ -56,8 +56,7 @@ enum ScrollAction {
     None,   // Nothing to do
     StartOfFile(usize),
     EndOfFile(usize),
-    SearchForward(usize),
-    SearchBackward(usize),
+    Search(bool, usize),
     Up(usize),
     Down(usize),
     Repaint,
@@ -104,6 +103,9 @@ pub struct Display {
     // Displayed line offsets
     displayed_lines: Vec<usize>,
 
+    // Search direction
+    search_forward: bool,
+
     mouse_wheel_height: u16,
 }
 
@@ -134,6 +136,7 @@ impl Display {
             color: config.color,
             chop: config.chop,
             pan: 0,
+            search_forward: true,
             pan_width: 0,
         }
     }
@@ -183,7 +186,8 @@ impl Display {
         // self.action = Action::Message;
     }
 
-    pub fn set_search(&mut self, doc: &mut Document, search: &str) -> bool {
+    pub fn set_search(&mut self, doc: &mut Document, search: &str, forward: bool) -> bool {
+        self.search_forward = forward;
         match doc.set_search(search) {
             Ok(_) => true,
             Err(e) => {
@@ -388,10 +392,10 @@ impl Display {
                 self.set_status_msg(format!("{:?}", cmd));
             }
             UserCommand::SearchNext => {
-                self.scroll = ScrollAction::SearchForward(self.get_arg() as usize);
+                self.scroll = ScrollAction::Search(self.search_forward, self.get_arg() as usize);
             }
             UserCommand::SearchPrev => {
-                self.scroll = ScrollAction::SearchBackward(self.get_arg() as usize);
+                self.scroll = ScrollAction::Search(!self.search_forward, self.get_arg() as usize);
             }
             _ => {}
         }
@@ -732,27 +736,19 @@ impl Display {
                         let begin = self.displayed_lines.last().unwrap();
                         Scroll::down(*begin, len)
                     }
-                    ScrollAction::SearchBackward(repeat) => {
-                        // Search backwards from the first line displayed
-                        log::trace!("search backward");
-                        // FIXME: This could take some time.  Need an async operation and a busy-indicator
-                        let begin = doc.search_back(*self.displayed_lines.first().unwrap(), repeat);
+                    ScrollAction::Search(forward, repeat) => {
+                        let begin = if !forward {
+                            // Search backwards from the first line displayed
+                            log::trace!("search backward");
+                            doc.search_back(*self.displayed_lines.first().unwrap(), repeat)
+                        } else {
+                            // Search forwards from the last line displayed
+                            log::trace!("search forward");
+                            doc.search_next(*self.displayed_lines.last().unwrap(), repeat)
+                        };
                         if let Some(begin) = begin {
                             Scroll::repaint(begin, view_height)
                         } else {
-                            log::trace!("search-back: no match");
-                            Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
-                        }
-                    }
-                    ScrollAction::SearchForward(repeat) => {
-                        // Search forwards from the last line displayed
-                        log::trace!("search forward");
-                        // FIXME: This could take some time.  Need an async operation and a busy-indicator
-                        let begin = doc.search_next(*self.displayed_lines.last().unwrap(), repeat);
-                        if let Some(begin) = begin {
-                            Scroll::repaint(begin, view_height)
-                        } else {
-                            log::trace!("search-next: no match");
                             Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
                         }
                     }
