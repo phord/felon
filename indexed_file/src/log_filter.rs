@@ -139,7 +139,10 @@ impl LogFilter {
     // Update an inner Position to navigate the log file while resolving unmapped filtered regions
     fn seek_inner(&mut self, pos: usize) {
         // Ignore it if the caller tries to set us but we're already tracking them
-        if self.inner_pos.is_virtual() || !(self.inner_pos.region().contains(&pos) || self.inner_pos.most_offset() == pos) {
+        if self.inner_pos.is_virtual()
+                || self.inner_pos.moved(&self.filter.index)
+                || !(self.inner_pos.region().contains(&pos)
+                        || self.inner_pos.most_offset() == pos) {
             self.inner_pos = Position::from(pos);
         }
     }

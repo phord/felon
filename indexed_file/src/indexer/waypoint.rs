@@ -122,6 +122,16 @@ impl Position {
         }
     }
 
+    #[inline]
+    pub fn moved(&self, index: &SaneIndex) -> bool {
+        match self {
+            Position::Existing(i, waypoint) => {
+                !index.index_valid(*i) || index.value(*i) != waypoint
+            },
+            _ => false,
+        }
+    }
+
     /// Resolve a virtual position to a real position, or Invalid
     pub(crate) fn resolve(&self, index: &SaneIndex) -> Position{
         match self {
