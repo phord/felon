@@ -5,18 +5,20 @@
 [fixed] Search backwards sometimes doesn't update display or displays all-tildes
 [     ] No way to turn off filter
 [fixed] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
+[     ] Highlight misaligned when TABs in the line
 
 # MVP: Features I need daily
 [fixed] Switch between chopped and wrapped lines
 [fixed] Horizontal scroll
 [     ] Compressed file support or LESSPIPE support
-[     ] Fix pipe support
-[     ] Follow mode, as file grows, load more lines
+[fixed] Fix pipe support
 [     ] Disable mouse mode by default
-[     ] Filter + Search burns 100% CPU because Search.has_gaps() and never reaches 100%
+[fixed] Filter + Search burns 100% CPU because Search.has_gaps() and never reaches 100%
+[     ] New search should replace previous one (remove previous highlights)
 
 # Todo:
 * F3/Shift-F3 to search
+* Follow mode, as file grows, load more lines and scroll to them
 * scroll in chunks larger than 1 line for faster speed.  Maybe 25% of page?  or 5 lines at a time?
 * [x] highlight search results
 * [x] Search
