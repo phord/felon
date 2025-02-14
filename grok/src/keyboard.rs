@@ -305,7 +305,7 @@ impl Reader {
         }
     }
 
-    fn get_command(&self, timeout: u64) -> crossterm::Result<UserCommand> {
+    fn get_command(&self, timeout: u64) -> std::io::Result<UserCommand> {
         loop {
             if !event::poll(Duration::from_millis(timeout))? {
                 return Ok(UserCommand::None);
@@ -378,7 +378,7 @@ impl Input {
         }
     }
 
-    fn start(&mut self) -> crossterm::Result<()> {
+    fn start(&mut self) -> std::io::Result<()> {
         if !self.started {
             terminal::enable_raw_mode()?;
 
@@ -391,7 +391,7 @@ impl Input {
         Ok(())
     }
 
-    pub fn get_command(&mut self, timeout: u64) -> crossterm::Result<UserCommand> {
+    pub fn get_command(&mut self, timeout: u64) -> std::io::Result<UserCommand> {
         self.start()?;
 
         // TODO: Different keymaps for different modes. user-input, scrolling, etc.

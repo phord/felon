@@ -20,7 +20,7 @@ impl StatusLine {
         1
     }
 
-    pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
+    pub fn refresh_screen(&mut self, doc: &mut Document) -> std::io::Result<()> {
         let (width, height) = terminal::size().expect("Unable to get terminal size");
 
         // FIXME: Don't print the status line again if nothing changed

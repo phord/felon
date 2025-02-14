@@ -32,11 +32,11 @@ impl Viewer {
     }
 
     // Begin owning the terminal
-    pub fn start(&mut self) -> crossterm::Result<()> {
+    pub fn start(&mut self) -> std::io::Result<()> {
         self.display.start()
     }
 
-    pub fn run(&mut self) -> crossterm::Result<bool> {
+    pub fn run(&mut self) -> std::io::Result<bool> {
 
         let event_timeout =
             if self.doc.has_pending()  {

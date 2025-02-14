@@ -139,7 +139,7 @@ impl Display {
     }
 
     // Begin owning the terminal
-    pub fn start(&mut self) -> crossterm::Result<()> {
+    pub fn start(&mut self) -> std::io::Result<()> {
         if ! self.on_alt_screen && self.use_alt {
             execute!(stdout(), terminal::EnterAlternateScreen)?;
             self.on_alt_screen = true;
@@ -154,7 +154,7 @@ impl Display {
         Ok(())
     }
 
-    fn stop(&mut self) -> crossterm::Result<()> {
+    fn stop(&mut self) -> std::io::Result<()> {
         if self.on_alt_screen {
             execute!(stdout(), terminal::LeaveAlternateScreen).expect("Failed to exit alt mode");
             self.on_alt_screen = false;
@@ -487,7 +487,7 @@ impl Scroll {
 
 impl Display {
 
-    fn paint(&mut self, doc: &mut Document, lines: Vec<indexed_file::LogLine>, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
+    fn paint(&mut self, doc: &mut Document, lines: Vec<indexed_file::LogLine>, scroll: Scroll) -> std::io::Result<ScreenBuffer> {
         let mut buff = ScreenBuffer::new();
         let height = self.page_size();
 
@@ -599,7 +599,7 @@ impl Display {
     // 3. Repaint:  Display all lines from the given offset
     // pos is the offset in the file for the first line
     // Scroll distance is in screen rows.  If a read line takes multiple rows, they count as multiple lines.
-    fn feed_lines(&mut self, doc: &mut Document, scroll: Scroll) -> crossterm::Result<ScreenBuffer> {
+    fn feed_lines(&mut self, doc: &mut Document, scroll: Scroll) -> std::io::Result<ScreenBuffer> {
         log::trace!("feed_lines: {:?}", scroll);
 
         let height = self.page_size();
@@ -666,7 +666,7 @@ impl Display {
         }
     }
 
-    pub fn refresh_screen(&mut self, doc: &mut Document) -> crossterm::Result<()> {
+    pub fn refresh_screen(&mut self, doc: &mut Document) -> std::io::Result<()> {
         // FIXME: Discard unused cached lines
 
         let view_height = self.page_size();

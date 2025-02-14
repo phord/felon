@@ -23,19 +23,19 @@ impl Search {
         }
     }
 
-    pub fn prompt_filter_start(&mut self) -> crossterm::Result<()> {
+    pub fn prompt_filter_start(&mut self) -> std::io::Result<()> {
         self.forward = true;    // FIXME
         self.active = true;
         self.prompt.start("&/")
     }
 
-    pub fn prompt_forward_start(&mut self) -> crossterm::Result<()> {
+    pub fn prompt_forward_start(&mut self) -> std::io::Result<()> {
         self.forward = true;
         self.active = true;
         self.prompt.start("/")
     }
 
-    pub fn prompt_backward_start(&mut self) -> crossterm::Result<()> {
+    pub fn prompt_backward_start(&mut self) -> std::io::Result<()> {
         self.forward = false;
         self.active = true;
         self.prompt.start("?")
@@ -80,7 +80,7 @@ impl SearchPrompt {
         1
     }
 
-    pub fn start(&mut self, prompt: &str) -> crossterm::Result<()> {
+    pub fn start(&mut self, prompt: &str) -> std::io::Result<()> {
         let (_width, height) = terminal::size().expect("Unable to get terminal size");
 
         self.prompt = prompt.to_string();

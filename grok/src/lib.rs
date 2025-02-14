@@ -11,7 +11,7 @@ pub mod input_line;
 use config::Config;
 use viewer::Viewer;
 
-pub fn run() -> crossterm::Result<()> {
+pub fn run() -> std::io::Result<()> {
     let cfg = Config::from_env().unwrap();
 
     if cfg.version {
