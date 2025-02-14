@@ -3,7 +3,7 @@ use std::io::{stdout, Write};
 use crate::config::Config;
 use crossterm::{QueueableCommand, cursor, terminal};
 use crate::styled_text::styled_line::RGB_BLACK;
-use reedline::{DefaultPrompt, DefaultPromptSegment, Reedline, Signal};
+use crate::input_line::InputLine;
 
 pub struct Search {
     active: bool,
@@ -96,22 +96,8 @@ impl SearchPrompt {
     }
 
     pub fn run(&mut self) -> Option<String> {
-        let mut line_editor = Reedline::create();
-        let mut prompt = DefaultPrompt::default();
-        prompt.left_prompt = DefaultPromptSegment::Basic("/".to_string());
-        let sig = line_editor.read_line(&prompt);
-        match sig {
-            Ok(Signal::Success(buffer)) => {
-                Some(buffer)
-            }
-            Ok(Signal::CtrlD) | Ok(Signal::CtrlC) => {
-                None
-            }
-            x => {
-                log::info!("reedline Event: {:?}", x);
-                None
-            }
-        }
+        let mut input_line = InputLine::default();
+        input_line.run(&self.prompt)
     }
 
 }
