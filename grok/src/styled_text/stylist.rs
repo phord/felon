@@ -115,12 +115,16 @@ impl Stylist {
     ///    match "(?P<color>red|blue|green) fish" Green,Italic
     ///    style "color" Semantic,Bold
     pub fn apply(&self, line: &str) -> StyledLine {
-        let mut styled = StyledLine::sanitize_basic(line, self.patt);
+        let mut styled = StyledLine::new(line, self.patt);
 
         // TODO: replace all NoCrumb styles with a Crumb style if one is later matched
         let mut named_ranges = Vec::new();
 
-        for style in &self.matchers {
+        // FIXME: Compile this once
+        let control_matcher = Style { matcher: StyledLine::default_santize_regex(), pattern: PattColor::Inverse };
+
+        // Prepend that to the styles to apply and apply them
+        for style in std::iter::once(&control_matcher).chain(self.matchers.iter()) {
             for capture in style.matcher.captures_iter(line) {
                 let matched = capture.get(0).unwrap();
                 styled.apply(matched.as_str(), matched.range(), style.pattern);
@@ -138,6 +142,7 @@ impl Stylist {
             }
         }
 
+        styled.sanitize_basic();
         styled
     }
 }

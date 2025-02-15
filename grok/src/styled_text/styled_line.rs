@@ -1,6 +1,7 @@
 use crossterm::style::{Stylize, ContentStyle};
 use fnv::FnvHasher;
 use itertools::Itertools;
+use regex::Regex;
 use std::{hash::Hasher, ops::Range};
 use crossterm::style::Color;
 
@@ -64,20 +65,32 @@ impl StyledLine {
         self.push(range.start, range.end, pattern);
     }
 
-    pub fn sanitize_basic(line: &str, patt: PattColor) -> Self {
+    pub(crate) fn default_santize_regex() -> regex::Regex {
+        Regex::new(r"[\x00-\x08\x0A-\x1f\x7f-\xff]").unwrap()
+    }
+
+    pub fn sanitize_basic(&mut self) {
         // TODO Replace this with a Stylist::Replace action
-        let mut out = String::with_capacity(line.len());
-        let mut phrases = vec![Phrase::new(0, patt)];
-        for ch in line.chars() {
+        let mut out = String::with_capacity(self.line.len());
+        let mut it_phrases = self.phrases.iter_mut();
+        let mut next_phrase = it_phrases.next().unwrap();
+        let mut offset = 0;
+
+        for ch in self.line.chars() {
+            while offset == next_phrase.start {
+                next_phrase.start = out.len();
+                next_phrase = it_phrases.next().unwrap();
+            }
+            offset += ch.len_utf8();
             match ch {
                 // '\r' | // TODO: allow \r delimited lines? Filter out only \r\n?  For now, show ^M
                 '\n' => { continue },
                 '\t' => {
-                    let stop = TAB_SIZE - out.len() % TAB_SIZE;
-                    out.push_str(&" ".repeat(stop));
+                    let start = out.len();
+                    let len = TAB_SIZE - start % TAB_SIZE;
+                    out.push_str(&" ".repeat(len));
                 },
                 '\x00'..='\x1f' | '\u{7f}'..='\u{FF}'=> {
-                    phrases.push(Phrase::new(out.len(), PattColor::Inverse));
                     match ch {
                         '\x1b' => out.push_str("ESC"),
                         '\x00'..='\x1f' => { out.push('^'); out.push((b'@' + ch as u8) as char); },
@@ -85,15 +98,16 @@ impl StyledLine {
                         '\u{80}'..='\u{FF}' => out.push_str(format!("<{:#X}>", ch as u8).as_str()),
                         _ => unreachable!("Outer pattern mismatch: {:?}", ch),
                     }
-                    phrases.push(Phrase::new(out.len(), patt));
                 },
                 _ => out.push(ch),
             }
         }
-        phrases.push(Phrase::new(out.len(), patt));
-
-        // log::trace!("Sanitized: {} {:?}", out, phrases);
-        Self {line: out, phrases}
+        // Clean up any stragglers
+        for next_phrase in it_phrases {
+            assert!(next_phrase.start <= out.len(), "unexpected gap before phrase: {:?} {} {}", next_phrase, out.len(), out);
+            next_phrase.start = out.len();
+        }
+        self.line = out;
     }
 
     pub fn to_string(&self, start: usize, width: usize) -> String {
