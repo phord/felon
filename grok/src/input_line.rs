@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+use directories::ProjectDirs;
+use lazy_static::lazy_static;
 use reedline::{DefaultPrompt, DefaultPromptSegment, FileBackedHistory, Reedline, Signal};
 use {
     reedline::{KeyCode, KeyModifiers},
@@ -7,12 +10,24 @@ use {
 #[derive(Default)]
 pub struct InputLine { }
 
-// FIXME: Put this in a config path
 // FIXME: Make this a config option
-const HISTORY_FILE: &str = ".grok_history";
+const HISTORY_FILE: &str = "search_history";
 
 impl InputLine {
     pub fn run(&mut self, prompt: &str) -> Option<String> {
+
+        lazy_static! {
+            static ref HISTORY_PATH: PathBuf =
+                if let Some(proj_dirs) = ProjectDirs::from("com", "Phord Software", "Grok") {
+                    let mut dir = proj_dirs.config_dir().to_path_buf();
+                    dir.push(HISTORY_FILE);
+                    log::trace!("History path: {:?}", dir);
+                    dir
+                } else {
+                    // FIXME: Make this a hidden file?
+                    PathBuf::from(HISTORY_FILE)
+                };
+            }
 
         let mut keybindings = default_emacs_keybindings();
         keybindings.add_binding(
@@ -23,7 +38,7 @@ impl InputLine {
         let edit_mode = Box::new(Emacs::new(keybindings));
 
         let history = Box::new(
-          FileBackedHistory::with_file(500, HISTORY_FILE.into())
+          FileBackedHistory::with_file(500, HISTORY_PATH.to_path_buf())
             .expect("Error configuring history with file"),
         );
 
