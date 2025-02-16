@@ -64,7 +64,7 @@ impl Stylist {
                 )
             ";
 
-        self.add_match(Regex::new(core_log).unwrap(), PattColor::None);
+        self.add_match(StyleReason::Builtin, Regex::new(core_log).unwrap(), PattColor::None);
         self.add_style("timestamp", PattColor::Timestamp);
         self.add_style("pid", PattColor::Semantic);
         // self.add_style("crumb", PattColor::Inverse);
@@ -72,16 +72,16 @@ impl Stylist {
         self.add_style("submodule", PattColor::Semantic);
         self.add_style("number", PattColor::Semantic);
 
-        self.add_match(Regex::new(ids).unwrap(), PattColor::None);
-        self.add_match(Regex::new(numbers).unwrap(), PattColor::None);
-
-        // self.add_match(Regex::new(r"(?P<segio>segio)").unwrap(), PattColor::Inverse);
-
-        // FIXME: Prevent matches overlapping?  Or restrict highlights to a region, e.g. the "body" instead of the timestamp
+        self.add_match(StyleReason::Builtin, Regex::new(ids).unwrap(), PattColor::None);
+        self.add_match(StyleReason::Builtin, Regex::new(numbers).unwrap(), PattColor::None);
     }
 
-    pub fn add_match(&mut self, regex: Regex, pattern: PattColor) {
-        self.matchers.push(Style{matcher: regex, pattern});
+    pub fn remove_match(&mut self, reason: StyleReason) {
+        self.matchers.retain(|s| s.reason != reason);
+    }
+
+    pub fn add_match(&mut self, reason: StyleReason, matcher: Regex, pattern: PattColor) {
+        self.matchers.push(Style{reason, matcher, pattern});
     }
 
     pub fn add_style(&mut self, name: &str, pattern: PattColor) {
@@ -121,7 +121,7 @@ impl Stylist {
         let mut named_ranges = Vec::new();
 
         // FIXME: Compile this once
-        let control_matcher = Style { matcher: StyledLine::default_santize_regex(), pattern: PattColor::Inverse };
+        let control_matcher = Style { reason: StyleReason::Builtin, matcher: StyledLine::default_santize_regex(), pattern: PattColor::Inverse };
 
         // Prepend that to the styles to apply and apply them
         for style in std::iter::once(&control_matcher).chain(self.matchers.iter()) {
@@ -163,7 +163,15 @@ pub enum StyleSource {
     Automatic,
 }
 
+#[derive(PartialEq)]
+pub enum StyleReason {
+    Search,
+    Config,
+    Builtin,
+}
+
 pub struct Style {
+    pub(crate) reason: StyleReason,
     pub(crate) matcher: Regex,
     pub(crate) pattern: PattColor,
 }

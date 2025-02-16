@@ -14,7 +14,7 @@
 [fixed] Fix pipe support
 [     ] Disable mouse mode by default
 [fixed] Filter + Search burns 100% CPU because Search.has_gaps() and never reaches 100%
-[     ] New search should replace previous one (remove previous highlights)
+[fixed] New search should replace previous one (remove previous highlights)
 [     ] Filter-out  ("&!")
 
 # Todo:
