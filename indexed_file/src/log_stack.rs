@@ -288,7 +288,6 @@ impl FilteredSource {
     /// Apply a new regex search expression to the filter
     /// TODO: add more filters instead of replacing the one we currently allow
     pub fn filter_regex(&mut self, re: &str) -> Result<(), regex::Error> {
-        // FIXME: when filter changes, invalidate the search (or merge it / make it dependent on filter)
         if re.is_empty() {
             self.filter = None;
         } else {
