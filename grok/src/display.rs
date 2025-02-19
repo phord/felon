@@ -550,21 +550,24 @@ impl Display {
             self.draw_line(doc, &mut buff, row, "~");
             row += incr;
         }
+        assert!(filler <= height);
 
         // Record the displayed offsets
         let offsets = lines.iter().map(|logline| logline.offset);
         if down {
             // If we scrolled down, insert the offsets in reverse at the start of the list
             self.displayed_lines.splice(0..0, offsets.rev());
-            self.displayed_lines.truncate(height);
+            self.displayed_lines.truncate(height - filler);
         } else {
             // Otherwise, append in order
-            let skip = (self.displayed_lines.len() + lines.len()).saturating_sub(height);
-            self.displayed_lines = self.displayed_lines[skip..].to_vec();
             if reversed {
                 self.displayed_lines.extend(offsets.rev());
             } else {
                 self.displayed_lines.extend(offsets);
+            }
+            let skip = self.displayed_lines.len().saturating_sub(height - filler);
+            if skip > 0 {
+                self.displayed_lines = self.displayed_lines[skip..].to_vec();
             }
         }
 

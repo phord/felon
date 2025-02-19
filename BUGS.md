@@ -1,7 +1,7 @@
 # Bugs
 
 [fixed] Jumping to a position that is not indexed yet displays unindexed lines, all ~.  e.g. `50P` jumps to middle, but shows nothing if not indexed yet.
-[     ] Scroll to bottom then up scrolls extra lines if file is shorter than page size.  End + PgUp (twice) shows this bug.
+[fixed] Scroll to bottom then up scrolls extra lines if file is shorter than page size.  End + PgUp (twice) shows this bug.
 [fixed] Search backwards sometimes doesn't update display or displays all-tildes
 [     ] No way to turn off filter
 [fixed] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
@@ -18,6 +18,7 @@
 [     ] Filter-out  ("&!")
 
 # Todo:
+* Use \n to move to next line instead of sending row positioning for every row
 * F3/Shift-F3 to search
 * Follow mode, as file grows, load more lines and scroll to them
 * scroll in chunks larger than 1 line for faster speed.  Maybe 25% of page?  or 5 lines at a time?
@@ -32,6 +33,7 @@
   * Edit filter
 * Search preview
 * Bookmarks
+  * F2/Shift-F2/Ctrl-F2;  and something else for Mac users?
   * anonymous
   * named
   * persistent
