@@ -72,7 +72,10 @@ impl Viewer {
             InputAction::None => {},
             InputAction::Search(forward, srch) => {
                 log::trace!("Got search: fwd={}  {:?}", forward, &srch);
-                self.display.set_search(&mut self.doc, &srch, forward);
+                // Empty input means repeat previous search
+                if !srch.is_empty() {
+                    self.display.set_search(&mut self.doc, &srch, forward);
+                }
                 self.display.handle_command(UserCommand::SearchNext);
             },
             InputAction::Cancel => {
@@ -85,7 +88,12 @@ impl Viewer {
             InputAction::None => {},
             InputAction::Search(_, filt) => {
                 log::trace!("Got filter: {:?}", &filt);
-                self.display.set_filter(&mut self.doc, &filt);
+                // Empty input means cancel all filters
+                if filt.is_empty() {
+                    self.display.clear_filter(&mut self.doc);
+                } else {
+                    self.display.set_filter(&mut self.doc, &filt);
+                }
                 self.display.handle_command(UserCommand::RefreshDisplay);
             },
             InputAction::Cancel => {

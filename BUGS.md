@@ -3,7 +3,7 @@
 [fixed] Jumping to a position that is not indexed yet displays unindexed lines, all ~.  e.g. `50P` jumps to middle, but shows nothing if not indexed yet.
 [fixed] Scroll to bottom then up scrolls extra lines if file is shorter than page size.  End + PgUp (twice) shows this bug.
 [fixed] Search backwards sometimes doesn't update display or displays all-tildes
-[     ] No way to turn off filter
+[fixed] No way to turn off filter
 [fixed] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
 [fixed] Highlight misaligned when TABs in the line
 

@@ -198,6 +198,10 @@ impl Display {
         }
     }
 
+    pub fn clear_filter(&mut self, doc: &mut Document) {
+        doc.clear_filter().expect("Failed to clear filter");
+    }
+
     pub fn set_filter(&mut self, doc: &mut Document, filter: &str) -> bool {
         match doc.set_filter(filter) {
             Ok(_) => true,

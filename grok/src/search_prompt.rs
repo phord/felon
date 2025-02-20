@@ -15,7 +15,6 @@ pub struct Search {
     active: bool,
     prompt: SearchPrompt,
     forward: bool,
-    expr: String,
 }
 
 
@@ -25,7 +24,6 @@ impl Search {
             active: false,
             prompt: SearchPrompt::new(config),
             forward: true,
-            expr: String::default(),
         }
     }
 
@@ -47,10 +45,6 @@ impl Search {
         self.prompt.start("?")
     }
 
-    pub fn get_expr(&self) -> &str {
-        &self.expr
-    }
-
     pub fn run(&mut self) -> InputAction {
         if !self.active {
             InputAction::None
@@ -58,16 +52,8 @@ impl Search {
             let input = self.prompt.run();
             if let Some(input) = input {
                 self.active = false;
-                // Empty input means repeat previous search
-                let input = input.trim_end_matches('\r');
-                if input.is_empty() {
-                    if self.expr.is_empty() {
-                        return InputAction::Cancel
-                    }
-                } else {
-                    self.expr = input.to_string();
-                }
-                InputAction::Search(self.forward, self.expr.clone())
+                let input = input.trim_end_matches('\r').to_string();
+                InputAction::Search(self.forward, input)
             } else {
                 self.active = false;
                 InputAction::Cancel

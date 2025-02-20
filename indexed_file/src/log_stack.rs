@@ -60,10 +60,11 @@ impl  LogStack {
         }
     }
 
-    /// Apply a new regex search expression to the filter
+    /// Apply a new regex search expression to the filter. If string is empty, clears current filter.
     /// TODO: add more filters instead of replacing the one we currently allow
     pub fn filter_regex(&mut self, re: &str) -> Result<(), regex::Error> {
         self.source.filter_regex(re)?;
+        // FIXME: Only restart search if filter changed
         if let Some(search) = &mut self.search {
             search.reset();
         }

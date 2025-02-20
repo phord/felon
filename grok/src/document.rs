@@ -29,6 +29,10 @@ impl Document {
         self.log.search_regex(search)
     }
 
+    pub fn clear_filter(&mut self) -> Result<(), regex::Error> {
+        self.log.filter_regex("")
+    }
+
     pub fn set_filter(&mut self, filter: &str) -> Result<(), regex::Error> {
         self.log.filter_regex(filter)
     }
