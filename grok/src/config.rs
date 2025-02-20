@@ -8,6 +8,7 @@ pub struct Config {
     pub altscreen: bool,
     pub color: bool,
     pub version: bool,
+    pub mouse: bool,
     pub mouse_scroll: u16,      // Number of lines to scroll with mouse-wheel
 }
 
@@ -40,6 +41,7 @@ impl Config {
             altscreen: true,
             color: false,
             version: false,
+            mouse: false,
             mouse_scroll: 5,
         }
     }
@@ -75,6 +77,7 @@ impl Config {
         if pargs.contains(["-X", "--no-alternate-screen"]) { self.altscreen = false; }
         if pargs.contains(["-C", "--color"]) { self.color = true; }
         if pargs.contains(["-V", "--version"]) { self.version = true; }
+        if pargs.contains(["-M", "--mouse"]) { self.mouse = true; }
 
         // Parse remaining args as input filenames
         for ostr in pargs.finish() {

@@ -25,7 +25,7 @@ impl Viewer {
             status: StatusLine::new(&config),
             search: Search::new(&config),
             filter: Search::new(&config),
-            input: Input::new(),
+            input: Input::new(&config),
             doc,
             fill_timeout: 0,
         }

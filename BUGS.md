@@ -12,7 +12,7 @@
 [fixed] Horizontal scroll
 [     ] Compressed file support or LESSPIPE support
 [fixed] Fix pipe support
-[     ] Disable mouse mode by default
+[fixed] Disable mouse mode by default
 [fixed] Filter + Search burns 100% CPU because Search.has_gaps() and never reaches 100%
 [fixed] New search should replace previous one (remove previous highlights)
 [     ] Filter-out  ("&!")

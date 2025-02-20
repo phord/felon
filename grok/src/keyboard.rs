@@ -17,6 +17,8 @@ use std::time::Duration;
 use std::io::stdout;
 
 use UserCommand as cmd;
+
+use crate::config::Config;
 const KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+W", cmd::Quit),
     ("Shift+Q", cmd::Quit),
@@ -355,6 +357,7 @@ impl Reader {
 pub struct Input {
     reader: Reader,
     started: bool,
+    mouse: bool,
 }
 
 impl Drop for Input {
@@ -363,7 +366,7 @@ impl Drop for Input {
             terminal::disable_raw_mode().expect("Unable to disable raw mode");
 
             let mut stdout = stdout();
-            if ! self.reader.mousemap.is_empty() {
+            if self.mouse {
                 execute!(stdout, event::DisableMouseCapture).expect("Failed to disable mouse capture");
             }
         }
@@ -371,10 +374,11 @@ impl Drop for Input {
 }
 
 impl Input {
-    pub fn new() -> Self {
+    pub fn new(config: &Config) -> Self {
         Self {
             reader: Reader::new(),
             started: false,
+            mouse: config.mouse,
         }
     }
 
@@ -383,7 +387,7 @@ impl Input {
             terminal::enable_raw_mode()?;
 
             let mut stdout = stdout();
-            if ! self.reader.mousemap.is_empty() {
+            if self.mouse {
                 execute!(stdout, event::EnableMouseCapture)?;
             }
             self.started = true;
