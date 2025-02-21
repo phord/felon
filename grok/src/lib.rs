@@ -19,6 +19,12 @@ pub fn run() -> std::io::Result<()> {
         std::process::exit(0);
     }
 
+    // Check if no files given and no stdin redirection. Abort if so.
+    if cfg.filename.is_empty() && std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        eprintln!("Error: No input files or pipe given");
+        std::process::exit(1);
+    }
+
     let mut viewer = Viewer::new(cfg);
     viewer.start()?;
 

@@ -6,6 +6,7 @@
 [fixed] No way to turn off filter
 [fixed] Search backwards with `?` always searches forwards / doesn't reverse meaning of N/n
 [fixed] Highlight misaligned when TABs in the line
+[fixed] Stream without filename streams from tty; first key hangs
 
 # MVP: Features I need daily
 [fixed] Switch between chopped and wrapped lines
