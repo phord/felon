@@ -135,12 +135,15 @@ impl CachedStreamReader {
     }
 
     pub fn fill_buffer(&mut self, pos: usize) {
+        let mut end = self.len();
         while self.is_open() && pos + READ_THRESHOLD > self.len() {
-            self.poll(None);
-            if pos < self.len() {
-                // Well, we got something, anyway.
+            // FIXME: Magic number timeout
+            let bytes = self.poll(Some(std::time::Instant::now() + time::Duration::from_millis(100)));
+            if pos < self.len() || bytes == end {
+                // We got something, or we timed out trying.
                 break
             }
+            end = bytes;
         }
     }
 
