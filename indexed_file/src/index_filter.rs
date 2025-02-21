@@ -1,11 +1,11 @@
-use regex::Regex;
+use regex::{Error, Regex};
 use std::ops::Range;
 
 use crate::{indexer::sane_index::SaneIndex, LogLine};
 use crate::indexer::waypoint::Position;
 
 /**
- * Basic EventualIndex that accumulates matching line offsets. Can be used for search or filter, despite the name.
+ * Basic Indexer that accumulates matching line offsets. Can be used for search or filter, despite the name.
  *
  * self.index grows as we navigate around, but it only accumulates lines that match our SearchType. Thus this filter
  * eventually indexes all lines that match the search criteria.
@@ -14,6 +14,7 @@ use crate::indexer::waypoint::Position;
  #[derive(Debug)]
 pub enum SearchType {
     Regex(Regex),
+    Neg(Regex),
     Raw(String),
     Bookmark,
     None,
@@ -22,10 +23,25 @@ pub enum SearchType {
 impl std::fmt::Display for SearchType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SearchType::Regex(re) => write!(f, "Regex({})", re),
+            SearchType::Regex(re) => write!(f, "\"{}\"", re),
+            SearchType::Neg(re) => write!(f, "\"!{}\"", re),
             SearchType::Raw(s) => write!(f, "Raw({})", s),
             SearchType::Bookmark => write!(f, "Bookmark"),
             SearchType::None => write!(f, "None"),
+        }
+    }
+}
+
+impl SearchType {
+    pub fn new(s: &str) -> core::result::Result<Self, Error> {
+        if s.is_empty() {
+            Ok(SearchType::None)
+        } else if let Some(stripped) = s.strip_prefix("!") {
+            let re = Regex::new(stripped)?;
+            Ok(SearchType::Neg(re))
+        } else {
+            let re = Regex::new(s)?;
+            Ok(SearchType::Regex(re))
         }
     }
 }
@@ -44,6 +60,7 @@ pub struct IndexFilter {
 fn is_match_type(line: &str, typ: &SearchType) -> bool {
     match typ {
         SearchType::Regex(re) => re.is_match(line),
+        SearchType::Neg(re) => !re.is_match(line),
         SearchType::Raw(s) => line.contains(s),
         SearchType::None => true,
         _ => { todo!("Unimplemented search type");},

@@ -292,7 +292,7 @@ impl FilteredSource {
         if re.is_empty() {
             self.filter = None;
         } else {
-            self.filter = Some(LogFilter::new(SearchType::Regex(Regex::new(re)?), self.source.len()));
+            self.filter = Some(LogFilter::new(SearchType::new(re)?, self.source.len()));
         }
         Ok(())
     }
