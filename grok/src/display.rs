@@ -689,21 +689,20 @@ impl Display {
             pan: self.pan,
         };
 
+        let first_on_screen = *self.displayed_lines.first().unwrap_or(&0);
+        let last_on_screen = *self.displayed_lines.last().unwrap_or(&0);
+
         let plan =
-            if self.displayed_lines.is_empty() {
-                // Blank slate; start of file
-                log::trace!("start of file");
-                Scroll::repaint(0, view_height)
-            } else if disp != self.prev {
+            if disp != self.prev {
                 // New screen dimensions; repaint everything
                 // FIXME: No need to repaint if we got vertically smaller
                 // FIXME: Only need to add rows if we only got taller
                 log::trace!("repaint everything");
-                Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+                Scroll::repaint(first_on_screen, view_height)
             } else if self.have_new_lines(doc) {
                 // We displayed fewer lines than the screen height. Check for more data appearing
                 log::trace!("check for more data");
-                Scroll::overwrite(*self.displayed_lines.last().unwrap(), self.displayed_lines.len(), view_height)
+                Scroll::overwrite(last_on_screen, self.displayed_lines.len(), view_height)
             } else {
                 match self.scroll {
                     ScrollAction::GotoOffset(offset) => {
@@ -719,7 +718,7 @@ impl Display {
                     }
                     ScrollAction::Repaint => {
                         log::trace!("repaint everything");
-                        Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+                        Scroll::repaint(first_on_screen, view_height)
                     }
                     ScrollAction::StartOfFile(line) => {
                         // Scroll to top
@@ -734,29 +733,27 @@ impl Display {
                     ScrollAction::Up(len) => {
                         // Scroll up 'len' lines before the top line
                         log::trace!("scroll up {} lines", len);
-                        let begin = self.displayed_lines.first().unwrap();
-                        Scroll::up(*begin, len)
+                        Scroll::up(first_on_screen, len)
                     }
                     ScrollAction::Down(len) => {
                         // Scroll down 'len' lines after the last line displayed
                         log::trace!("scroll down {} lines", len);
-                        let begin = self.displayed_lines.last().unwrap();
-                        Scroll::down(*begin, len)
+                        Scroll::down(last_on_screen, len)
                     }
                     ScrollAction::Search(forward, repeat) => {
                         let begin = if !forward {
                             // Search backwards from the first line displayed
                             log::trace!("search backward");
-                            doc.search_back(*self.displayed_lines.first().unwrap(), repeat)
+                            doc.search_back(first_on_screen, repeat)
                         } else {
                             // Search forwards from the last line displayed
                             log::trace!("search forward");
-                            doc.search_next(*self.displayed_lines.last().unwrap(), repeat)
+                            doc.search_next(last_on_screen, repeat)
                         };
                         if let Some(begin) = begin {
                             Scroll::repaint(begin, view_height)
                         } else {
-                            Scroll::repaint(*self.displayed_lines.first().unwrap(), view_height)
+                            Scroll::repaint(first_on_screen, view_height)
                         }
                     }
                     ScrollAction::None => Scroll::none()

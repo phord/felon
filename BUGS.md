@@ -19,6 +19,7 @@
 [     ] Filter-out  ("&!")
 
 # Todo:
+* re-read last line to update display if last line was partial (no LF) and new data appears
 * Use \n to move to next line instead of sending row positioning for every row
 * F3/Shift-F3 to search
 * Follow mode, as file grows, load more lines and scroll to them
@@ -64,4 +65,4 @@ X Search/filter history recall
   * --mouse (--MOUSE to reverse scroll wheel direction)
   * --save-marks (saves bookmarks)
   * -<number> set horiz scroll width
-  * --mouse
+  [x] --mouse
