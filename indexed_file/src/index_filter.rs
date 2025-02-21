@@ -16,7 +16,6 @@ pub enum SearchType {
     Regex(Regex),
     Neg(Regex),
     Raw(String),
-    Bookmark,
     None,
 }
 
@@ -26,7 +25,6 @@ impl std::fmt::Display for SearchType {
             SearchType::Regex(re) => write!(f, "\"{}\"", re),
             SearchType::Neg(re) => write!(f, "\"!{}\"", re),
             SearchType::Raw(s) => write!(f, "Raw({})", s),
-            SearchType::Bookmark => write!(f, "Bookmark"),
             SearchType::None => write!(f, "None"),
         }
     }
@@ -63,7 +61,6 @@ fn is_match_type(line: &str, typ: &SearchType) -> bool {
         SearchType::Neg(re) => !re.is_match(line),
         SearchType::Raw(s) => line.contains(s),
         SearchType::None => true,
-        _ => { todo!("Unimplemented search type");},
     }
 }
 
