@@ -62,7 +62,14 @@ X Search/filter history recall
   * -p pattern search
   * -V --version
   * -x --tabs tabstops
-  * --mouse (--MOUSE to reverse scroll wheel direction)
+  * --MOUSE to reverse scroll wheel direction
   * --save-marks (saves bookmarks)
   * -<number> set horiz scroll width
   [x] --mouse
+
+* Speedups
+  * Use Cow<String> where possible for returned lines?
+  * Use big buffer-chunks for regex scanning
+  * Avoid scanning for line numbers until needed
+  * Multithreaded scanning
+  *
