@@ -13,10 +13,10 @@ pub(crate) struct ReadBuffer {
 }
 
 impl ReadBuffer {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(start_offset: u64) -> Self {
         ReadBuffer {
             buffer: Vec::default(),
-            start_offset: 0,
+            start_offset,
             consumed: 0,
         }
     }
@@ -51,16 +51,9 @@ impl ReadBuffer {
         self.consumed += amt
     }
 
-    pub(crate) fn extend(&mut self, data: Vec<u8>, pos: u64) {
-        if self.buffer.is_empty() || self.end() != pos{
-            // TODO: handle overlap case when pos < self.end()?
-            self.buffer = data;
-            self.start_offset = pos;
-            self.consumed = 0;
-        } else {
-            // assert!((self.start()..=self.end()).contains(&pos));
-            self.buffer.extend(data);
-        }
+    // Extend current buffer by appending to the end.
+    pub(crate) fn extend(&mut self, data: Vec<u8>) {
+        self.buffer.extend(data);
     }
 
     pub(crate) fn discard_front(&mut self, amt: u64) {

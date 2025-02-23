@@ -126,7 +126,7 @@ impl<R: Read + Seek> CompressedFile<R> {
             seek_pos: None,
             frames: Vec::new(),
             cur_frame: 0,
-            read_buffer: ReadBuffer::new(),
+            read_buffer: ReadBuffer::new(0),
         };
 
         // Read all physical frame sizes into self.frames.
@@ -233,7 +233,7 @@ impl<R: Read + Seek> CompressedFile<R> {
         }
         // reset read_buffer
         if frame.logical != self.read_buffer.end() {
-            self.read_buffer = ReadBuffer::new();
+            self.read_buffer = ReadBuffer::new(frame.logical);
         }
 
         self.pos = frame.logical;
@@ -320,6 +320,7 @@ impl<R: Read + Seek> CompressedFile<R> {
                     self.skip_bytes(pos - self.pos)?;
                     assert_eq!(pos, self.pos, "seek pos is outside of file range");
                 }
+                assert_eq!(pos, self.pos);
             }
         }
         Ok(())
@@ -381,7 +382,7 @@ impl<R: Read + Seek> CompressedFile<R> {
             if self.decoder.can_collect() > 0 {
                 if let Some(buffer) = self.decoder.collect() {
                     // Add more bytes to our internal buffer
-                    self.read_buffer.extend(buffer, self.pos);
+                    self.read_buffer.extend(buffer);
 
                     // TODO: Add a test to ensure this bounding works as expected
                     // Discard start of buffer if we're well past it now
