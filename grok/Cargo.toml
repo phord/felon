@@ -12,7 +12,6 @@ name = "grok"
 path = "src/main.rs"
 
 [dependencies]
-pico-args = "0.4.2"
 crossterm = "0.28.1"
 indexed_file = { path = "../indexed_file" }
 lazy_static = "*"
