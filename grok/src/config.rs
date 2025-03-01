@@ -16,6 +16,9 @@ pub enum ConfigItem {
     // Style(String, PattColor),
     // Match(String, PattColor),
 
+    // Cmdline args only
+    Help,
+    Version,
 }
 
 #[derive(Debug, Clone)]
@@ -24,7 +27,6 @@ pub struct Config {
     pub chop: bool,
     pub altscreen: bool,
     pub color: bool,
-    pub version: bool,
     pub mouse: bool,
     pub mouse_scroll: u16,      // Number of lines to scroll with mouse-wheel
 }
@@ -63,7 +65,6 @@ impl Config {
             chop: false,
             altscreen: true,
             color: false,
-            version: false,
             mouse: false,
             mouse_scroll: 5,
         }
@@ -85,6 +86,7 @@ impl Config {
             ConfigItem::Color(color) => self.color = color,
             ConfigItem::Visual(visual) => self.mouse = visual,
             ConfigItem::MouseScroll(scroll) => self.mouse_scroll = scroll,
+            ConfigItem::Version | ConfigItem::Help => {},
         }
     }
 
@@ -103,8 +105,8 @@ impl Config {
             "-X" | "--no-alternate-screen" => ConfigItem::AltScreen(!self.altscreen),
             "-C" | "--color" => ConfigItem::Color(!self.color),
             "-M" | "--mouse" => ConfigItem::Visual(!self.mouse),
-            "-H" | "--help" => todo!("help"),
-            "-V" | "--version" => todo!("version"),
+            "-H" | "--help" => ConfigItem::Help,
+            "-V" | "--version" => ConfigItem::Version,
             "-W" | "--wheel-lines" => {
                 if let Some(arg) = arg {
                     if let Ok(num) = arg.parse::<u16>() {
@@ -122,9 +124,20 @@ impl Config {
         Ok((cfg, consumed))
     }
 
+    fn handle_cmdline(&mut self, item: &ConfigItem) {
+        match item {
+            ConfigItem::Version => {
+                println!("grok version 0.1.0");
+                std::process::exit(0);
+            },
+            ConfigItem::Help => {
+                print!("{}", HELP);
+                std::process::exit(0);
+            },
+            _ => {},
+        }
+    }
 
-
-    // pub fn to_config_item();
     // TODO: Need some way to handle "toggle" values; eg., -S at runtime toggles slice
     fn parse_args(&mut self) -> Result<(), Error>{
         let mut skip = false;
@@ -140,6 +153,7 @@ impl Config {
             let cfg = self.parse_item(&item, Some(&arg));
             match cfg {
                 Ok((item, consumed)) => {
+                    self.handle_cmdline(&item);
                     self.receive_item(item);
                     skip = consumed;
                 },
