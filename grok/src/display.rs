@@ -70,9 +70,7 @@ pub struct Display {
     width: usize,
     on_alt_screen: bool,
 
-    use_alt: bool,
-    color: bool,
-    chop: bool,
+    config: Config,
 
     /// Right-scroll pan position
     pan: usize,
@@ -122,7 +120,7 @@ impl Display {
             height: 0,
             width: 0,
             on_alt_screen: false,
-            use_alt: config.altscreen,
+            config: config.clone(),
             scroll: ScrollAction::StartOfFile(0),
             arg_num: 0,
             panel: 1,
@@ -133,8 +131,6 @@ impl Display {
             prev: DisplayState { height: 0, width: 0, pan: 0},
             displayed_lines: Vec::new(),
             mouse_wheel_height: config.mouse_scroll,
-            color: config.color,
-            chop: config.chop,
             pan: 0,
             search_forward: true,
             pan_width: 0,
@@ -143,7 +139,7 @@ impl Display {
 
     // Begin owning the terminal
     pub fn start(&mut self) -> std::io::Result<()> {
-        if ! self.on_alt_screen && self.use_alt {
+        if ! self.on_alt_screen && self.config.altscreen {
             execute!(stdout(), terminal::EnterAlternateScreen)?;
             self.on_alt_screen = true;
         }
@@ -335,6 +331,17 @@ impl Display {
             UserCommand::CollectDecimal => {
                 self.collect_decimal();
             }
+            UserCommand::ChordKey(..) => {}
+            UserCommand::Chord(ref chord) => {
+                log::info!("Got a chord {chord}");
+                match self.config.parse_item(chord, None) {
+                    Ok((item, _)) => {
+                        self.config.receive_item(item);
+                        self.scroll = ScrollAction::Repaint;
+                    },
+                    Err(e) => log::error!("Error parsing chord: {:?}", e),
+                }
+            }
             UserCommand::PageDown => {
                 self.scroll = ScrollAction::Down(self.get_whole());
             }
@@ -432,7 +439,7 @@ impl Display {
     }
 
     fn draw_line(&self, doc: &Document, buff: &mut ScreenBuffer, row: usize, line: &str) {
-        if self.color {
+        if self.config.color {
             self.draw_styled_line(buff, row, doc.line_colors(line));
         } else {
             self.draw_plain_line(doc, buff, row, line);
@@ -619,7 +626,7 @@ impl Display {
             self.pan = self.get_max_pan(doc, &scroll);
         }
 
-        if self.chop && self.pan == 0 {
+        if self.config.chop && self.pan == 0 {
             doc.set_line_mode(LineViewMode::Wrap{width: self.width});
         } else {
             // Pan the document to the left; override wrap-mode

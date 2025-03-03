@@ -120,6 +120,9 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("9", UserCommand::CollectDigits(9)),
     (".", UserCommand::CollectDecimal),
 
+    // Dash preceeds an option
+    ("-", UserCommand::ChordKey('-', 2)),
+
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
     // affects how the mouse is used. In particular, highlighting text, copy and paste functions from the terminal
@@ -136,7 +139,7 @@ const KEYMAP: &[(&str, UserCommand)] = &[
 
 ];
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum UserCommand {
     None,
     BackwardSearchPrompt,
@@ -174,6 +177,8 @@ pub enum UserCommand {
     SelectWordAt(u16, u16),
     SelectWordDrag(u16, u16),
     TerminalResize,
+    ChordKey(char, u8),
+    Chord(String),
 }
 
 // TODO: Roll this into a test
@@ -185,6 +190,8 @@ pub enum UserCommand {
 struct Reader {
     keymap: HashMap<KeyEvent, UserCommand>,
     mousemap: HashMap<MouseEvent, UserCommand>,
+    chord: String,
+    chord_len: u8,
 }
 
 impl Reader {
@@ -192,22 +199,24 @@ impl Reader {
     pub fn new() -> Self {
         let allmap: HashMap<_, _> = KEYMAP
             .iter()
-            .map(|(key, cmd)| (Self::keycode(key).unwrap(), *cmd))
+            .map(|(key, cmd)| (Self::keycode(key).unwrap(), cmd.clone()))
             .collect();
 
         let keymap: HashMap<_, _> = allmap.iter()
             .filter(|(event, _)| matches!(event, Event::Key(_)) )
-            .map(|(event, cmd)| match event { Event::Key(key_event) => (*key_event, *cmd), _ => unreachable!() })
+            .map(|(event, cmd)| match event { Event::Key(key_event) => (*key_event, cmd.clone()), _ => unreachable!() })
             .collect();
 
         let mousemap: HashMap<_, _> = allmap.iter()
             .filter(|(event, _)| matches!(event, Event::Mouse(_)) )
-            .map(|(event, cmd)| match event { Event::Mouse(mouse_event) => (*mouse_event, *cmd), _ => unreachable!() })
+            .map(|(event, cmd)| match event { Event::Mouse(mouse_event) => (*mouse_event, cmd.clone()), _ => unreachable!() })
             .collect();
 
         Self {
             keymap,
             mousemap,
+            chord: String::new(),
+            chord_len: 0,
         }
     }
 
@@ -305,45 +314,69 @@ impl Reader {
         }
     }
 
-    fn get_command(&self, timeout: u64) -> std::io::Result<UserCommand> {
-        loop {
-            if !event::poll(Duration::from_millis(timeout))? {
-                return Ok(UserCommand::None);
-            } else {
-                match event::read()? {
-                    Event::Key(event) => {
-                        return match self.keymap.get(&event) {
-                            Some(cmd) => Ok(*cmd),
-                            None => Ok(UserCommand::None),
-                        };
-                    }
-                    Event::Mouse(event) => {
-                        let lookup = MouseEvent {
-                            column:0, row:0,
-                            ..event
-                        };
+    pub fn reset_chord(&mut self) {
+        self.chord_len = 0;
+    }
 
-                        // println!("{:?}", event);
-
-                        return match self.mousemap.get(&lookup) {
-                            Some(cmd) => {
-                                match cmd {
-                                    UserCommand::SelectWordAt(_,_) => {
-                                        Ok(UserCommand::SelectWordAt(event.column, event.row))
-                                    },
-                                    UserCommand::SelectWordDrag(_,_) => {
-                                        Ok(UserCommand::SelectWordDrag(event.column, event.row))
-                                    },
-                                    _ => Ok(*cmd),
-                                }
+    fn get_command(&mut self, timeout: u64) -> std::io::Result<UserCommand> {
+        if !event::poll(Duration::from_millis(timeout))? {
+            Ok(UserCommand::None)
+        } else {
+            match event::read()? {
+                Event::Key(event) => {
+                    if self.chord_len > 0 {
+                        // FIXME: Chord should collect full key string (i.e. "Ctrl+K", "Meta+Home")
+                        self.chord.push_str(&format!("{}", event.code));
+                        self.chord_len -= 1;
+                        if self.chord_len == 0 {
+                            Ok(UserCommand::Chord(self.chord.clone()))
+                        } else {
+                            Ok(UserCommand::None)
+                        }
+                    } else {
+                        Ok(match self.keymap.get(&event) {
+                            Some(UserCommand::ChordKey(key, len)) => {
+                                self.chord = key.to_string();
+                                self.chord_len = len - 1;
+                                UserCommand::None
                             },
-                            None => Ok(UserCommand::None),
-                        };
+                            Some(cmd) => {
+                                cmd.clone()
+                            },
+                            None => UserCommand::None,
+                        })
                     }
-                    Event::Resize(_, _) => {
-                        Ok(UserCommand::TerminalResize)
+                },
+                Event::FocusGained | Event::FocusLost | Event::Paste(_) => {
+                    Ok(UserCommand::None)
+                },
+                Event::Mouse(event) => {
+                    let lookup = MouseEvent {
+                        column:0, row:0,
+                        ..event
+                    };
+
+                    // println!("{:?}", event);
+
+                    match self.mousemap.get(&lookup) {
+                        Some(cmd) => {
+                            match cmd {
+                                UserCommand::SelectWordAt(_,_) => {
+                                    Ok(UserCommand::SelectWordAt(event.column, event.row))
+                                },
+                                UserCommand::SelectWordDrag(_,_) => {
+                                    Ok(UserCommand::SelectWordDrag(event.column, event.row))
+                                },
+                                _ => Ok(cmd.clone()),
+                            }
+                        },
+                        None => Ok(UserCommand::None),
                     }
                 }
+                Event::Resize(_, _) => {
+                    Ok(UserCommand::TerminalResize)
+                }
+            }
         }
     }
 
@@ -396,5 +429,8 @@ impl Input {
 
         // TODO: Different keymaps for different modes. user-input, scrolling, etc.
         self.reader.get_command(timeout)
+    }
+    pub fn reset_chord(&mut self) {
+        self.reader.reset_chord();
     }
 }
