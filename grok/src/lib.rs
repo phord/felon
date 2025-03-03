@@ -12,7 +12,13 @@ use config::Config;
 use viewer::Viewer;
 
 pub fn run() -> std::io::Result<()> {
-    let cfg = Config::from_env().unwrap();
+    let cfg = match Config::from_env() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Error: {:?}", e);
+            std::process::exit(1);
+        }
+    };
 
     // Check if no files given and no stdin redirection. Abort if so.
     if cfg.filename.is_empty() && std::io::IsTerminal::is_terminal(&std::io::stdin()) {

@@ -333,13 +333,13 @@ impl Display {
             }
             UserCommand::ChordKey(..) => {}
             UserCommand::Chord(ref chord) => {
-                log::info!("Got a chord {chord}");
-                match self.config.parse_item(chord, None) {
+                log::trace!("Got a chord {chord}");
+                match self.config.parse_switch(chord, None) {
                     Ok((item, _)) => {
                         self.config.receive_item(item);
                         self.scroll = ScrollAction::Repaint;
                     },
-                    Err(e) => log::error!("Error parsing chord: {:?}", e),
+                    Err(e) => log::trace!("Error parsing chord: {:?}", e),
                 }
             }
             UserCommand::PageDown => {

@@ -37,6 +37,7 @@ pub enum Error {
     ExpectedInt(String),
     ExpectedArgumentFor(String),
     UnknownArgument(String),
+    UnknownSwitch(String),
 }
 
 const HELP: &str = "\
@@ -91,8 +92,9 @@ impl Config {
     }
 
     /// Parse a string argument and optionally, the word after it, into a ConfigItem.
-    /// Unrecognized switches are interpreted as files to add to the queue.
-    pub fn parse_item(&mut self, item: &str, arg: Option<&str>) -> Result<(ConfigItem, bool) , Error> {
+    /// Unrecognized switches return an error.
+    pub fn parse_switch(&mut self, item: &str, arg: Option<&str>) -> Result<(ConfigItem, bool) , Error> {
+        assert!(item.starts_with("-"));
         let (arg, used) = if let Some(args) = item.split_once("=") {
             (Some(args.1), false)
         } else {
@@ -119,9 +121,17 @@ impl Config {
                     return Err(Error::ExpectedArgumentFor(item.to_string()));
                 }
             },
-            _ => ConfigItem::OpenFile(PathBuf::from(item)),
+            _ => return Err(Error::UnknownSwitch(item.to_string())),
         };
         Ok((cfg, consumed))
+    }
+
+    pub fn parse_item(&mut self, item: &str, arg: Option<&str>) -> Result<(ConfigItem, bool) , Error> {
+        if item.starts_with("-") {
+            self.parse_switch(item, arg)
+        } else {
+            Ok((ConfigItem::OpenFile(PathBuf::from(item)), false))
+        }
     }
 
     fn handle_cmdline(&mut self, item: &ConfigItem) {
@@ -138,7 +148,6 @@ impl Config {
         }
     }
 
-    // TODO: Need some way to handle "toggle" values; eg., -S at runtime toggles slice
     fn parse_args(&mut self) -> Result<(), Error>{
         let mut skip = false;
         for arg_pairs in std::env::args()
@@ -158,7 +167,6 @@ impl Config {
                     skip = consumed;
                 },
                 Err(e) => {
-                    eprintln!("Error: Parsing {:?}: {:?}", item, e);
                     return Err(e)
                 }
             }
