@@ -15,112 +15,110 @@ use crossterm::{event, terminal, execute};
 use std::collections::HashMap;
 use std::time::Duration;
 use std::io::stdout;
-
-use UserCommand as cmd;
-
 use crate::config::Config;
-const KEYMAP: &[(&str, UserCommand)] = &[
-    ("Ctrl+W", cmd::Quit),
-    ("Shift+Q", cmd::Quit),
-    ("Q", cmd::Quit),
-    ("Esc", cmd::Quit),
-    ("Up", cmd::ScrollUp),
-    ("Down", cmd::ScrollDown),
-    ("Ctrl+Left", cmd::PanLeftMax),
-    ("Ctrl+Right", cmd::PanRightMax),
-    ("Left", cmd::PanLeft),
-    ("Right", cmd::PanRight),
-    ("PageUp", cmd::PageUp),
-    ("PageDown", cmd::PageDown),
-    ("Home", cmd::ScrollToTop),
-    ("End", cmd::ScrollToBottom),
-    ("&", cmd::FilterPrompt),
-    ("/", cmd::ForwardSearchPrompt),
-    ("?", cmd::BackwardSearchPrompt),
-    ("N", cmd::SearchNext),
-    ("Shift+N", cmd::SearchPrev),
 
-    ("R", cmd::RefreshDisplay),
-    ("Ctrl+R", cmd::RefreshDisplay),
-    ("Ctrl+L", cmd::RefreshDisplay),
-    ("Shift+R", cmd::RefreshDisplay),     // FIXME: and reload files
+const KEYMAP: &[(&str, UserCommand)] = &[
+    ("Ctrl+W", UserCommand::Quit),
+    ("Shift+Q", UserCommand::Quit),
+    ("Q", UserCommand::Quit),
+    ("Esc", UserCommand::Quit),
+    ("Up", UserCommand::ScrollUp),
+    ("Down", UserCommand::ScrollDown),
+    ("Ctrl+Left", UserCommand::PanLeftMax),
+    ("Ctrl+Right", UserCommand::PanRightMax),
+    ("Left", UserCommand::PanLeft),
+    ("Right", UserCommand::PanRight),
+    ("PageUp", UserCommand::PageUp),
+    ("PageDown", UserCommand::PageDown),
+    ("Home", UserCommand::ScrollToTop),
+    ("End", UserCommand::ScrollToBottom),
+    ("&", UserCommand::FilterPrompt),
+    ("/", UserCommand::ForwardSearchPrompt),
+    ("?", UserCommand::BackwardSearchPrompt),
+    ("N", UserCommand::SearchNext),
+    ("Shift+N", UserCommand::SearchPrev),
+
+    ("R", UserCommand::RefreshDisplay),
+    ("Ctrl+R", UserCommand::RefreshDisplay),
+    ("Ctrl+L", UserCommand::RefreshDisplay),
+    ("Shift+R", UserCommand::RefreshDisplay),     // FIXME: and reload files
 
     //     PgUp b ^B ESC-v w - scroll back one page (opposite of SPACE); w is sticky
     // TODO: ESC-v?
-    ("B", cmd::PageUp),
-    ("Ctrl+B", cmd::PageUp),
-    ("W", cmd::PageUpSticky),
+    ("B", UserCommand::PageUp),
+    ("Ctrl+B", UserCommand::PageUp),
+    ("W", UserCommand::PageUpSticky),
 
     // PgDn SPACE ^V ^F f z -- move down one page or N lines (if N was given first); z is sticky (saves the page size)
-    (" ", cmd::PageDown),
-    ("Ctrl+V", cmd::PageDown),
-    ("Ctrl+F", cmd::PageDown),
-    ("F", cmd::PageDown),
-    ("Z", cmd::PageDownSticky),
+    (" ", UserCommand::PageDown),
+    ("Ctrl+V", UserCommand::PageDown),
+    ("Ctrl+F", UserCommand::PageDown),
+    ("F", UserCommand::PageDown),
+    ("Z", UserCommand::PageDownSticky),
 
     // g < ESC-< - go to line N (not prompted; default 1)
     // G > ESC-> - go to line N (not prompted; default end of file)
-    ("G", cmd::SeekStartLine),
-    ("<", cmd::SeekStartLine),
-    ("Shift+G", cmd::SeekEndLine),
-    (">", cmd::SeekEndLine),
+    ("G", UserCommand::SeekStartLine),
+    ("<", UserCommand::SeekStartLine),
+    ("Shift+G", UserCommand::SeekEndLine),
+    (">", UserCommand::SeekEndLine),
 
     // p - go to percentage point in file
     // P - go to byte offset in file
 
-    ("P", cmd::GotoPercent),
-    ("%", cmd::GotoPercent),
-    ("Shift+P", cmd::GotoOffset),
+    ("P", UserCommand::GotoPercent),
+    ("%", UserCommand::GotoPercent),
+    ("Shift+P", UserCommand::GotoOffset),
 
     // ENTER ^N e ^E j ^J J - move down N (default 1) lines
-    ("Enter", cmd::ScrollDown),
-    ("J", cmd::ScrollDown),
-    ("Shift+J", cmd::ScrollDown),
-    ("Ctrl+J", cmd::ScrollDown),
-    ("E", cmd::ScrollDown),
-    ("Ctrl+E", cmd::ScrollDown),
+    ("Enter", UserCommand::ScrollDown),
+    ("J", UserCommand::ScrollDown),
+    ("Shift+J", UserCommand::ScrollDown),
+    ("Ctrl+J", UserCommand::ScrollDown),
+    ("E", UserCommand::ScrollDown),
+    ("Ctrl+E", UserCommand::ScrollDown),
 
     // y ^Y ^P k ^K K Y - scroll up N lines (opposite of j)
     // J K and Y scroll past end/begin of screen. All others stop at file edges
-    ("Y", cmd::ScrollUp),
-    ("K", cmd::ScrollUp),
-    ("Shift+Y", cmd::ScrollUp),
-    ("Shift+K", cmd::ScrollUp),
-    ("Ctrl+Y", cmd::ScrollUp),
-    ("Ctrl+P", cmd::ScrollUp),
-    ("Ctrl+K", cmd::ScrollUp),
+    ("Y", UserCommand::ScrollUp),
+    ("K", UserCommand::ScrollUp),
+    ("Shift+Y", UserCommand::ScrollUp),
+    ("Shift+K", UserCommand::ScrollUp),
+    ("Ctrl+Y", UserCommand::ScrollUp),
+    ("Ctrl+P", UserCommand::ScrollUp),
+    ("Ctrl+K", UserCommand::ScrollUp),
 
     // d ^D - scroll forward half a screen or N lines; N is sticky; becomes new default for d/u
     // u ^U - scroll up half a screen or N lines; N is sticky; becomes new default for d/u
-    ("D", cmd::HalfPageDown),
-    ("Ctrl+D", cmd::HalfPageDown),
-    ("U", cmd::HalfPageUp),
-    ("Ctrl+U", cmd::HalfPageUp),
+    ("D", UserCommand::HalfPageDown),
+    ("Ctrl+D", UserCommand::HalfPageDown),
+    ("U", UserCommand::HalfPageUp),
+    ("Ctrl+U", UserCommand::HalfPageUp),
 
     // F - go to end of file and try to read more data
-    ("Shift+F", cmd::SeekEndLine),        // TODO: and read more data
+    ("Shift+F", UserCommand::SeekEndLine),        // TODO: and read more data
 
     // m <x> - bookmark first line on screen with letter given (x is any alpha, upper or lower)
     // M <x> - bookmark last line on screen with letter given
     // ' <x> - go to bookmark with letter given (and position as it was marked, at top or bottom)
     // ^X^X <n> - got to bookmark
-    ("M", cmd::SetBookmarkTop),
-    ("Shift+M", cmd::SetBookmarkBottom),
-    ("'", cmd::GotoBookmark),
-    ("Ctrl+X", cmd::GotoBookmark),
+    ("M", UserCommand::SetBookmarkTop),
+    ("Shift+M", UserCommand::SetBookmarkBottom),
+    ("'", UserCommand::GotoBookmark),
+    ("Ctrl+X", UserCommand::GotoBookmark),
 
     // Digits: accumulate a number argument for the next command
-    ("0", cmd::CollectDigits(0)),
-    ("1", cmd::CollectDigits(1)),
-    ("2", cmd::CollectDigits(2)),
-    ("3", cmd::CollectDigits(3)),
-    ("4", cmd::CollectDigits(4)),
-    ("5", cmd::CollectDigits(5)),
-    ("6", cmd::CollectDigits(6)),
-    ("7", cmd::CollectDigits(7)),
-    ("8", cmd::CollectDigits(8)),
-    ("9", cmd::CollectDigits(9)),
-    (".", cmd::CollectDecimal),
+    ("0", UserCommand::CollectDigits(0)),
+    ("1", UserCommand::CollectDigits(1)),
+    ("2", UserCommand::CollectDigits(2)),
+    ("3", UserCommand::CollectDigits(3)),
+    ("4", UserCommand::CollectDigits(4)),
+    ("5", UserCommand::CollectDigits(5)),
+    ("6", UserCommand::CollectDigits(6)),
+    ("7", UserCommand::CollectDigits(7)),
+    ("8", UserCommand::CollectDigits(8)),
+    ("9", UserCommand::CollectDigits(9)),
+    (".", UserCommand::CollectDecimal),
 
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
@@ -128,13 +126,13 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     // probably won't work as they normally do.  We can't emulate those features either since we don't have access
     // to the user's clipboard unless we're on the same X server.
 
-    ("MouseLeft", cmd::SelectWordAt(0,0)),
-    ("MouseLeftDrag", cmd::SelectWordDrag(0,0)),
-    // ("Ctrl+MouseLeft", cmd::ScrollDown),
-    // ("MouseRight", cmd::MouseRight),
-    // ("MouseMiddle", cmd::MouseMiddle),
-    ("MouseWheelUp", cmd::MouseScrollUp),
-    ("MouseWheelDown", cmd::MouseScrollDown),
+    ("MouseLeft", UserCommand::SelectWordAt(0,0)),
+    ("MouseLeftDrag", UserCommand::SelectWordDrag(0,0)),
+    // ("Ctrl+MouseLeft", UserCommand::ScrollDown),
+    // ("MouseRight", UserCommand::MouseRight),
+    // ("MouseMiddle", UserCommand::MouseMiddle),
+    ("MouseWheelUp", UserCommand::MouseScrollUp),
+    ("MouseWheelDown", UserCommand::MouseScrollDown),
 
 ];
 
@@ -319,7 +317,6 @@ impl Reader {
                             None => Ok(UserCommand::None),
                         };
                     }
-                    Event::FocusGained | Event::FocusLost | Event::Paste(_) => {},
                     Event::Mouse(event) => {
                         let lookup = MouseEvent {
                             column:0, row:0,
@@ -331,11 +328,11 @@ impl Reader {
                         return match self.mousemap.get(&lookup) {
                             Some(cmd) => {
                                 match cmd {
-                                    cmd::SelectWordAt(_,_) => {
-                                        Ok(cmd::SelectWordAt(event.column, event.row))
+                                    UserCommand::SelectWordAt(_,_) => {
+                                        Ok(UserCommand::SelectWordAt(event.column, event.row))
                                     },
-                                    cmd::SelectWordDrag(_,_) => {
-                                        Ok(cmd::SelectWordDrag(event.column, event.row))
+                                    UserCommand::SelectWordDrag(_,_) => {
+                                        Ok(UserCommand::SelectWordDrag(event.column, event.row))
                                     },
                                     _ => Ok(*cmd),
                                 }
@@ -344,10 +341,9 @@ impl Reader {
                         };
                     }
                     Event::Resize(_, _) => {
-                        return Ok(cmd::TerminalResize);
+                        Ok(UserCommand::TerminalResize)
                     }
                 }
-            }
         }
     }
 
