@@ -1,11 +1,12 @@
 // Generic wrapper of different readable file types
 
 use std::fs::File;
-use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Seek;
 use std::io::SeekFrom;
 use std::path::PathBuf;
+
+use bstr::io::BufReadExt;
 
 use crate::files::CursorLogFile;
 use crate::files::MockLogFile;
@@ -44,7 +45,7 @@ impl LogBase for TextLogFile {}
 impl LogBase for TextLogStream {}
 impl LogBase for ZstdLogFile {}
 
-pub trait LogFile: BufRead + Seek + Stream {
+pub trait LogFile: BufReadExt + Seek + Stream {
 
     // Read a line from a given offset
     fn read_line_at(&mut self, start: usize) -> std::io::Result<String> {
@@ -62,6 +63,26 @@ pub trait LogFile: BufRead + Seek + Stream {
             Ok(_) => Ok(String::from_utf8_lossy(&buf).into_owned()),
             Err(e) => Err(e),
         }
+    }
+
+    /// Parse a block of data from the file and return the offsets of the lines
+    /// This is about 3x as fast as read_line_at(), but it doesn't do Unicode conversion and it doesn't return the found lines.
+    fn find_lines(&mut self, range: &std::ops::Range<usize>) -> std::io::Result<Vec<usize>>
+    where Self: Sized {
+        let len = range.len().min(self.len() - range.start).min(10 * 1024 * 1024);
+        self.seek(SeekFrom::Start(range.start as u64))?;
+
+        let mut lines = Vec::with_capacity(len / 50);
+        let mut offset = range.start;
+        self.for_byte_line_with_terminator(|line| {
+            offset += line.len();
+            lines.push(offset);
+            if offset >= range.start + len {
+                return Ok(false);
+            }
+            Ok(true)
+        })?;
+        Ok(lines)
     }
 
     // Determine the preferred chunk to read to include the target offset

@@ -72,6 +72,33 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         }
     }
 
+    /// Parse gap at pos for newlines and fill in the index
+    /// Returns Hit(empty_line), Miss(EOF), or Timeout(pos)
+    /// In case of hit, the line returned is empty; only the Position is useful.
+    fn resolve_lines(&mut self, pos: &Position) -> GetLine {
+        // Resolve position to a target offset to read in the file
+        let offset = pos.least_offset();
+        if self.check_timeout() {
+            GetLine::Timeout(pos.clone())
+        } else if offset >= self.len() {
+            GetLine::Miss(Position::invalid())
+        } else {
+            let mut pos = pos.resolve(&self.index);
+            if pos.is_unmapped() {
+                let lines = self.source.find_lines(pos.region()).unwrap();
+                let mut offset = pos.least_offset();
+                for line in lines {
+                    let range = offset..line;
+                    pos = self.index.insert_one(&pos, &(range));
+                    pos = pos.advance(&self.index);
+                    offset = line;
+                }
+                // TODO: Handle case when no lines were found by erasing the gap
+            }
+            GetLine::Hit(pos, LogLine::default())
+        }
+    }
+
     // Find the last line in the range [start, end], memoizing all complete lines we see.
     // Return last memoized line from the region.
     fn last_line(&mut self, start: usize, end: usize) -> GetLine {
@@ -212,9 +239,9 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         let mut pos = self.index.seek_gap(pos);
         while pos.is_unmapped() {
             // Resolve unmapped region
-            match self.get_line_memo(&pos) {
-                GetLine::Hit(p, _) =>     // Found a line.  Advance to the remaining gap, if any.
-                        { assert!(p.is_mapped()); pos = p.advance(&self.index)},
+            match self.resolve_lines(&pos) {
+                GetLine::Hit(p, _) =>     // Resolved previous gap.  p points past the last line.
+                        { pos = self.index.seek_gap(&p); },
                 GetLine::Miss(p) =>       // End of file
                         return p,
                 GetLine::Timeout(p) =>    // Timeout.  Return the position we stopped at.
