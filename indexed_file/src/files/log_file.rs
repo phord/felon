@@ -65,15 +65,19 @@ pub trait LogFile: BufReadExt + Seek + Stream {
         }
     }
 
-    /// Parse a block of data from the file and return the offsets of the lines
+    /// Parse a block of data from the file and return the offsets of the lines (byte after each LF)
     /// This is about 3x as fast as read_line_at(), but it doesn't do Unicode conversion and it doesn't return the found lines.
     fn find_lines(&mut self, range: &std::ops::Range<usize>) -> std::io::Result<Vec<usize>>
     where Self: Sized {
         let len = range.len().min(self.len() - range.start).min(10 * 1024 * 1024);
         self.seek(SeekFrom::Start(range.start as u64))?;
-
-        let mut lines = Vec::with_capacity(len / 50);
+        let estimate_avg_line_length = 50;
+        let mut lines = Vec::with_capacity(len / estimate_avg_line_length);
         let mut offset = range.start;
+        if offset == 0 {
+            // There's always a line beginning at zero
+            lines.push(0);
+        }
         self.for_byte_line_with_terminator(|line| {
             offset += line.len();
             lines.push(offset);
