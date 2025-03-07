@@ -13,7 +13,7 @@ use crate::LogLine;
 use super::indexed_log::{IndexStats, IndexedLog};
 use super::sane_index::SaneIndex;
 use super::timeout::Timeout;
-use super::waypoint::{Position, VirtualPosition};
+use super::waypoint::Position;
 use super::GetLine;
 
 pub struct SaneIndexer<LOG> {
@@ -72,10 +72,14 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         }
     }
 
+    fn intersect(range1: &std::ops::Range<usize>, range2: &std::ops::Range<usize>) -> std::ops::Range<usize> {
+        range1.start.max(range2.start)..range1.end.min(range2.end)
+    }
+
     /// Parse gap at pos for newlines and fill in the index
     /// Returns Hit(empty_line), Miss(EOF), or Timeout(pos)
-    /// In case of hit, the line returned is empty; only the Position is useful.
-    fn resolve_lines(&mut self, pos: &Position) -> GetLine {
+    /// In case of hit, the line returned is empty; the Position points to the waypoint _after_ the last line
+    fn resolve_lines(&mut self, pos: &Position, range: &std::ops::Range<usize>) -> GetLine {
         // Resolve position to a target offset to read in the file
         let offset = pos.least_offset();
         if self.check_timeout() {
@@ -85,67 +89,19 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         } else {
             let mut pos = pos.resolve(&self.index);
             if pos.is_unmapped() {
-                let lines = self.source.find_lines(pos.region()).unwrap();
-                let mut offset = pos.least_offset();
-                for line in lines {
-                    let range = offset..line;
-                    pos = self.index.insert_one(&pos, &(range));
+                let range = Self::intersect(pos.region(), range);
+                assert!(!range.is_empty());
+                let lines = self.source.find_lines(&range).unwrap();
+                for line in lines.windows(2) {
+                    pos = self.index.insert_one(&pos, &(line[0]..line[1]));
                     pos = pos.advance(&self.index);
-                    offset = line;
                 }
-                // TODO: Handle case when no lines were found by erasing the gap
+                // TODO: Handle case when no lines were found ... by erasing the gap?  Will need to merge erased gaps later, then?
             }
             GetLine::Hit(pos, LogLine::default())
         }
     }
 
-    // Find the last line in the range [start, end], memoizing all complete lines we see.
-    // Return last memoized line from the region.
-    fn last_line(&mut self, start: usize, end: usize) -> GetLine {
-        // We're scanning a chunk of memory that has 0 or more line-endings in it.
-        //       start                  end
-        //         v                     v
-        // ----|---[===|============|====]-----|-----
-        //                          ^last line^   This is the line we want
-        //             ^another line^             This is a complete line, so we will memoize it.
-        //      ^prev--^                          This line is only partially scanned, so we will not memoize it.
-        //
-        // Try reading the first (throwaway) line.
-        //   If it ends before our endpoint, memoize the rest of the lines and return the last one.
-        //   Otherwise, fail.
-        let offset =
-            if start == 0 {
-                // If we start at zero, there are no throwaway lines
-                0
-            } else if let Some(line) = self.read_line(start) {
-                // Found a partial line, but we only need to know where it ends to establish a foothold
-                let offset = line.offset + line.line.len();
-                if offset > end {
-                    // Did not find a line break in our gap. Failure.
-                    return GetLine::Miss(Position::invalid());
-                }
-                offset
-            } else {
-                // Did not find anything.  EOF?
-                panic!("Reading past EOF intentionally?");
-                // return GetLine::Miss(Position::invalid());
-            };
-
-        // Found the start of a line in our gap. Read from here to end of gap and remember the lines.
-        let mut pos = Position::Virtual(VirtualPosition::Offset(offset));
-        loop {
-            let get = self.get_line_memo(&pos);
-            if let GetLine::Hit(p, _) = &get {
-                if p.most_offset() > end {
-                    return get;
-                }
-                pos = p.next(&self.index);
-            } else {
-                // No lines matched? Failure.
-                return get;
-            }
-        }
-    }
 
     /// Scan a chunk of space bounded by pos before the offset position to find the start of our target line
     /// Return the last line found before offset in the region.
@@ -160,12 +116,13 @@ impl<LOG: LogFile> SaneIndexer<LOG> {
         let start = pos.least_offset().saturating_sub(1);
         loop {
             let try_offset = offset.saturating_sub(chunk_delta).max(start);
-            let get = self.last_line(try_offset, offset);
-            if let GetLine::Hit(pos, _) = &get {
+            let get = self.resolve_lines(pos, &(try_offset..usize::MAX));
+            if let GetLine::Hit(_pos, _) = &get {
+                let pos = Position::from(offset).resolve(&self.index);
                 if !pos.is_invalid() && pos.most_offset() >= offset {
                     // Found the line touching our endpoint
                     assert!(pos.least_offset() <= offset);
-                    return get;
+                    return self.get_line_memo(&pos)
                 }
                 assert!(pos.least_offset() >= start);
                 if pos.least_offset() == start {
@@ -239,7 +196,7 @@ impl<LOG: LogFile> IndexedLog for SaneIndexer<LOG> {
         let mut pos = self.index.seek_gap(pos);
         while pos.is_unmapped() {
             // Resolve unmapped region
-            match self.resolve_lines(&pos) {
+            match self.resolve_lines(&pos, pos.region()) {
                 GetLine::Hit(p, _) =>     // Resolved previous gap.  p points past the last line.
                         { pos = self.index.seek_gap(&p); },
                 GetLine::Miss(p) =>       // End of file
