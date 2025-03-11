@@ -183,7 +183,7 @@ pub enum UserCommand {
 
 // TODO: Roll this into a test
 // use crossterm::event::{Event, KeyCode, MouseButton, KeyEvent, MouseEvent, MouseEventKind, KeyModifiers};
-// use grok::keyboard::Reader;
+// use lgt::keyboard::Reader;
 // assert_eq!(Reader::keycode("Ctrl+Q"), KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
 
 #[derive(Default)]

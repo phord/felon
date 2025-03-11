@@ -1,14 +1,14 @@
 [package]
-name = "grok"
+name = "lgt"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "grok"
+name = "lgt"
 path = "src/lib.rs"
 
 [[bin]]
-name = "grok"
+name = "lgt"
 path = "src/main.rs"
 
 [dependencies]

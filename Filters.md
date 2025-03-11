@@ -42,7 +42,7 @@ There are two kinds of filters: filter-in, filter-out.
 Those are the terms `lnav` uses, and they fit fine.  But I often think of them as `grep` and `grep -v`, or `include` and `!include`.
 
 There is also a search type which I'll call an `anchor`.  `lnav` calls this a `search`, I think.  We can also use `highlighters` as
-a search type, but it may not merit the extra baggage since we only use it for the current display.  In `grok` there can
+a search type, but it may not merit the extra baggage since we only use it for the current display.  In `lgt` there can
 be multiple highlighters, and we could also support multiple anchors, I suppose.  But this starts to sound too complex for a UI.
 
 There are possibly different types of matchers. `Regex` is the typical one, but we may also want to exclude lines that

@@ -1,13 +1,13 @@
 GROK
 
 NAME
-        grok - the Log Grokker tool
+        lgt - the Log Grokker tool
 
-grok is an interactive replacement for `zegrep | less`.  It intends to be a replacement for [lnav](https://lnav.org/) which heavily inspired some of the features.
+lgt is an interactive replacement for `zegrep | less`.  It intends to be a replacement for [lnav](https://lnav.org/) which heavily inspired some of the features.
 
 SYNOPSIS
-        grok [ -S | --chop-long-lines ] [ -X | --no-alternate-screen ]
-             [ -C | --semantic-color ] [ -c | --color ] [filename [filename ...]]
+        lgt [ -S | --chop-long-lines ] [ -X | --no-alternate-screen ]
+            [ -C | --semantic-color ] [ -c | --color ] [filename [filename ...]]
 
 DESCRIPTION
         Grok is a pager similar to less, but sometimes faster and with more features. Grok is intended to be faster than less
@@ -74,13 +74,13 @@ COMMANDS
 
 
         q or Q or Esc
-                Exits grok.
+                Exits lgt.
 
 ----
 
 Following are some design notes and ideas useful only to me, perhaps.
 
-Originally grok was intended to be a faster word-based file indexer, capable of know everywhere a word existed in a file all at once.
+Originally lgt was intended to be a faster word-based file indexer, capable of know everywhere a word existed in a file all at once.
 The expectation was that this could be faster than regular expression searching after the fact. The expectation was incorrect, at least in my implementation.
 It's not a new idea; it dates back to the 1940's, and an [intern at Google used it](https://swtch.com/~rsc/regexp/regexp4.html) in some modern tools there for a while.
 Anyway, it turned out to be not terribly fast, in the end, and regex seems plenty fast enough.  Continuing with that for now.

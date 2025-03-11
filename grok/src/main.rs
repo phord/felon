@@ -5,5 +5,5 @@ fn main() -> std::io::Result<()> {
         .log_to_file(FileSpec::default().directory("/tmp"))
         .start().unwrap();
 
-    grok::run()
+    lgt::run()
 }

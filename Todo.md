@@ -58,7 +58,7 @@ A quick issue tracker
        - zstd
        - gzip
 
-      - The wrappers implement a core set of traits needed for grok.
+      - The wrappers implement a core set of traits needed for lgt.
         - Traits
           - Read
           - Seek
