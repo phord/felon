@@ -54,6 +54,7 @@ Following features from less are not implemented.
 
         m      Followed by any lowercase or uppercase letter, marks the first displayed line with that letter.  If the status
                 column is enabled via the -J option, the status column shows the marked line.
+            PROMPT: set mark:
 
         M      Acts like m, except the last displayed line is marked rather than the first displayed line.
 
@@ -61,10 +62,12 @@ Following features from less are not implemented.
                 with that letter.  Followed by another single quote, returns to the position at which the last "large" movement
                 command was executed.  Followed by a ^ or $, jumps to the beginning or end of the file respectively.  Marks are
                 preserved when a new  file  is examined, so the ' command can be used to switch between input files.
+            PROMPT: goto mark:
 
         ^X^X   Same as single quote.
 
         ESC-m  Followed by any lowercase or uppercase letter, clears the mark identified by that letter.
+            PROMPT: clear mark:
 
                 If pattern is empty (if
                 you type & immediately followed by ENTER), any filtering is turned off, and all lines are displayed.  While filtering is in
@@ -127,3 +130,6 @@ Following features from less are not implemented.
 
        s filename
               Save the input to a file.  This only works if the input is a pipe, not an ordinary file.
+
+Chord characters:
+    ESC, -, _, :, ^X, Z

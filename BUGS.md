@@ -19,6 +19,7 @@
 - [x] New search should replace previous one (remove previous highlights)
 - [x] Filter-out  ("&!")
 - [ ] Replacement name for grok
+- [ ] Digits-parsing is broken (50p -> "scroll to percent 0")
 
 # Todo:
 - [ ] re-read last line to update display if last line was partial (no LF) and new data appears
