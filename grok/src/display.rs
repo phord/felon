@@ -412,7 +412,7 @@ impl Display {
         }
 
         // Clear argument when any user action but digits/decimal is seen
-        if ! matches!(cmd, UserCommand::CollectDigits(_) | UserCommand::CollectDecimal | UserCommand::TerminalResize) {
+        if ! matches!(cmd, UserCommand::None| UserCommand::CollectDigits(_) | UserCommand::CollectDecimal | UserCommand::TerminalResize) {
             self.arg_num = 0;
             self.arg_denom = 0;
             self.arg_fraq = 0;
