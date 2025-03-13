@@ -587,7 +587,7 @@ impl Display {
 
     fn get_max_pan(&self, doc: &mut Document, scroll: &Scroll) -> usize {
         let sv = match scroll {
-            Scroll::Repaint(ref sv) => sv,
+            Scroll::Repaint(sv) => sv,
 
             Scroll::Up(_) |
             Scroll::Down(_) |

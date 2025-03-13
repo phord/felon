@@ -77,7 +77,7 @@ impl  LogStack {
     }
 
     fn do_search(&mut self, timeout: u64, count: usize, pos: Position) -> Option<usize> {
-        if let Some(ref mut search) = &mut self.search {
+        if let Some(search) = &mut self.search {
             let src = &mut self.source.with_timeout(timeout);
             let mut count = count;
             let mut pos = pos;
@@ -150,7 +150,7 @@ impl  LogStack {
 
             PendingOp::Streaming => {
                 let len = self.source.poll(Some(std::time::Instant::now() + std::time::Duration::from_millis(timeout)));
-                if let Some(ref mut search) = &mut self.search {
+                if let Some(search) = &mut self.search {
                     search.update_len(len);
                 }
                 if !self.source.is_open() {
@@ -241,7 +241,7 @@ impl IndexedLog for LogStack {
         } else {
             pos.clone()
         };
-        if let Some(ref mut search) = &mut self.search {
+        if let Some(search) = &mut self.search {
             if search.has_gaps() {
                 return search.resolve_gaps(&mut self.source, &pos)
             }
@@ -310,7 +310,7 @@ impl Stream for FilteredSource {
     // Poll for new data
     fn poll(&mut self, timeout: Option<std::time::Instant>) -> usize {
         let len = self.source.poll(timeout);
-        if let Some(ref mut filter) = &mut self.filter {
+        if let Some(filter) = &mut self.filter {
             filter.update_len(len);
         }
         len
@@ -323,7 +323,7 @@ impl IndexedLog for FilteredSource {
     }
 
     fn next(&mut self, pos: &Position) -> GetLine {
-        if let Some(ref mut filter) = &mut self.filter {
+        if let Some(filter) = &mut self.filter {
             filter.find_next(&mut self.source, pos)
         } else {
             self.source.next(pos)
@@ -331,7 +331,7 @@ impl IndexedLog for FilteredSource {
     }
 
     fn next_back(&mut self, pos: &Position) -> GetLine {
-        if let Some(ref mut filter) = &mut self.filter {
+        if let Some(filter) = &mut self.filter {
             filter.find_next_back(&mut self.source, pos)
         } else {
             self.source.next_back(pos)
@@ -339,7 +339,7 @@ impl IndexedLog for FilteredSource {
     }
 
     fn advance(&mut self, pos: &Position) -> Position {
-        if let Some(ref mut filter) = &mut self.filter {
+        if let Some(filter) = &mut self.filter {
             filter.advance(pos)
         } else {
             self.source.advance(pos)
@@ -347,7 +347,7 @@ impl IndexedLog for FilteredSource {
     }
 
     fn advance_back(&mut self, pos: &Position) -> Position {
-        if let Some(ref mut filter) = &mut self.filter {
+        if let Some(filter) = &mut self.filter {
             filter.advance_back(pos)
         } else {
             self.source.advance_back(pos)
@@ -360,7 +360,7 @@ impl IndexedLog for FilteredSource {
         } else {
             pos.clone()
         };
-        if let Some(ref mut filter) = &mut self.filter {
+        if let Some(filter) = &mut self.filter {
             if filter.has_gaps() {
                 return filter.resolve_gaps(&mut self.source, &pos)
             }

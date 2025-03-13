@@ -135,7 +135,7 @@ impl Position {
     /// Resolve a virtual position to a real position, or Invalid
     pub(crate) fn resolve(&self, index: &SaneIndex) -> Position{
         match self {
-            Position::Virtual(ref virt) => {
+            Position::Virtual(virt) => {
                 if let Some(offset) = virt.offset() {
                     let i = index.search(offset);
                     if index.index_valid(i) {
@@ -165,7 +165,7 @@ impl Position {
     // TODO: dedup this with resolve
     pub(crate) fn resolve_back(&self, index: &SaneIndex) -> Position {
         match self {
-            Position::Virtual(ref virt) => {
+            Position::Virtual(virt) => {
                 if let Some(offset) = virt.offset() {
                     let mut i = index.search(offset);
                     // offset is exclusive when seeking backwards.  If we found a waypoint at offset, we need to step back one.
