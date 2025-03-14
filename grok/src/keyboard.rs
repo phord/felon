@@ -401,6 +401,44 @@ mod tests {
         assert_eq!(reader.process_event(Event::Paste("test".to_string())), UserCommand::None, "Paste should return None");
         assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::Quit, "Second Ctrl+X should still complete the chord");
     }
+
+    #[test]
+    fn test_invalid_key_combinations() {
+        let test_cases = [
+            // Duplicate modifiers
+            ("Ctrl+Ctrl+X", "Key combo Ctrl+Ctrl+X gives ctrl twice"),
+            ("Shift+Shift+A", "Key combo Shift+Shift+A gives shift twice"),
+            ("Alt+Alt+B", "Key combo Alt+Alt+B gives alt twice"),
+
+            // Multiple action keys
+            ("A+B", "Key combo A+B has two action keys"),
+            ("Enter+Space", "Key combo Enter+Space has two action keys"),
+            ("Tab+Esc", "Key combo Tab+Esc has two action keys"),
+
+            // Mixed mouse and keyboard
+            ("MouseLeft+A", "Key combo MouseLeft+A has an action key and a mouse action"),
+            ("Enter+MouseWheelUp", "Key combo Enter+MouseWheelUp has an action key and a mouse action"),
+
+            // Multiple mouse actions
+            ("MouseLeft+MouseRight", "Key combo MouseLeft+MouseRight has two mouse actions"),
+            ("MouseWheelUp+MouseWheelDown", "Key combo MouseWheelUp+MouseWheelDown has two mouse actions"),
+
+            // Unknown/invalid key names
+            ("Foo", "Unknown key name foo in Foo"),
+            ("Ctrl+Bar", "Unknown key name bar in Ctrl+Bar"),
+            ("Alt+Shift+Baz", "Unknown key name baz in Alt+Shift+Baz"),
+
+            // No action key
+            ("Ctrl+Alt+Shift", "Key combo Ctrl+Alt+Shift has no action key or mouse action"),
+        ];
+
+        for (input, expected_error) in test_cases {
+            match Reader::keycode(input) {
+                Ok(_) => panic!("Expected error for invalid combo: {}", input),
+                Err(error) => assert_eq!(error, expected_error, "Testing invalid combo: {}", input),
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -546,7 +584,7 @@ impl Reader {
                 if action_key.is_some() {
                     return Err(format!("Key combo {} has two action keys", orig));
                 }
-                if mouse_action.is_some() {
+                if mouse_button.is_some() {
                     return Err(format!("Key combo {} has an action key and a mouse action", orig));
                 }
                 action_key = action;
@@ -555,13 +593,15 @@ impl Reader {
                 if mouse_button.is_some() {
                     return Err(format!("Key combo {} has two mouse actions", orig));
                 }
+                // Already got an action key
+                if action_key.is_some() {
+                    return Err(format!("Key combo {} has an action key and a mouse action", orig));
+                }
                 mouse_button = mouse_action;
             } else {
                 return Err(format!("Unknown key name {} in {}", key, orig));
             }
         }
-
-        assert_ne!(action_key.is_some(), mouse_button.is_some());
 
         if let Some(key) = action_key {
             Ok(Event::Key(KeyEvent::new(key, modifiers)))
