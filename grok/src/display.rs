@@ -331,7 +331,6 @@ impl Display {
             UserCommand::CollectDecimal => {
                 self.collect_decimal();
             }
-            UserCommand::ChordKey(..) => {}
             UserCommand::Chord(ref chord) => {
                 log::trace!("Got a chord {chord}");
                 match self.config.parse_switch(chord, None) {

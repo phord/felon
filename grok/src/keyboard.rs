@@ -17,7 +17,7 @@ use std::time::Duration;
 use std::io::stdout;
 use crate::config::Config;
 
-const KEYMAP: &[(&str, UserCommand)] = &[
+const BASE_KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+W", UserCommand::Quit),
     ("Shift+Q", UserCommand::Quit),
     ("Q", UserCommand::Quit),
@@ -36,7 +36,10 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("?", UserCommand::BackwardSearchPrompt),
     ("N", UserCommand::SearchNext),
     ("Shift+N", UserCommand::SearchPrev),
+];
 
+// Additional keys for "less" compatibility
+const LESS_KEYMAP: &[(&str, UserCommand)] = &[
     ("R", UserCommand::RefreshDisplay),
     ("Ctrl+R", UserCommand::RefreshDisplay),
     ("Ctrl+L", UserCommand::RefreshDisplay),
@@ -56,11 +59,17 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("Z", UserCommand::PageDownSticky),
 
     // g < ESC-< - go to line N (not prompted; default 1)
-    // G > ESC-> - go to line N (not prompted; default end of file)
     ("G", UserCommand::SeekStartLine),
     ("<", UserCommand::SeekStartLine),
+    ("Esc <", UserCommand::SeekStartLine),
+
+    // G > ESC-> - go to line N (not prompted; default end of file)
     ("Shift+G", UserCommand::SeekEndLine),
     (">", UserCommand::SeekEndLine),
+    ("Esc >", UserCommand::SeekEndLine),
+
+    ("Esc Shift+G", UserCommand::SeekEndLine),        // TODO: Different from Shift+G, which should keep searching on stdin
+    ("Esc Shift+F", UserCommand::SeekEndLine),        // TODO: Stop on pattern match
 
     // p - go to percentage point in file
     // P - go to byte offset in file
@@ -120,17 +129,45 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     (".", UserCommand::CollectDecimal),
 
     // Dash preceeds an option
-    ("-", UserCommand::ChordKey('-', 2)),
+    ("-", UserCommand::SwitchToggle),
+    ("_", UserCommand::SwitchDescribe),
+
     // ESC chords
     ("Esc )", UserCommand::PanRight),
     ("Esc (", UserCommand::PanLeft),
     ("Esc }", UserCommand::PanRightMax),
     ("Esc {", UserCommand::PanLeftMax),
-    ("Esc Shift+G", UserCommand::SeekEndLine),        // TODO: Different from Shift+G, which should keep searching on stdin
     ("Esc V", UserCommand::PageUp),
-    ("Esc Shift+F", UserCommand::SeekEndLine),        // TODO: Stop on pattern match
-    ("Esc <", UserCommand::SeekStartLine),
-    ("Esc >", UserCommand::SeekEndLine),
+
+    // ("Esc Ctrl+F [:print:] [:print:]", UserCommand::NextMatchingBraceCustom),
+    // ("Esc Ctrl+B [:print:] [:print:]", UserCommand::PrevMatchingBraceCustom),
+    // ("Esc M [A-Za-z]", UserCommand::MarkClear),
+    // ("Esc /", UserCommand::SearchNextFiles),
+    // ("Esc ?", UserCommand::SearchPrevFiles),
+    // ("Esc N", UserCommand::SearchNextFiles),
+    // ("Esc Shift+N", UserCommand::SearchPrevFiles),
+    // ("Esc U", UserCommand::DisableSearchHighlight),
+    // ("Esc Shift+U", UserCommand::SearchClear),
+
+    // ("' [A-Za-z'^$]", UserCommand::MarkGoto),        // Goto named mark, or "Previous", "Top" or "Bottom"
+    // ("m [A-Za-z]", UserCommand::MarkTop),
+    // ("Shift+M [A-Za-z]", UserCommand::MarkBottom),
+
+    // ("Ctrl+X Ctrl+X [A-Za-z'^$]", UserCommand::MarkGoto),        // Goto named mark, or "Previous", "Top" or "Bottom"
+    // ("Ctrl+X Ctrl+V", UserCommand::AddFile),
+
+    // ("Shift+E", UserCommand::AddFile),
+
+    // (": E", UserCommand::AddFile),
+    // ("Shift+E", UserCommand::AddFile),
+    // (": N", UserCommand::NextFile),
+    // (": P", UserCommand::PrevFile),
+    // (": X", UserCommand::GotoFile),
+    // (": D", UserCommand::RemoveFile),
+
+    // ("=", UserCommand::ShowInfo),
+    // ("Ctrl+G", UserCommand::ShowInfo),
+    // (": Shift+F", UserCommand::ShowInfo),
 
     (": Q", UserCommand::Quit),
     (": Shift+Q", UserCommand::Quit),
@@ -152,7 +189,6 @@ const KEYMAP: &[(&str, UserCommand)] = &[
 
 ];
 
-#[derive(Clone, Debug)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum UserCommand {
     None,
@@ -192,8 +228,9 @@ pub enum UserCommand {
     SelectWordAt(u16, u16),
     SelectWordDrag(u16, u16),
     TerminalResize,
-    ChordKey(char, u8),
-    Chord(String),
+    SwitchToggle,
+    SwitchDescribe,
+    Chord(String),      // FIXME: Deprecated
 }
 
 #[cfg(test)]
@@ -322,7 +359,7 @@ mod tests {
 
         // Test non-matching sequence
         let non_match = Reader::keycodes("Ctrl+X Ctrl+V").unwrap();
-        assert!(reader.keymap.get(&non_match).is_none(), "Expected no match for invalid chord");
+        assert!(!reader.keymap.contains_key(&non_match), "Expected no match for invalid chord");
     }
 
     #[test]
@@ -375,10 +412,10 @@ struct Reader {
 impl Reader {
 
     pub fn new() -> Self {
-        Self {
-            keymap: Self::build_keymap(KEYMAP),
-            event_sequence: Vec::new(),
-        }
+        let mut s = Self::default();
+        s.extend_keymap(BASE_KEYMAP);
+        s.extend_keymap(LESS_KEYMAP);
+        s
     }
 
     pub fn default() -> Self {
@@ -431,7 +468,10 @@ impl Reader {
     fn keycodes(orig: &str) -> Result<Vec<Event>, String> {
         let mut events = Vec::new();
         for key in orig.split(" ") {
-            events.push(Self::keycode(key)?);
+            match Self::keycode(key) {
+                Ok(event) => events.push(event),
+                Err(e) => return Err(format!("Error parsing key combo {orig} at {key}: {e}")),
+            }
         }
         Ok(events)
     }
@@ -473,6 +513,7 @@ impl Reader {
                     if k.len() == 1 {
                         Some(KeyCode::Char(k.chars().next().unwrap()))
                     } else if k.len() > 1 && k.starts_with("F") && k.len() < 4 {
+                        // FIXME: handle errors
                         Some(KeyCode::F(k[1..].parse().unwrap()))
                     } else {
                         None
