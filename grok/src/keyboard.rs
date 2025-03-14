@@ -21,7 +21,6 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+W", UserCommand::Quit),
     ("Shift+Q", UserCommand::Quit),
     ("Q", UserCommand::Quit),
-    ("Esc", UserCommand::Quit),
     ("Up", UserCommand::ScrollUp),
     ("Down", UserCommand::ScrollDown),
     ("Ctrl+Left", UserCommand::PanLeftMax),
@@ -50,7 +49,7 @@ const KEYMAP: &[(&str, UserCommand)] = &[
     ("W", UserCommand::PageUpSticky),
 
     // PgDn SPACE ^V ^F f z -- move down one page or N lines (if N was given first); z is sticky (saves the page size)
-    (" ", UserCommand::PageDown),
+    ("Space", UserCommand::PageDown),
     ("Ctrl+V", UserCommand::PageDown),
     ("Ctrl+F", UserCommand::PageDown),
     ("F", UserCommand::PageDown),
@@ -122,6 +121,20 @@ const KEYMAP: &[(&str, UserCommand)] = &[
 
     // Dash preceeds an option
     ("-", UserCommand::ChordKey('-', 2)),
+    // ESC chords
+    ("Esc )", UserCommand::PanRight),
+    ("Esc (", UserCommand::PanLeft),
+    ("Esc }", UserCommand::PanRightMax),
+    ("Esc {", UserCommand::PanLeftMax),
+    ("Esc Shift+G", UserCommand::SeekEndLine),        // TODO: Different from Shift+G, which should keep searching on stdin
+    ("Esc V", UserCommand::PageUp),
+    ("Esc Shift+F", UserCommand::SeekEndLine),        // TODO: Stop on pattern match
+    ("Esc <", UserCommand::SeekStartLine),
+    ("Esc >", UserCommand::SeekEndLine),
+
+    (": Q", UserCommand::Quit),
+    (": Shift+Q", UserCommand::Quit),
+    ("Shift+Z Shift+Z", UserCommand::Quit),
 
     // Mouse action mappings
     // Note that if any mouse mappings are enabled, the code will turn on MouseTrap mode in the terminal. This
@@ -140,8 +153,10 @@ const KEYMAP: &[(&str, UserCommand)] = &[
 ];
 
 #[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UserCommand {
     None,
+    PartialChord,  // New variant for partial chord matches
     BackwardSearchPrompt,
     FilterPrompt,
     ForwardSearchPrompt,
@@ -181,43 +196,244 @@ pub enum UserCommand {
     Chord(String),
 }
 
-// TODO: Roll this into a test
-// use crossterm::event::{Event, KeyCode, MouseButton, KeyEvent, MouseEvent, MouseEventKind, KeyModifiers};
-// use lgt::keyboard::Reader;
-// assert_eq!(Reader::keycode("Ctrl+Q"), KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+    #[test]
+    fn test_keycode_combinations() {
+        let test_cases = [
+            ("Ctrl+Q", Event::Key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL))),
+            ("Shift+N", Event::Key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::SHIFT))),
+            ("Ctrl+Shift+PageUp", Event::Key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::CONTROL | KeyModifiers::SHIFT))),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = Reader::keycode(input).unwrap();
+            assert_eq!(result, expected, "Testing key combo: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_keycodes_combinations() {
+        let test_cases = [
+            ("- - -", vec![
+                Event::Key(KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE)),
+                Event::Key(KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE)),
+                Event::Key(KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE)),
+            ]),
+            ("Ctrl+Q Shift+N", vec![
+                Event::Key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL)),
+                Event::Key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::SHIFT)),
+            ]),
+            ("Esc Shift+G", vec![
+                Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+                Event::Key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::SHIFT)),
+            ]),
+            ("MouseLeft MouseWheelUp", vec![
+                Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: 0, row: 0, modifiers: KeyModifiers::NONE }),
+                Event::Mouse(MouseEvent { kind: MouseEventKind::ScrollUp, column: 0, row: 0, modifiers: KeyModifiers::NONE }),
+            ]),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = Reader::keycodes(input).unwrap();
+            assert_eq!(result, expected, "Testing key sequence: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_keymap_construction() {
+        let reader = Reader::new();
+        let test_cases = [
+            ("Q", UserCommand::Quit),
+            ("Esc", UserCommand::Quit),
+            ("MouseWheelUp", UserCommand::MouseScrollUp),
+            ("MouseWheelDown", UserCommand::MouseScrollDown),
+            ("Esc V", UserCommand::PageUp),
+            ("Esc >", UserCommand::SeekEndLine),
+        ];
+
+        for (key_str, expected_cmd) in test_cases {
+            let events = Reader::keycodes(key_str).unwrap();
+            match reader.keymap.get(&events) {
+                Some(cmd) => assert_eq!(cmd, &expected_cmd, "Testing keymap entry: {}", key_str),
+                None => panic!("Keymap missing entry for: {}", key_str),
+            }
+        }
+    }
+
+    #[test]
+    fn test_extend_keymap() {
+        let mut reader = Reader::new();
+        let extensions = [
+            ("Alt+X", UserCommand::Quit),
+            ("Ctrl+C", UserCommand::Quit),
+            ("Alt+V", UserCommand::PageUp),
+        ];
+
+        reader.extend_keymap(&extensions);
+
+        // Test both original and extended mappings
+        let test_cases = [
+            // Original mappings should still work
+            ("Q", UserCommand::Quit),
+            ("Esc", UserCommand::Quit),
+            ("MouseWheelUp", UserCommand::MouseScrollUp),
+            // New mappings should work too
+            ("Alt+X", UserCommand::Quit),
+            ("Ctrl+C", UserCommand::Quit),
+            ("Alt+V", UserCommand::PageUp),
+        ];
+
+        for (key_str, expected_cmd) in test_cases {
+            let events = Reader::keycodes(key_str).unwrap();
+            match reader.keymap.get(&events) {
+                Some(cmd) => assert_eq!(cmd, &expected_cmd, "Testing keymap entry: {}", key_str),
+                None => panic!("Keymap missing entry for: {}", key_str),
+            }
+        }
+    }
+
+    #[test]
+    fn test_chord_sequences_with_partial() {
+        let mut reader = Reader::new();
+        let chord_mappings = [
+            ("Ctrl+X Ctrl+X", UserCommand::Quit),
+            ("Ctrl+X Ctrl+C", UserCommand::ScrollToTop),
+        ];
+
+        reader.extend_keymap(&chord_mappings);
+
+        // Test partial chord matches
+        let partial = Reader::keycodes("Ctrl+X").unwrap();
+        match reader.keymap.get(&partial) {
+            Some(UserCommand::PartialChord) => (), // Success
+            _ => panic!("Expected PartialChord for Ctrl+X prefix"),
+        }
+
+        // Test full chord matches
+        let full_chord = Reader::keycodes("Ctrl+X Ctrl+X").unwrap();
+        match reader.keymap.get(&full_chord) {
+            Some(UserCommand::Quit) => (), // Success
+            _ => panic!("Expected Quit for full Ctrl+X Ctrl+X chord"),
+        }
+
+        // Test non-matching sequence
+        let non_match = Reader::keycodes("Ctrl+X Ctrl+V").unwrap();
+        assert!(reader.keymap.get(&non_match).is_none(), "Expected no match for invalid chord");
+    }
+
+    #[test]
+    fn test_chord_sequence_step_by_step() {
+        let mut reader = Reader::default();
+        let chord_mappings = [
+            ("Ctrl+X Ctrl+X", UserCommand::Quit),
+            ("Ctrl+X Ctrl+C", UserCommand::ScrollToTop),
+            ("g g", UserCommand::ScrollToTop),
+        ];
+        reader.extend_keymap(&chord_mappings);
+
+        // Test Ctrl+X Ctrl+X sequence
+        let ctrl_x = Event::Key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
+        assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::PartialChord, "First Ctrl+X should return PartialChord");
+        assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::Quit, "Second Ctrl+X should return Quit");
+
+        // Test failed sequence Ctrl+X Z
+        assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::PartialChord, "Ctrl+X should return PartialChord");
+        let key_z = Event::Key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::NONE));
+        assert_eq!(reader.process_event(key_z), UserCommand::None, "Z after Ctrl+X should return None");
+
+        // Test 'g g' sequence
+        let key_g = Event::Key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::NONE));
+        assert_eq!(reader.process_event(key_g.clone()), UserCommand::PartialChord, "First g should return PartialChord");
+        assert_eq!(reader.process_event(key_g.clone()), UserCommand::ScrollToTop, "Second g should return ScrollToTop");
+
+        // Test reset_chord
+        assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::PartialChord, "Ctrl+X should return PartialChord");
+        reader.reset_chord();
+        assert_eq!(reader.process_event(key_g), UserCommand::PartialChord, "After reset, g should return PartialChord");
+        // Clear up the chord collector from the previous test.
+        reader.reset_chord();
+
+        // Test that non-key events don't interrupt chord collection
+        assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::PartialChord, "First Ctrl+X should return PartialChord");
+        assert_eq!(reader.process_event(Event::FocusGained), UserCommand::None, "FocusGained should return None");
+        assert_eq!(reader.process_event(Event::FocusLost), UserCommand::None, "FocusLost should return None");
+        assert_eq!(reader.process_event(Event::Paste("test".to_string())), UserCommand::None, "Paste should return None");
+        assert_eq!(reader.process_event(ctrl_x.clone()), UserCommand::Quit, "Second Ctrl+X should still complete the chord");
+    }
+}
 
 #[derive(Default)]
 struct Reader {
-    keymap: HashMap<KeyEvent, UserCommand>,
-    mousemap: HashMap<MouseEvent, UserCommand>,
-    chord: String,
-    chord_len: u8,
+    keymap: HashMap<Vec<Event>, UserCommand>,
+    event_sequence: Vec<Event>,
 }
 
 impl Reader {
 
     pub fn new() -> Self {
-        let allmap: HashMap<_, _> = KEYMAP
-            .iter()
-            .map(|(key, cmd)| (Self::keycode(key).unwrap(), cmd.clone()))
-            .collect();
-
-        let keymap: HashMap<_, _> = allmap.iter()
-            .filter(|(event, _)| matches!(event, Event::Key(_)) )
-            .map(|(event, cmd)| match event { Event::Key(key_event) => (*key_event, cmd.clone()), _ => unreachable!() })
-            .collect();
-
-        let mousemap: HashMap<_, _> = allmap.iter()
-            .filter(|(event, _)| matches!(event, Event::Mouse(_)) )
-            .map(|(event, cmd)| match event { Event::Mouse(mouse_event) => (*mouse_event, cmd.clone()), _ => unreachable!() })
-            .collect();
-
         Self {
-            keymap,
-            mousemap,
-            chord: String::new(),
-            chord_len: 0,
+            keymap: Self::build_keymap(KEYMAP),
+            event_sequence: Vec::new(),
         }
+    }
+
+    pub fn default() -> Self {
+        Self {
+            keymap: Self::build_keymap(&[]),
+            event_sequence: Vec::new(),
+        }
+    }
+
+    fn build_keymap(mappings: &[(&str, UserCommand)]) -> HashMap<Vec<Event>, UserCommand> {
+        let mut keymap = HashMap::new();
+
+        for (key_str, cmd) in mappings {
+            let events = match Self::keycodes(key_str) {
+                Ok(events) => events,
+                Err(e) => {
+                    log::error!("Error parsing key combo: {}", e);
+                    continue;
+                }
+            };
+
+            // For sequences with multiple events, add prefix entries
+            if events.len() > 1 {
+                for i in 1..events.len() {
+                    let prefix = events[0..i].to_vec();
+                    if keymap.contains_key(&prefix) && keymap[&prefix] != UserCommand::PartialChord {
+                        log::warn!("Keymap conflict: {:?}", prefix);
+                        continue;
+                    }
+                    keymap.entry(prefix).or_insert(UserCommand::PartialChord);
+                }
+            }
+
+            if keymap.contains_key(&events) && keymap[&events] == UserCommand::PartialChord {
+                log::warn!("Keymap conflict: {:?}", &events);
+            }
+
+            // Add the full sequence
+            keymap.insert(events, cmd.clone());
+        }
+
+        keymap
+    }
+
+    pub fn extend_keymap(&mut self, mappings: &[(&str, UserCommand)]) {
+        self.keymap.extend(Self::build_keymap(mappings));
+    }
+
+    // Convert a string representation of a series of key combos into a Vector of Key and/or Mouse Events
+    fn keycodes(orig: &str) -> Result<Vec<Event>, String> {
+        let mut events = Vec::new();
+        for key in orig.split(" ") {
+            events.push(Self::keycode(key)?);
+        }
+        Ok(events)
     }
 
     /// Convert a string representation of a key combo into a Key or Mouse Event
@@ -252,6 +468,7 @@ impl Reader {
                 "insert" => Some(KeyCode::Insert),
                 "null" => Some(KeyCode::Null),
                 "esc" => Some(KeyCode::Esc),
+                "space" => Some(KeyCode::Char(' ')),
                 k => {
                     if k.len() == 1 {
                         Some(KeyCode::Char(k.chars().next().unwrap()))
@@ -315,69 +532,50 @@ impl Reader {
     }
 
     pub fn reset_chord(&mut self) {
-        self.chord_len = 0;
+        self.event_sequence.clear();
+    }
+
+    fn process_event(&mut self, event: Event) -> UserCommand {
+        let mut x = 0;
+        let mut y = 0;
+
+        // Filter out non-key/mouse events
+        match event {
+            Event::Key(_) => self.event_sequence.push(event),
+            Event::Mouse(event) => {
+                self.event_sequence.push(Event::Mouse(MouseEvent { column: 0, row: 0, ..event }));
+                x = event.column;
+                y = event.row;
+            },
+            Event::Resize(_, _) => return UserCommand::TerminalResize,
+            // Ignore other events without interrupting chord collection
+            _ => return UserCommand::None,
+        }
+
+        match self.keymap.get(&self.event_sequence) {
+            Some(UserCommand::PartialChord) => UserCommand::PartialChord,
+            Some(cmd) => {
+                let result = match cmd {
+                    UserCommand::SelectWordAt(_, _) => UserCommand::SelectWordAt(x, y),
+                    UserCommand::SelectWordDrag(_, _) => UserCommand::SelectWordDrag(x, y),
+                    _ => cmd.clone(),
+                };
+                self.event_sequence.clear();
+                result
+            },
+            None => {
+                self.event_sequence.clear();
+                UserCommand::None
+            }
+        }
     }
 
     fn get_command(&mut self, timeout: u64) -> std::io::Result<UserCommand> {
         if !event::poll(Duration::from_millis(timeout))? {
-            Ok(UserCommand::None)
-        } else {
-            match event::read()? {
-                Event::Key(event) => {
-                    if self.chord_len > 0 {
-                        // FIXME: Chord should collect full key string (i.e. "Ctrl+K", "Meta+Home")
-                        self.chord.push_str(&format!("{}", event.code));
-                        self.chord_len -= 1;
-                        if self.chord_len == 0 {
-                            Ok(UserCommand::Chord(self.chord.clone()))
-                        } else {
-                            Ok(UserCommand::None)
-                        }
-                    } else {
-                        Ok(match self.keymap.get(&event) {
-                            Some(UserCommand::ChordKey(key, len)) => {
-                                self.chord = key.to_string();
-                                self.chord_len = len - 1;
-                                UserCommand::None
-                            },
-                            Some(cmd) => {
-                                cmd.clone()
-                            },
-                            None => UserCommand::None,
-                        })
-                    }
-                },
-                Event::FocusGained | Event::FocusLost | Event::Paste(_) => {
-                    Ok(UserCommand::None)
-                },
-                Event::Mouse(event) => {
-                    let lookup = MouseEvent {
-                        column:0, row:0,
-                        ..event
-                    };
-
-                    // println!("{:?}", event);
-
-                    match self.mousemap.get(&lookup) {
-                        Some(cmd) => {
-                            match cmd {
-                                UserCommand::SelectWordAt(_,_) => {
-                                    Ok(UserCommand::SelectWordAt(event.column, event.row))
-                                },
-                                UserCommand::SelectWordDrag(_,_) => {
-                                    Ok(UserCommand::SelectWordDrag(event.column, event.row))
-                                },
-                                _ => Ok(cmd.clone()),
-                            }
-                        },
-                        None => Ok(UserCommand::None),
-                    }
-                }
-                Event::Resize(_, _) => {
-                    Ok(UserCommand::TerminalResize)
-                }
-            }
+            return Ok(UserCommand::None);
         }
+        let event = event::read()?;
+        Ok(self.process_event(event))
     }
 
 }
