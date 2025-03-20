@@ -75,7 +75,7 @@ impl CachedStreamReader {
                 ..base
             }
         } else {
-            let log:Option<BufReader<File>> = None;
+            let log: Option<BufReader<File>> = None;
             Self {
                 rx: Some(Self::reader(log)),
                 ..base
