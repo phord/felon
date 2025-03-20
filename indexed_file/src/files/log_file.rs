@@ -15,6 +15,7 @@ use crate::files::TextLogStream;
 use crate::files::ZstdLogFile;
 
 use super::CachedStreamReader;
+use super::GzipLogFile;
 use super::Stream;
 
 
@@ -116,6 +117,10 @@ pub fn new_text_file(input_file: Option<&PathBuf>) -> std::io::Result<LogSource>
         let metadata = input_file.metadata()?;
         if metadata.is_file() {
             if let Ok(file) = ZstdLogFile::from_path(input_file) {
+                // FIXME: If the first magic number succeeded but some later error occurred during scan, treat the
+                //        file as a compressed file anyway.
+                Ok(file.to_src())
+            } else if let Ok(file) = GzipLogFile::from_path(input_file) {
                 // FIXME: If the first magic number succeeded but some later error occurred during scan, treat the
                 //        file as a compressed file anyway.
                 Ok(file.to_src())
