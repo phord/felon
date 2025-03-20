@@ -7,6 +7,7 @@ pub mod document;
 pub mod status_line;
 pub mod search_prompt;
 pub mod input_line;
+pub mod user_input;
 
 use config::Config;
 use viewer::Viewer;

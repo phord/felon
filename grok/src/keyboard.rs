@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::io::stdout;
 use crate::config::Config;
+use crate::user_input::UserInput;
 
 const BASE_KEYMAP: &[(&str, UserCommand)] = &[
     ("Ctrl+W", UserCommand::Quit),
@@ -658,7 +659,6 @@ impl Reader {
         let event = event::read()?;
         Ok(self.process_event(event))
     }
-
 }
 
 #[derive(Default)]
@@ -673,8 +673,8 @@ impl Drop for Input {
         if self.started {
             terminal::disable_raw_mode().expect("Unable to disable raw mode");
 
-            let mut stdout = stdout();
             if self.mouse {
+                let mut stdout = stdout();
                 execute!(stdout, event::DisableMouseCapture).expect("Failed to disable mouse capture");
             }
         }
@@ -694,8 +694,8 @@ impl Input {
         if !self.started {
             terminal::enable_raw_mode()?;
 
-            let mut stdout = stdout();
             if self.mouse {
+                let mut stdout = stdout();
                 execute!(stdout, event::EnableMouseCapture)?;
             }
             self.started = true;
@@ -703,13 +703,16 @@ impl Input {
         Ok(())
     }
 
-    pub fn get_command(&mut self, timeout: u64) -> std::io::Result<UserCommand> {
+    pub fn reset_chord(&mut self) {
+        self.reader.reset_chord();
+    }
+}
+
+impl UserInput for Input {
+    fn get_command(&mut self, timeout: u64) -> std::io::Result<UserCommand> {
         self.start()?;
 
         // TODO: Different keymaps for different modes. user-input, scrolling, etc.
         self.reader.get_command(timeout)
-    }
-    pub fn reset_chord(&mut self) {
-        self.reader.reset_chord();
     }
 }

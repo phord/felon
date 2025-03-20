@@ -4,6 +4,7 @@ use crate::status_line::StatusLine;
 use crate::search_prompt::{InputAction, Search};
 use crate::keyboard::{Input, UserCommand};
 use crate::document::Document;
+use crate::user_input::UserInput;
 
 pub struct Viewer {
     _config: Config,
