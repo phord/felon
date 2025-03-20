@@ -197,6 +197,9 @@ pub enum UserCommand {
     BackwardSearchPrompt,
     FilterPrompt,
     ForwardSearchPrompt,
+    BackwardSearch(String),
+    Filter(String),
+    ForwardSearch(String),
     HalfPageDown,
     HalfPageUp,
     GotoBookmark,
@@ -214,6 +217,7 @@ pub enum UserCommand {
     PageDownSticky,
     PageUp,
     PageUpSticky,
+    Cancel,     // Cancel the current input mode
     Quit,
     RefreshDisplay,
     ScrollDown,
@@ -670,14 +674,7 @@ pub struct Input {
 
 impl Drop for Input {
     fn drop(&mut self) {
-        if self.started {
-            terminal::disable_raw_mode().expect("Unable to disable raw mode");
-
-            if self.mouse {
-                let mut stdout = stdout();
-                execute!(stdout, event::DisableMouseCapture).expect("Failed to disable mouse capture");
-            }
-        }
+        self.stop().unwrap_or_default();
     }
 }
 
@@ -709,6 +706,19 @@ impl Input {
 }
 
 impl UserInput for Input {
+    fn stop(&mut self) -> std::io::Result<()> {
+        if self.started {
+            terminal::disable_raw_mode()?;
+
+            if self.mouse {
+                let mut stdout = stdout();
+                execute!(stdout, event::DisableMouseCapture)?;
+            }
+        }
+        self.started = false;
+        Ok(())
+    }
+
     fn get_command(&mut self, timeout: u64) -> std::io::Result<UserCommand> {
         self.start()?;
 

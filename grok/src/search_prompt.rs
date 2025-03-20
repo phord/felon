@@ -1,64 +1,57 @@
 use crossterm::terminal::ClearType;
 use std::io::{stdout, Write};
 use crate::config::Config;
+use crate::keyboard::UserCommand;
+use crate::user_input::UserInput;
 use crossterm::{QueueableCommand, cursor, terminal};
 use crate::styled_text::styled_line::RGB_BLACK;
 use crate::input_line::InputLine;
 
-pub enum InputAction {
-    None,
-    Search(bool, String),
-    Cancel,
+pub enum SearchPromptMode {
+    Forward,
+    Backward,
+    Filter,
 }
 
 pub struct Search {
-    active: bool,
     prompt: SearchPrompt,
-    forward: bool,
+    mode: SearchPromptMode,
 }
 
-
 impl Search {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config, mode: SearchPromptMode) -> Self {
+        let prompt_string = match mode {
+            SearchPromptMode::Forward => "/",
+            SearchPromptMode::Backward => "?",
+            SearchPromptMode::Filter => "&/",
+        };
+
         Self {
-            active: false,
-            prompt: SearchPrompt::new(config),
-            forward: true,
+            prompt: SearchPrompt::new(config, prompt_string),
+            mode,
+        }
+    }
+}
+
+impl UserInput for Search {
+    // Note: timeout is ignored because our string input does not timeout yet.  This is a blocking call.
+    fn get_command(&mut self, _timeout: u64) -> std::io::Result<UserCommand> {
+        match self.prompt.run() {
+            Some(srch) => {
+                let srch = srch.trim_end_matches('\r').to_string();
+                match self.mode {
+                    SearchPromptMode::Forward => Ok(UserCommand::ForwardSearch(srch)),
+                    SearchPromptMode::Backward => Ok(UserCommand::BackwardSearch(srch)),
+                    SearchPromptMode::Filter => Ok(UserCommand::Filter(srch)),
+                }
+            },
+            None => Ok(UserCommand::Cancel),
         }
     }
 
-    pub fn prompt_filter_start(&mut self) -> std::io::Result<()> {
-        self.forward = true;    // FIXME
-        self.active = true;
-        self.prompt.start("&/")
-    }
-
-    pub fn prompt_forward_start(&mut self) -> std::io::Result<()> {
-        self.forward = true;
-        self.active = true;
-        self.prompt.start("/")
-    }
-
-    pub fn prompt_backward_start(&mut self) -> std::io::Result<()> {
-        self.forward = false;
-        self.active = true;
-        self.prompt.start("?")
-    }
-
-    pub fn run(&mut self) -> InputAction {
-        if !self.active {
-            InputAction::None
-        } else {
-            let input = self.prompt.run();
-            if let Some(input) = input {
-                self.active = false;
-                let input = input.trim_end_matches('\r').to_string();
-                InputAction::Search(self.forward, input)
-            } else {
-                self.active = false;
-                InputAction::Cancel
-            }
-        }
+    fn stop(&mut self) -> std::io::Result<()> {
+        // Nothing to do
+        Ok(())
     }
 }
 
@@ -68,21 +61,21 @@ pub struct SearchPrompt {
 }
 
 impl SearchPrompt {
-    pub fn new(config: &Config) -> Self {
-        Self {
+    pub fn new(config: &Config, prompt: &str) -> Self {
+        let mut sp = Self {
             color: config.color,
-            prompt: String::default(),
-        }
+            prompt: prompt.to_string(),
+        };
+        sp.start().expect("Unable to start search prompt");
+        sp
     }
 
     pub fn get_height(&self) -> u16 {
         1
     }
 
-    pub fn start(&mut self, prompt: &str) -> std::io::Result<()> {
+    pub fn start(&mut self) -> std::io::Result<()> {
         let (_width, height) = terminal::size().expect("Unable to get terminal size");
-
-        self.prompt = prompt.to_string();
 
         let mut stdout = stdout();
         stdout.queue(cursor::MoveTo(0, height - self.get_height()))?;

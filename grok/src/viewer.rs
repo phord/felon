@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::display::Display;
 use crate::status_line::StatusLine;
-use crate::search_prompt::{InputAction, Search};
+use crate::search_prompt::{Search, SearchPromptMode};
 use crate::keyboard::{Input, UserCommand};
 use crate::document::Document;
 use crate::user_input::UserInput;
@@ -10,9 +10,7 @@ pub struct Viewer {
     _config: Config,
     display: Display,
     status: StatusLine,
-    search: Search,
-    filter: Search,
-    input: Input,
+    modalinput: Box<dyn UserInput>,
     doc: Document,
     fill_timeout: u64,
 }
@@ -24,9 +22,7 @@ impl Viewer {
             _config: config.clone(),
             display: Display::new(config.clone()),
             status: StatusLine::new(&config),
-            search: Search::new(&config),
-            filter: Search::new(&config),
-            input: Input::new(&config),
+            modalinput: Box::new(Input::new(&config)),
             doc,
             fill_timeout: 0,
         }
@@ -53,54 +49,60 @@ impl Viewer {
             };
 
         self.display.refresh_screen(&mut self.doc)?;
+
+        // FIXME: Only refresh status if modalinput is still Input
         self.status.refresh_screen(&mut self.doc)?;
 
-        let cmd = self.input.get_command(event_timeout)?;
+        let cmd = self.modalinput.get_command(event_timeout)?;
         match cmd {
             UserCommand::None => { self.fill_timeout += 3; },
             _ => {  self.fill_timeout = 0; log::trace!("Got command: {:?}", cmd); }
         };
 
-        match cmd {
+        match &cmd {
             UserCommand::Quit => return Ok(false),
-            UserCommand::ForwardSearchPrompt => self.search.prompt_forward_start()?,
-            UserCommand::BackwardSearchPrompt => self.search.prompt_backward_start()?,
-            UserCommand::FilterPrompt => self.filter.prompt_filter_start()?,
-            _ => self.display.handle_command(cmd),
-        }
 
-        match self.search.run() {
-            InputAction::None => {},
-            InputAction::Search(forward, srch) => {
-                log::trace!("Got search: fwd={}  {:?}", forward, &srch);
-                // Empty input means repeat previous search
+            // Begin prompts
+            UserCommand::ForwardSearchPrompt | UserCommand::BackwardSearchPrompt | UserCommand::FilterPrompt => {
+                self.modalinput.stop().expect("Failed to stop modal input");
+                let mode = match cmd {
+                    UserCommand::ForwardSearchPrompt => SearchPromptMode::Forward,
+                    UserCommand::BackwardSearchPrompt => SearchPromptMode::Backward,
+                    UserCommand::FilterPrompt => SearchPromptMode::Filter,
+                    _ => unreachable!(),
+                };
+                self.modalinput = Box::new(Search::new(&self._config, mode));
+            },
+
+            // Finish prompts
+            UserCommand::ForwardSearch(srch) | UserCommand::BackwardSearch(srch) => {
                 if !srch.is_empty() {
-                    self.display.set_search(&mut self.doc, &srch, forward);
+                    let fwd = matches!(cmd, UserCommand::ForwardSearch(_));
+                    self.display.set_search(&mut self.doc, srch, fwd);
                 }
                 self.display.handle_command(UserCommand::SearchNext);
             },
-            InputAction::Cancel => {
-                log::trace!("Cancel search");
+            UserCommand::Filter(filt) => {
+                self.display.set_filter(&mut self.doc, filt);
                 self.display.handle_command(UserCommand::RefreshDisplay);
             },
+            UserCommand::Cancel => {
+                self.display.handle_command(UserCommand::RefreshDisplay);
+            },
+            _ => {},
         }
 
-        match self.filter.run() {
-            InputAction::None => {},
-            InputAction::Search(_, filt) => {
-                log::trace!("Got filter: {:?}", &filt);
-                // Empty input means cancel all filters
-                if filt.is_empty() {
-                    self.display.clear_filter(&mut self.doc);
-                } else {
-                    self.display.set_filter(&mut self.doc, &filt);
-                }
-                self.display.handle_command(UserCommand::RefreshDisplay);
+        match cmd {
+            UserCommand::ForwardSearchPrompt | UserCommand::BackwardSearchPrompt | UserCommand::FilterPrompt => {
+                // FIXME: Move this special-handling down into Display?
             },
-            InputAction::Cancel => {
-                log::trace!("Cancel filter");
-                self.display.handle_command(UserCommand::RefreshDisplay);
+            // Prompt finish cleanup
+            UserCommand::Cancel | UserCommand::ForwardSearch(_) | UserCommand::BackwardSearch(_) | UserCommand::Filter(_) => {
+                self.modalinput = Box::new(Input::new(&self._config));
             },
+
+            // Forward everything else to display
+            _ => self.display.handle_command(cmd),
         }
 
         Ok(true)
