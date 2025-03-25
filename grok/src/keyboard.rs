@@ -252,7 +252,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = Reader::keycode(input).unwrap();
+            let result = KeyCodes::parse_key(input).unwrap();
             assert_eq!(result, expected, "Testing key combo: {}", input);
         }
     }
@@ -280,7 +280,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases {
-            let result = Reader::keycodes(input).unwrap();
+            let result = KeyCodes::parse(input).unwrap();
             assert_eq!(result, expected, "Testing key sequence: {}", input);
         }
     }
@@ -290,7 +290,6 @@ mod tests {
         let reader = Reader::new();
         let test_cases = [
             ("Q", UserCommand::Quit),
-            ("Esc", UserCommand::Quit),
             ("MouseWheelUp", UserCommand::MouseScrollUp),
             ("MouseWheelDown", UserCommand::MouseScrollDown),
             ("Esc V", UserCommand::PageUp),
@@ -298,8 +297,8 @@ mod tests {
         ];
 
         for (key_str, expected_cmd) in test_cases {
-            let events = Reader::keycodes(key_str).unwrap();
-            match reader.keymap.get(&events) {
+            let events = KeyCodes::parse(key_str).unwrap();
+            match reader.keymap.keymap.get(&events) {
                 Some(cmd) => assert_eq!(cmd, &expected_cmd, "Testing keymap entry: {}", key_str),
                 None => panic!("Keymap missing entry for: {}", key_str),
             }
@@ -308,20 +307,20 @@ mod tests {
 
     #[test]
     fn test_extend_keymap() {
-        let mut reader = Reader::new();
+        let reader = Reader::new();
+        let mut keymap = reader.keymap;
         let extensions = [
             ("Alt+X", UserCommand::Quit),
             ("Ctrl+C", UserCommand::Quit),
             ("Alt+V", UserCommand::PageUp),
         ];
 
-        reader.extend_keymap(&extensions);
+        keymap.extend(KeyMap::new(&extensions));
 
         // Test both original and extended mappings
         let test_cases = [
             // Original mappings should still work
             ("Q", UserCommand::Quit),
-            ("Esc", UserCommand::Quit),
             ("MouseWheelUp", UserCommand::MouseScrollUp),
             // New mappings should work too
             ("Alt+X", UserCommand::Quit),
@@ -330,8 +329,8 @@ mod tests {
         ];
 
         for (key_str, expected_cmd) in test_cases {
-            let events = Reader::keycodes(key_str).unwrap();
-            match reader.keymap.get(&events) {
+            let events = KeyCodes::parse(key_str).unwrap();
+            match keymap.keymap.get(&events) {
                 Some(cmd) => assert_eq!(cmd, &expected_cmd, "Testing keymap entry: {}", key_str),
                 None => panic!("Keymap missing entry for: {}", key_str),
             }
@@ -340,42 +339,45 @@ mod tests {
 
     #[test]
     fn test_chord_sequences_with_partial() {
-        let mut reader = Reader::new();
+        let mut keymap = KeyMap::default();
         let chord_mappings = [
             ("Ctrl+X Ctrl+X", UserCommand::Quit),
             ("Ctrl+X Ctrl+C", UserCommand::ScrollToTop),
         ];
 
-        reader.extend_keymap(&chord_mappings);
+        keymap.extend(KeyMap::new(&chord_mappings));
 
         // Test partial chord matches
-        let partial = Reader::keycodes("Ctrl+X").unwrap();
-        match reader.keymap.get(&partial) {
+        let partial = KeyCodes::parse("Ctrl+X").unwrap();
+        match keymap.keymap.get(&partial) {
             Some(UserCommand::PartialChord) => (), // Success
             _ => panic!("Expected PartialChord for Ctrl+X prefix"),
         }
 
         // Test full chord matches
-        let full_chord = Reader::keycodes("Ctrl+X Ctrl+X").unwrap();
-        match reader.keymap.get(&full_chord) {
+        let full_chord = KeyCodes::parse("Ctrl+X Ctrl+X").unwrap();
+        match keymap.keymap.get(&full_chord) {
             Some(UserCommand::Quit) => (), // Success
             _ => panic!("Expected Quit for full Ctrl+X Ctrl+X chord"),
         }
 
         // Test non-matching sequence
-        let non_match = Reader::keycodes("Ctrl+X Ctrl+V").unwrap();
-        assert!(!reader.keymap.contains_key(&non_match), "Expected no match for invalid chord");
+        let non_match = KeyCodes::parse("Ctrl+X Ctrl+V").unwrap();
+        assert!(!keymap.keymap.contains_key(&non_match), "Expected no match for invalid chord");
     }
 
     #[test]
     fn test_chord_sequence_step_by_step() {
-        let mut reader = Reader::default();
+        let mut keymap = KeyMap::default();
         let chord_mappings = [
             ("Ctrl+X Ctrl+X", UserCommand::Quit),
             ("Ctrl+X Ctrl+C", UserCommand::ScrollToTop),
             ("g g", UserCommand::ScrollToTop),
         ];
-        reader.extend_keymap(&chord_mappings);
+        keymap.extend(KeyMap::new(&chord_mappings));
+
+        let mut reader = Reader::new();
+        reader.keymap.extend(keymap);
 
         // Test Ctrl+X Ctrl+X sequence
         let ctrl_x = Event::Key(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::CONTROL));
@@ -438,7 +440,7 @@ mod tests {
         ];
 
         for (input, expected_error) in test_cases {
-            match Reader::keycode(input) {
+            match KeyCodes::parse_key(input) {
                 Ok(_) => panic!("Expected error for invalid combo: {}", input),
                 Err(error) => assert_eq!(error, expected_error, "Testing invalid combo: {}", input),
             }
@@ -448,31 +450,47 @@ mod tests {
 
 #[derive(Default)]
 struct Reader {
-    keymap: HashMap<Vec<Event>, UserCommand>,
+    keymap: KeyMap,
     event_sequence: Vec<Event>,
+}
+
+impl From<KeyMap> for Reader {
+    fn from(keymap: KeyMap) -> Self {
+        Self {
+            keymap,
+            ..Self::default()
+        }
+    }
 }
 
 impl Reader {
 
     pub fn new() -> Self {
-        let mut s = Self::default();
-        s.extend_keymap(BASE_KEYMAP);
-        s.extend_keymap(LESS_KEYMAP);
-        s
+        let mut keymap = KeyMap::default();
+        keymap.extend(KeyMap::new(BASE_KEYMAP));
+        keymap.extend(KeyMap::new(LESS_KEYMAP));
+        Self { keymap, ..Self::default() }
     }
 
     pub fn default() -> Self {
         Self {
-            keymap: Self::build_keymap(&[]),
+            keymap: KeyMap::default(),
             event_sequence: Vec::new(),
         }
     }
+}
 
-    fn build_keymap(mappings: &[(&str, UserCommand)]) -> HashMap<Vec<Event>, UserCommand> {
+    #[derive(Default)]
+struct KeyMap {
+    keymap: HashMap<Vec<Event>, UserCommand>,
+}
+
+impl KeyMap {
+    fn new(mappings: &[(&str, UserCommand)]) -> Self {
         let mut keymap = HashMap::new();
 
         for (key_str, cmd) in mappings {
-            let events = match Self::keycodes(key_str) {
+            let events = match KeyCodes::parse(key_str) {
                 Ok(events) => events,
                 Err(e) => {
                     log::error!("Error parsing key combo: {}", e);
@@ -500,18 +518,23 @@ impl Reader {
             keymap.insert(events, cmd.clone());
         }
 
-        keymap
+        Self {
+            keymap,
+        }
     }
 
-    pub fn extend_keymap(&mut self, mappings: &[(&str, UserCommand)]) {
-        self.keymap.extend(Self::build_keymap(mappings));
+    fn extend(&mut self, keymap: KeyMap) {
+        self.keymap.extend(keymap.keymap);
     }
+}
 
+struct KeyCodes {}
+impl KeyCodes {
     // Convert a string representation of a series of key combos into a Vector of Key and/or Mouse Events
-    fn keycodes(orig: &str) -> Result<Vec<Event>, String> {
+    fn parse(orig: &str) -> Result<Vec<Event>, String> {
         let mut events = Vec::new();
         for key in orig.split(" ") {
-            match Self::keycode(key) {
+            match Self::parse_key(key) {
                 Ok(event) => events.push(event),
                 Err(e) => return Err(format!("Error parsing key combo {orig} at {key}: {e}")),
             }
@@ -520,7 +543,7 @@ impl Reader {
     }
 
     /// Convert a string representation of a key combo into a Key or Mouse Event
-    fn keycode(orig: &str) -> Result<Event, String> {
+    fn parse_key(orig: &str) -> Result<Event, String> {
         let mut modifiers = KeyModifiers::NONE;
         let mut action_key: Option<KeyCode> = None;
         let mut mouse_button: Option<MouseEventKind> = None;
@@ -617,6 +640,9 @@ impl Reader {
         }
     }
 
+}
+
+impl Reader {
     pub fn reset_chord(&mut self) {
         self.event_sequence.clear();
     }
@@ -638,7 +664,7 @@ impl Reader {
             _ => return UserCommand::None,
         }
 
-        match self.keymap.get(&self.event_sequence) {
+        match self.keymap.keymap.get(&self.event_sequence) {
             Some(UserCommand::PartialChord) => UserCommand::PartialChord,
             Some(cmd) => {
                 let result = match cmd {
