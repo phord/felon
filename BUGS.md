@@ -10,9 +10,9 @@
 # MVP: Features I need daily
 - [x] Switch between chopped and wrapped lines
 - [x] Horizontal scroll
-- [ ] Compressed file support or LESSPIPE support
+- [x] Compressed file support or LESSPIPE support
   - [x] Improved compressed file, but still some bugs
-  - [ ] Gzip support
+  - [x] Gzip support (all-at-once decoded into RAM)
 - [x] Fix pipe support
 - [x] Disable mouse mode by default
 - [x] Filter + Search burns 100% CPU because Search.has_gaps() and never reaches 100%
@@ -22,13 +22,15 @@
 - [x] Digits-parsing is broken (50p -> "scroll to percent 0")
 
 # Todo:
+- [ ] Gzip support with random-access / resume parsing
+- [ ] LESSPIPE/LESSOPEN support
 - [ ] re-read last line to update display if last line was partial (no LF) and new data appears
 - [ ] 1BRC fast file parser contestants:
   - [ ] Fast line splitter: https://github.com/SuperioOne/algorithms/tree/master/algorithms_buffer_utils/src
   - [ ] rayon::par_lines?  https://github.com/ayebear/1brc-rayon/blob/main/src/main.rs
   - [ ] rayon: So clean  https://github.com/arthurlm/one-brc-rs/blob/main/src/main.rs
   - [ ] Hand-rolled threads  https://github.com/thebracket/one_billion_rows
-  - [ ]
+- [ ] Show number on status-line as digits are typed
 - [ ] Use \n to move to next line instead of sending row positioning for every row
 - [ ] F3/Shift-F3 to search
 - [ ] Follow mode, as file grows, load more lines and scroll to them
