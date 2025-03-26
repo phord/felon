@@ -1,21 +1,20 @@
-GROK
+FELON
 
 NAME
-        lgt - the Log Grokker tool
+        felon - the Log Grokker tool
 
-lgt is an interactive replacement for `zegrep | less`.  It intends to be a replacement for [lnav](https://lnav.org/) which heavily inspired some of the features.
+felon is an interactive replacement for `zegrep | less`.  It intends to be a replacement for [lnav](https://lnav.org/) which heavily inspired some of the features.
 
 SYNOPSIS
-        lgt [ -S | --chop-long-lines ] [ -X | --no-alternate-screen ]
-            [ -C | --semantic-color ] [ -c | --color ] [filename [filename ...]]
+        felon [ -S | --chop-long-lines ] [ -X | --no-alternate-screen ] [filename [filename ...]]
 
 DESCRIPTION
-        Grok is a pager similar to less, but sometimes faster and with more features. Grok is intended to be faster than less
-        when handling compressed files and when searching or filtering the lines. Grok implements many of the same commands as
+        Felon is a pager similar to less, but sometimes faster and with more features. Felon is intended to be faster than less
+        when handling compressed files and when searching or filtering the lines. Felon implements many of the same commands as
         less as a convenience.  But it doesn't implement all of them, and some of them may work differently.
 
 COMMANDS
-        In the following descriptions, ^X meanse control+X.  SPACE means the spacebar.  ENTER means the carriage return.
+        In the following descriptions, ^X means control+X.  SPACE means the spacebar.  ENTER means the carriage return.
 
         Many commands can accept a numeric argument, N. Type the number first, then the command.  For example, 100g will
         go to line 100 from the start of the file.
@@ -67,20 +66,17 @@ COMMANDS
                 Multiple & commands may be entered, in which case all lines matching any of the inclusive patterns will be displayed, while
                 all lines matching any of the exclusive patterns will be hidden.
 
-                ^N or !
+                !
                         Make this an exclusive pattern. That is, hide lines matching this pattern instead of showing them.
 
-                ^R      Don't interpret regular expression metacharacters; that is, do a simple textual comparison.
-
-
-        q or Q or Esc
-                Exits lgt.
+        q or Q
+                Exits felon.
 
 ----
 
 Following are some design notes and ideas useful only to me, perhaps.
 
-Originally lgt was intended to be a faster word-based file indexer, capable of know everywhere a word existed in a file all at once.
+Originally felon was intended to be a faster word-based file indexer, capable of knowing everywhere a word existed in a file all at once.
 The expectation was that this could be faster than regular expression searching after the fact. The expectation was incorrect, at least in my implementation.
 It's not a new idea; it dates back to the 1940's, and an [intern at Google used it](https://swtch.com/~rsc/regexp/regexp4.html) in some modern tools there for a while.
 Anyway, it turned out to be not terribly fast, in the end, and regex seems plenty fast enough.  Continuing with that for now.
@@ -121,23 +117,23 @@ Features/Ideas:
 ----
 
 High-level todos:
-    o Remove coloring
-        . Simplify presentation / testing / portability
-        . Reapply semantic coloring in sub-line indexing
-    o Show index status on statusline
-    o Identify weird character widths (unicode, tabs, ctrl-chars)
-        . Expand control chars (<^A>, <^H>, TAB to Spaces, etc.)
-        . Count others for proper display-width matching
-    o Add gzip support
-    o Search
-    o Dynamic Config
-        . Allows runtime modification, like '-S', '-N', etc.
-    o Implement -N (line numbers) with dynamic updating and/or relative indexing (e.g. "end-10000")
-    o Custom line stylers
-    o TUI framework for cleaner painting
-    o Wait for events to settle/resolve before painting
-    o If no alt-screen and lines < display_height, don't fill whole screen?  (see less for something like git pager usage)
-        . Something like -K support to exit when no paging needed, too.
+    - [ ] Remove coloring
+        - Simplify presentation / testing / portability
+        - Reapply semantic coloring in sub-line indexing
+    - [x] Show index status on statusline
+    - [ ] Identify weird character widths (unicode, tabs, ctrl-chars)
+        - Expand control chars (<^A>, <^H>, TAB to Spaces, etc.)
+        - Count others for proper display-width matching
+    - [x] Add gzip support
+    - [x] Search
+    - [ ] Dynamic Config
+        - Allows runtime modification, like '-S', '-N', etc.
+    - [ ] Implement -N (line numbers) with dynamic updating and/or relative indexing (e.g. "end-10000")
+    - [ ] Custom line stylers
+    - [ ] TUI framework for cleaner painting
+    - [ ] Wait for events to settle/resolve before painting
+    - [ ] If no alt-screen and lines < display_height, don't fill whole screen?  (see less for something like git pager usage)
+        - Something like -K support to exit when no paging needed, too.
 
 Commands I need:
     Toggle filters / colors temporarily
@@ -164,6 +160,7 @@ Related published crates:
 https://crates.io/crates/streampager   https://github.com/markbt/streampager
     Pager for streams and "large files"
     Has some less-compatible keys
+    Development has stalled
 
 https://github.com/arijit79/minus      https://crates.io/crates/minus
     A pager library to use to develop pagers
@@ -173,6 +170,7 @@ https://github.com/arijit79/minus      https://crates.io/crates/minus
     Supports ANSI data, sort of.  (broken for horizontal scrolling)
     Regex searching / incremental searching
     Designed for async usage
+    Mouse support
 
 
 https://github.com/Avarel/bvr          https://crates.io/crates/bvr
