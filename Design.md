@@ -280,8 +280,8 @@ BundleView - collects filters and files, memoizes resulting set of lines and giv
 Navigator - moves a cursor in a BundleView
 Display - renders lines on console; navigates file with keyboard commands
 
-lgt -m5 shows "first 5 matches"
-lgt -m-5 shows "last 5 matches" (because we can do this efficiently on text files)
+felon -m5 shows "first 5 matches"
+felon -m-5 shows "last 5 matches" (because we can do this efficiently on text files)
 
 
 There are three levels of urgency for filter/highlight results:

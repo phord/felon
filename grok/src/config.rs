@@ -44,7 +44,7 @@ const HELP: &str = "\
 App
 
 USAGE:
-  lgt [OPTIONS] [INPUT ...]
+  felon [OPTIONS] [INPUT ...]
 
 FLAGS:
   -h, --help            Prints help information
@@ -137,7 +137,7 @@ impl Config {
     fn handle_cmdline(&mut self, item: &ConfigItem) {
         match item {
             ConfigItem::Version => {
-                println!("lgt version 0.1.0");
+                println!("felon version 0.1.0");
                 std::process::exit(0);
             },
             ConfigItem::Help => {

@@ -58,7 +58,7 @@ A quick issue tracker
        - zstd
        - gzip
 
-      - The wrappers implement a core set of traits needed for lgt.
+      - The wrappers implement a core set of traits needed for felon.
         - Traits
           - Read
           - Seek

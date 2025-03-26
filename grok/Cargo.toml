@@ -1,14 +1,14 @@
 [package]
-name = "lgt"
+name = "felon"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "lgt"
+name = "felon"
 path = "src/lib.rs"
 
 [[bin]]
-name = "lgt"
+name = "felon"
 path = "src/main.rs"
 
 [dependencies]

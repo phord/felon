@@ -1,6 +1,6 @@
-### Command Grammar for all Grok commands
+### Command Grammar for all Felon commands
 
-Grok has match expressions, styles, modifiers
+Felon has match expressions, styles, modifiers
 
 filter out "shmem.res"
 filter in --disabled --group GC "gc.main"

@@ -108,7 +108,7 @@ Following features from less are not implemented.
         +cmd   Causes the specified cmd to be executed each time a new file is examined.  For example, +G causes less to initially
                 display each file starting at the end rather than the beginning.
 
-        V      Prints the version number of lgt being run.
+        V      Prints the version number of felon being run.
 
         or :q or :Q or ZZ
 

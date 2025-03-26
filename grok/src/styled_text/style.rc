@@ -1,7 +1,7 @@
 # style.rc
 #
-# This should be interpreted as a script of commands to Grok.  The commands available here are the same ones
-# available on the command-line in Grok.  TODO: Build a command parser.
+# This should be interpreted as a script of commands to Felon.  The commands available here are the same ones
+# available on the command-line in Felon.  TODO: Build a command parser.
 #
 
 filter-out "shmem.res"

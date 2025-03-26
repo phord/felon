@@ -18,7 +18,7 @@ impl InputLine {
 
         lazy_static! {
             static ref HISTORY_PATH: PathBuf =
-                if let Some(proj_dirs) = ProjectDirs::from("com", "Phord Software", "Grok") {
+                if let Some(proj_dirs) = ProjectDirs::from("com", "Phord Software", "Felon") {
                     let mut dir = proj_dirs.config_dir().to_path_buf();
                     dir.push(HISTORY_FILE);
                     log::trace!("History path: {:?}", dir);

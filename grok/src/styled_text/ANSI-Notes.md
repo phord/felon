@@ -45,7 +45,7 @@ Observations:
   - We need to produce the 'logical' line whenever we are searching for something (FilteredLog).
   - When -R mode is off, logical == original.  So, -R runs slower, and should be used sparingly.
   - If there are no ANSI sequences in the line, logical == original.  Discovering this is still expensive, though.
-  - Implementing -R mode may be a waste of time for Grok.  We don't want to use it for most log-file searching.
+  - Implementing -R mode may be a waste of time for Felon.  We don't want to use it for most log-file searching.
   - We can speed this up somewhat by caching whether any codes were present in Waypoint.
 
 =====

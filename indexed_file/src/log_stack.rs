@@ -38,7 +38,7 @@ impl PendingOp {
 }
 
 
-// TODO: Move this into Grok?  It implements some very lgt-specific features.
+// TODO: Move this into Felon?  It implements some very felon-specific features.
 
 /// A stack of logs with filters.
 /// Rust complicates our traits enough that it's impractical to rely on recursive log trees.

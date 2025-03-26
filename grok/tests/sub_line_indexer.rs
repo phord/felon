@@ -5,10 +5,10 @@
 
 #[cfg(test)]
 mod sub_line_iterator_helper {
-    use lgt::styled_text::grok_iterator::GrokLineIterator;
-    use lgt::styled_text::styled_line::PattColor;
-    use lgt::styled_text::stylist::Stylist;
-    use lgt::styled_text::line_view_mode::LineViewMode;
+    use felon::styled_text::grok_iterator::GrokLineIterator;
+    use felon::styled_text::styled_line::PattColor;
+    use felon::styled_text::stylist::Stylist;
+    use felon::styled_text::line_view_mode::LineViewMode;
     use indexed_file::{IndexedLog, Log};
     use indexed_file::files::new_mock_file;
     use lazy_static::lazy_static;
@@ -488,9 +488,9 @@ mod sub_line_iterator_tests {
 mod sub_line_wrap_tests {
     use std::collections::HashSet;
     use crate::sub_line_iterator_helper::Harness;
-    use lgt::styled_text::{grok_iterator::GrokLineIterator, styled_line::PattColor};
-    use lgt::styled_text::stylist::Stylist;
-    use lgt::styled_text::line_view_mode::LineViewMode;
+    use felon::styled_text::{grok_iterator::GrokLineIterator, styled_line::PattColor};
+    use felon::styled_text::stylist::Stylist;
+    use felon::styled_text::line_view_mode::LineViewMode;
     use indexed_file::{IndexedLog, Log};
     use lazy_static::lazy_static;
 
